@@ -22,5 +22,7 @@ No `ANTHROPIC_API_KEY`? The app boots in replay mode and every scenario still ru
 ```sh
 pnpm typecheck && pnpm lint && pnpm test
 pnpm build && pnpm size
-pnpm e2e --project=pixel7
+pnpm e2e --project=pixel7      # phone first; then --project=iphone14 --project=desktop
+pnpm test:shutdown             # SIGTERM and SIGKILL mid-stream against the built server
+pnpm screenshots <label>       # design-review frames, phone first, into docs/design/<label>/
 ```

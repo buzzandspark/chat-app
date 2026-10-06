@@ -1,0 +1,52 @@
+event: started
+id: 0
+data: {"type":"started","chatId":"5e27b431-8942-4acf-bcee-574fbd35d03d","messageId":"f009276a-2c84-43d2-94c2-25bbd491b1f1","userMessageId":"ab4367c7-f07c-49d4-888b-afaacd01375d","requestedModel":"claude-sonnet-5-5","seq":0,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":0}
+
+event: message_start
+id: 1
+data: {"type":"message_start","apiMessageId":"msg_scripted_1","model":"claude-sonnet-5-5","inputTokens":800,"cacheReadTokens":0,"cacheWriteTokens":0,"inputTransformations":[],"seq":1,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":804}
+
+event: block_start
+id: 2
+data: {"type":"block_start","index":0,"block":"text","seq":2,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":805}
+
+event: text_delta
+id: 3
+data: {"type":"text_delta","index":0,"text":"The","seq":3,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":805}
+
+event: text_delta
+id: 4
+data: {"type":"text_delta","index":0,"text":" re","seq":4,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":1204}
+
+event: text_delta
+id: 5
+data: {"type":"text_delta","index":0,"text":"lay","seq":5,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":1603}
+
+event: text_delta
+id: 6
+data: {"type":"text_delta","index":0,"text":" ke","seq":6,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":2005}
+
+event: text_delta
+id: 7
+data: {"type":"text_delta","index":0,"text":"eps","seq":7,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":2404}
+
+event: text_delta
+id: 8
+data: {"type":"text_delta","index":0,"text":" ev","seq":8,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":2803}
+
+event: text_delta
+id: 9
+data: {"type":"text_delta","index":0,"text":"ery","seq":9,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":3204}
+
+event: text_delta
+id: 10
+data: {"type":"text_delta","index":0,"text":" ge","seq":10,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":3604}
+
+event: text_delta
+id: 11
+data: {"type":"text_delta","index":0,"text":"ner","seq":11,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":4003}
+
+event: interrupted
+id: 12
+data: {"type":"interrupted","reason":"shutdown","seq":12,"generationId":"46f828b1-1dfc-4762-a197-a6de1292791f","t":4073}
+

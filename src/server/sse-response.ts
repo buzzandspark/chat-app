@@ -2,6 +2,7 @@ import "server-only";
 import { isTerminal, type RelayEvent } from "@relay/events";
 import { encodeSse, SSE_HEADERS, SSE_KEEPALIVE } from "@relay/sse";
 import type { EventStore } from "@relay/store";
+import { streamClosed, streamOpened } from "./streams";
 
 export interface StreamOptions {
   /** D24 dropped-connection scenario: abort the response after this many events. */
@@ -15,6 +16,7 @@ export function streamGeneration(store: EventStore, generationId: string, after:
   let closed = false;
   let unsubscribe: () => void = () => {};
   let keepalive: ReturnType<typeof setInterval> | null = null;
+  streamOpened();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let sent = 0;
@@ -28,14 +30,11 @@ export function streamGeneration(store: EventStore, generationId: string, after:
         } catch {
           // already closed by the consumer
         }
+        streamClosed();
       };
-      const drop = () => {
-        if (closed) return;
-        closed = true;
-        if (keepalive) clearInterval(keepalive);
-        unsubscribe();
-        controller.error(new Error("simulated connection drop"));
-      };
+      // D24 dropped connection: end the response without a terminal event, as a
+      // proxy timeout or a lost radio does. The client resumes from its last seq.
+      const drop = () => close();
       options.signal?.addEventListener("abort", close, { once: true });
       keepalive = setInterval(() => {
         if (!closed) controller.enqueue(encoder.encode(SSE_KEEPALIVE));
@@ -50,9 +49,11 @@ export function streamGeneration(store: EventStore, generationId: string, after:
       if (store.get(generationId)?.terminal) close();
     },
     cancel() {
+      if (closed) return;
       closed = true;
       if (keepalive) clearInterval(keepalive);
       unsubscribe();
+      streamClosed();
     },
   });
   return new Response(stream, { headers: SSE_HEADERS });

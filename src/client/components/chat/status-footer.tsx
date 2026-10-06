@@ -1,5 +1,5 @@
 "use client";
-import { RefreshCw, Square, WifiOff } from "lucide-react";
+import { RefreshCw, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@client/hooks/use-now";
@@ -10,7 +10,6 @@ interface StatusFooterProps {
   message: MessageState;
   onRetry: () => void;
   onContinue: () => void;
-  onStop: () => void;
   onResume: () => void;
 }
 
@@ -21,7 +20,7 @@ function Countdown({ until }: { until: number }) {
 }
 
 /** D17: every terminal and non-terminal state has its own wording and action. */
-export function StatusFooter({ message, onRetry, onContinue, onStop, onResume }: StatusFooterProps) {
+export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusFooterProps) {
   const base = "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-muted-foreground";
   const retry = (
     <Button size="sm" variant="outline" className="touch-target" onClick={onRetry}>
@@ -49,14 +48,8 @@ export function StatusFooter({ message, onRetry, onContinue, onStop, onResume }:
         </div>
       );
     }
-    return (
-      <div className={base}>
-        <Button size="sm" variant="ghost" className="touch-target" onClick={onStop} aria-label="Stop generating">
-          <Square data-icon="inline-start" className="fill-current" />
-          Stop
-        </Button>
-      </div>
-    );
+    // The composer owns the stop control while the stream is healthy.
+    return null;
   }
 
   switch (message.status) {

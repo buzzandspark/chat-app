@@ -1,9 +1,11 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { env } from "@shared/env";
+import { uuidv7 } from "@shared/id";
 import { closeDatabase, openDatabase, schema } from "@db/client";
 import { runMigrations } from "@db/migrate";
 import { seedDevUser } from "@db/seed";
+import { costOf } from "@relay/anthropic/pricing";
 import { installSignalHandlers, onShutdown } from "./shutdown";
 
 const g = globalThis as unknown as { __cadenceBooted?: boolean };
@@ -24,15 +26,24 @@ export async function boot(): Promise<void> {
 }
 
 /**
- * Boot backstop (D3): a row still `running` at boot means the previous process
- * died without draining. Mark it interrupted so resume returns a snapshot
- * instead of waiting for events that will never come. Cost settlement for these
- * rows is wired in step 3/6 (D22).
+ * Boot backstop (D3, D22): a row still `running` at boot means the previous
+ * process died without draining. Mark it interrupted so resume returns a
+ * snapshot instead of waiting for events that never come, and settle an
+ * estimated cost from the saved partial content: the crashed process never
+ * wrote usage, so input is the chat's text at four characters per token and
+ * output is the partial's text the same way, flagged `estimated`.
  */
 function backstopInterruptedGenerations(): void {
   const { db } = openDatabase(env.DATABASE_PATH);
   const running = db
-    .select({ id: schema.generations.id, messageId: schema.generations.messageId })
+    .select({
+      id: schema.generations.id,
+      messageId: schema.generations.messageId,
+      chatId: schema.generations.chatId,
+      userId: schema.generations.userId,
+      requestedModel: schema.generations.requestedModel,
+      servingModel: schema.generations.servingModel,
+    })
     .from(schema.generations)
     .where(eq(schema.generations.status, "running"))
     .all();
@@ -48,7 +59,46 @@ function backstopInterruptedGenerations(): void {
         .set({ status: "interrupted", updatedAt: now })
         .where(eq(schema.messages.id, row.messageId))
         .run();
+      const chatRows = tx
+        .select({ id: schema.messages.id, content: schema.messages.content })
+        .from(schema.messages)
+        .where(eq(schema.messages.chatId, row.chatId))
+        .all();
+      let inputChars = 0;
+      let outputChars = 0;
+      for (const m of chatRows) {
+        for (const b of m.content) {
+          if (b.type !== "text") continue;
+          if (m.id === row.messageId) outputChars += b.text.length;
+          else inputChars += b.text.length;
+        }
+      }
+      const model = row.servingModel ?? row.requestedModel;
+      const tokens = {
+        inputTokens: Math.ceil(inputChars / 4),
+        outputTokens: Math.ceil(outputChars / 4),
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      };
+      const costUsd = costOf(model, tokens);
+      tx.insert(schema.usageEvents)
+        .values({
+          id: uuidv7(),
+          generationId: row.id,
+          userId: row.userId,
+          model,
+          iterationType: "message",
+          ...tokens,
+          costUsd,
+          estimated: true,
+          createdAt: now,
+        })
+        .run();
+      tx.update(schema.users)
+        .set({ costSpentUsd: sql`${schema.users.costSpentUsd} + ${costUsd}` })
+        .where(eq(schema.users.id, row.userId))
+        .run();
     }
   });
-  console.warn(`[boot] marked ${running.length} orphaned generation(s) interrupted`);
+  console.warn(`[boot] marked ${running.length} orphaned generation(s) interrupted with estimated cost`);
 }

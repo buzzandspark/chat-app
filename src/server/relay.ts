@@ -32,6 +32,7 @@ export function getRelay(): RelaySingleton {
     isDraining,
   });
   const rateLimiter = new RateLimiter();
+  // Registered after boot's closeDatabase drain, so it runs before it (LIFO).
   onShutdown(async () => {
     console.log(`[shutdown] draining ${engine.runningCount()} generation(s)`);
     await engine.drain();

@@ -240,3 +240,20 @@
   min-height: var(--spacing-touch);
   min-width: var(--spacing-touch);
 }
+
+/* Streaming caret (D10): drawn by CSS after the last block so it is inline with the text. */
+.streaming-caret > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: currentColor;
+  animation: caret-pulse 1s steps(2, start) infinite;
+}
+@keyframes caret-pulse {
+  to {
+    visibility: hidden;
+  }
+}

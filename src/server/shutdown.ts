@@ -1,4 +1,5 @@
 import "server-only";
+import { openStreams, waitForStreamsToClose } from "./streams";
 
 type Drain = () => Promise<void> | void;
 
@@ -36,13 +37,22 @@ export function installSignalHandlers(gracePeriodMs = 25_000): void {
     void (async () => {
       const started = Date.now();
       console.log(`[shutdown] ${signal} received, draining ${state.drains.length} task(s)`);
-      for (const drain of state.drains) {
+      // Last registered, first drained: the engine (registered lazily) must
+      // finish writing before the database (registered at boot) closes.
+      for (const drain of [...state.drains].reverse()) {
         try {
           await drain();
         } catch (err) {
           console.error("[shutdown] drain failed", err);
         }
       }
+      // Let connected clients receive their terminal events before the sockets die.
+      const pending = openStreams();
+      if (pending > 0) {
+        console.log(`[shutdown] waiting for ${pending} stream(s) to flush`);
+        await waitForStreamsToClose(2000);
+      }
+      await new Promise((r) => setTimeout(r, 100));
       console.log(`[shutdown] drained in ${Date.now() - started}ms`);
       process.exit(code);
     })();

@@ -97,9 +97,12 @@ export function AssistantMessage({ message }: { message: MessageState }) {
           if (block.type === "divider") return <ModelDivider key={i} from={block.from} to={block.to} category={block.category} />;
           const isLast = i === message.blocks.length - 1;
           return (
-            <div key={i} className="relative">
-              <Markdown text={block.text} streaming={streaming && isLast} />
-            </div>
+            <Markdown
+              key={i}
+              text={block.text}
+              streaming={streaming && isLast}
+              className={cn(streaming && isLast && "streaming-caret")}
+            />
           );
         })}
         {streaming && !hasTextBlock && !hasThinkingBlock ? (
@@ -107,16 +110,12 @@ export function AssistantMessage({ message }: { message: MessageState }) {
             <span className="size-2 animate-pulse rounded-full bg-muted-foreground" />
           </div>
         ) : null}
-        {streaming && hasText ? <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-foreground align-text-bottom" /> : null}
       </div>
       {discarded ? <span className="text-caption text-muted-foreground">Incomplete and not saved.</span> : null}
       <StatusFooter
         message={message}
         onRetry={onRetry}
         onContinue={() => send("Continue.")}
-        onStop={() => {
-          if (message.generationId) void client.stop(message.generationId);
-        }}
         onResume={() => client.resumeAll()}
       />
       {!streaming ? (

@@ -20,7 +20,9 @@
     "db:studio": "drizzle-kit studio",
     "docker:build": "docker build -t cadence:local .",
     "docker:run": "docker run --rm -p 3000:3000 -v cadence-data:/data --env-file .env cadence:local",
-    "fixtures": "tsx scripts/make-fixtures.ts"
+    "fixtures": "tsx scripts/make-fixtures.ts",
+    "screenshots": "tsx scripts/screenshots.ts",
+    "test:shutdown": "sh scripts/shutdown-test.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
