@@ -10,7 +10,12 @@ import { ChatContext, type ChatSettings, type EditingState } from "./chat-contex
 import { Composer, type ComposerHandle } from "./composer";
 import { LiveRegion } from "./live-region";
 import { MessageList, type MessageListHandle } from "./message-list";
-import { ScenarioPanel } from "./scenario-panel";
+import dynamic from "next/dynamic";
+
+const ScenarioPanel = dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
+  ssr: false,
+  loading: () => <div className="h-9" aria-hidden />,
+});
 
 interface ChatViewProps {
   chatId: string;

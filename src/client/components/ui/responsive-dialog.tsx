@@ -22,6 +22,14 @@ export function ResponsiveDialog({ open, onOpenChange, title, description, child
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
+        // D19: focus returns to the composer after a dialog closes.
+        onCloseAutoFocus={(e) => {
+          const composer = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
+          if (composer) {
+            e.preventDefault();
+            composer.focus();
+          }
+        }}
         className={cn(
           "fixed inset-x-0 bottom-0 top-auto w-full max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-sheet px-gutter pt-5",
           "pb-[max(env(safe-area-inset-bottom,0px),1rem)] [html[data-keyboard=open]_&]:pb-4",

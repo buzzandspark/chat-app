@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import Script from "next/script";
+import { Monitoring } from "@client/components/shell/monitoring";
 import "./globals.css";
 
 // D21: self-hosted via next/font with metric-matched fallbacks so there is no
@@ -52,7 +53,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-dvh flex flex-col">
-        <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+        {children}
+        <Monitoring dsn={process.env.NEXT_PUBLIC_SENTRY_DSN ?? null} />
+        {process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN ? (
+          <Script defer data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN} src="https://plausible.io/js/script.js" strategy="afterInteractive" />
+        ) : null}
       </body>
     </html>
   );

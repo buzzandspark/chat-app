@@ -1,5 +1,5 @@
 "use client";
-import { Menu, PanelLeft } from "lucide-react";
+import { Menu, MessageSquareText, PanelLeft } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,11 @@ import type { ChatSummary } from "@client/store/sidebar-store";
 import { useSidebarChats } from "@client/store/sidebar-store";
 import { useIsDesktop } from "@client/hooks/use-media-query";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
-import { SearchDialog } from "./search-dialog";
+import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
+
+const SearchDialog = dynamic(() => import("./search-dialog").then((m) => m.SearchDialog), { ssr: false });
+const FeedbackDialog = dynamic(() => import("./feedback-dialog").then((m) => m.FeedbackDialog), { ssr: false });
 
 interface ChatShellProps {
   initialChats: ChatSummary[];
@@ -28,6 +31,7 @@ export function ChatShell({ initialChats, userLabel, children }: ChatShellProps)
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   useVisualViewport();
 
   const open = desktop ? desktopOpen : phoneOpen;
@@ -104,10 +108,14 @@ export function ChatShell({ initialChats, userLabel, children }: ChatShellProps)
           <h1 className="min-w-0 flex-1 truncate px-1 text-small font-medium" data-testid="chat-title">
             {title}
           </h1>
+          <Button variant="ghost" size="icon" className="touch-target" aria-label="Send feedback" onClick={() => setFeedbackOpen(true)}>
+            <MessageSquareText />
+          </Button>
         </header>
         {children}
       </div>
-      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      {searchOpen ? <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} /> : null}
+      {feedbackOpen ? <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} chatId={currentChatId} /> : null}
     </div>
   );
 }

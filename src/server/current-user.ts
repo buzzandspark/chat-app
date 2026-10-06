@@ -1,7 +1,9 @@
 import "server-only";
 import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
 import { unstable_rethrow } from "next/navigation";
 import { connection } from "next/server";
+import { getAuth } from "@auth/server";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
 import type { UserRole } from "@shared/types";
@@ -14,15 +16,26 @@ export interface CurrentUser {
 }
 
 /**
- * Build steps 2 to 5 run against the seeded dev user (D6); step 6 replaces
- * this with better-auth's `auth.api.getSession`, validated once per request
- * and once per SSE connection.
+ * ADR-0004: real validation through better-auth's `getSession`, once per
+ * request and once per SSE connection. Without a session, development and
+ * the e2e harness fall back to the seeded dev user so the chat can be
+ * exercised without logging in; production never does.
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   // better-sqlite3 is synchronous, so nothing before this line signals
   // "request time" to the prerenderer; `connection()` does, which keeps the
   // database out of the build and the shell static (D21).
   await connection();
+  const reqHeaders = await headers();
+  const session = await getAuth().api.getSession({ headers: reqHeaders });
+  if (session?.user) {
+    const u = session.user as { id: string; email: string; name: string; role?: string | null; banned?: boolean | null };
+    if (u.banned) return null;
+    const role: UserRole = u.role === "admin" || u.role === "demo" ? u.role : "user";
+    touchLastActive(u.id);
+    return { id: u.id, role, email: u.email, name: u.name };
+  }
+  if (env.isProd && !env.e2e) return null;
   const db = getDb();
   const row = db
     .select({ id: schema.users.id, role: schema.users.role, email: schema.users.email, name: schema.users.name })
@@ -30,6 +43,25 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     .where(eq(schema.users.id, env.DEV_USER_ID))
     .get();
   return row ?? null;
+}
+
+const lastTouched = new Map<string, number>();
+/** `users.last_active_at`, written at most once a minute per user. */
+function touchLastActive(userId: string): void {
+  const now = Date.now();
+  if ((lastTouched.get(userId) ?? 0) > now - 60_000) return;
+  lastTouched.set(userId, now);
+  try {
+    getDb().update(schema.users).set({ lastActiveAt: new Date(now) }).where(eq(schema.users.id, userId)).run();
+  } catch {
+    // best effort
+  }
+}
+
+export async function requireAdmin(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.role !== "admin") throw new HttpError(404, { error: "not_found" });
+  return user;
 }
 
 export class HttpError extends Error {

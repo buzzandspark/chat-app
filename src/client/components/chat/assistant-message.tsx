@@ -1,22 +1,20 @@
 "use client";
-import { Check, Copy, MoreHorizontal, RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import dynamic from "next/dynamic";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@client/markdown/Markdown";
 import { getChatStore, textOf, type MessageState } from "@client/store/chat-store";
 import { useChat } from "@client/store/hooks";
 import { modelDisplayName } from "@shared/models";
 import { useChatContext } from "./chat-context";
-import { LatencyPopover } from "./latency-popover";
-import { ServedBy, StatusFooter } from "./status-footer";
+import { StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
+
+// D21: menus and popovers (Radix) load after first paint, not in the route bundle.
+const AssistantActions = dynamic(() => import("./assistant-actions").then((m) => m.AssistantActions), {
+  ssr: false,
+  loading: () => <div className="h-11" aria-hidden />,
+});
 
 function ModelDivider({ from, to, category }: { from: string; to: string; category: string | null }) {
   return (
@@ -36,7 +34,6 @@ export function AssistantMessage({ message }: { message: MessageState }) {
   const streaming = message.status === "streaming";
   const text = textOf(message.blocks);
   const hasText = text.length > 0;
-  const [copied, setCopied] = useState(false);
   const paintedRef = useRef(false);
 
   // D20: first paint is measured in a task after the committing frame.
@@ -63,15 +60,6 @@ export function AssistantMessage({ message }: { message: MessageState }) {
 
   const onRetry = () => {
     if (userMessageId) retry(userMessageId, message.id);
-  };
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // clipboard unavailable
-    }
   };
 
   const discarded = message.discardedText;
@@ -120,34 +108,12 @@ export function AssistantMessage({ message }: { message: MessageState }) {
         onResume={() => client.resumeAll()}
       />
       {!streaming ? (
-        <div className="flex items-center gap-1">
-          <ServedBy message={message} />
-          <LatencyPopover timings={message.timings} usage={message.usage} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="touch-target text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
-                aria-label="Message actions"
-              >
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={onCopy} className="min-h-11">
-                {copied ? <Check /> : <Copy />}
-                {copied ? "Copied" : "Copy"}
-              </DropdownMenuItem>
-              {userMessageId && message.status !== "refused" ? (
-                <DropdownMenuItem onClick={onRetry} className="min-h-11">
-                  <RefreshCw />
-                  Regenerate
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <AssistantActions
+          message={message}
+          text={text}
+          canRegenerate={Boolean(userMessageId) && message.status !== "refused"}
+          onRegenerate={onRetry}
+        />
       ) : null}
     </div>
   );

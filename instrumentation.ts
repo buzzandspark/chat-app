@@ -10,3 +10,10 @@ export async function register(): Promise<void> {
     await boot();
   }
 }
+
+/** D25: server-side errors go to Sentry when a DSN is configured. */
+export async function onRequestError(err: unknown, request: { path: string; method: string }): Promise<void> {
+  if (!process.env.SENTRY_DSN || process.env.NEXT_RUNTIME !== "nodejs") return;
+  const Sentry = await import("@sentry/node");
+  Sentry.captureException(err, { extra: { path: request.path, method: request.method } });
+}

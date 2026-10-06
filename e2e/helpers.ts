@@ -2,7 +2,13 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export async function openNewChat(page: Page): Promise<void> {
   await page.goto("/c/new");
+  await waitForComposer(page);
+}
+
+/** The composer is server-rendered; wait for hydration before typing into it. */
+export async function waitForComposer(page: Page): Promise<void> {
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
+  await expect(page.getByTestId("composer")).toHaveAttribute("data-hydrated", "true");
 }
 
 export async function runScenario(page: Page, name: string): Promise<void> {

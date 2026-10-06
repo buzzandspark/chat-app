@@ -1,14 +1,25 @@
 "use client";
-import { MoreHorizontal, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { MoreHorizontal, Plus, Search, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getSidebarStore, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
-import { DeleteDialog, RenameDialog } from "./chat-dialogs";
 import { ThemeToggle } from "./theme-toggle";
+
+// D21: Radix menus and dialogs load after first paint.
+const ChatItemMenu = dynamic(() => import("./chat-item-menu").then((m) => m.ChatItemMenu), {
+  ssr: false,
+  loading: () => (
+    <Button variant="ghost" size="icon" className="absolute right-0.5 top-1/2 size-10 -translate-y-1/2 text-muted-foreground opacity-0" aria-hidden disabled>
+      <MoreHorizontal />
+    </Button>
+  ),
+});
+const RenameDialog = dynamic(() => import("./chat-dialogs").then((m) => m.RenameDialog), { ssr: false });
+const DeleteDialog = dynamic(() => import("./chat-dialogs").then((m) => m.DeleteDialog), { ssr: false });
 
 interface SidebarProps {
   initialChats: ChatSummary[];
@@ -105,28 +116,7 @@ export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: Si
                     >
                       <span className="truncate">{chat.title}</span>
                     </Link>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Actions for ${chat.title}`}
-                          className="absolute right-0.5 top-1/2 size-10 -translate-y-1/2 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
-                        >
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="min-h-11" onClick={() => setRenaming(chat)}>
-                          <Pencil />
-                          Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="min-h-11" variant="destructive" onClick={() => setDeleting(chat)}>
-                          <Trash2 />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <ChatItemMenu title={chat.title} onRename={() => setRenaming(chat)} onDelete={() => setDeleting(chat)} />
                   </li>
                 );
               })}
@@ -138,8 +128,8 @@ export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: Si
           <ThemeToggle />
         </div>
       </aside>
-      <RenameDialog chat={renaming} onClose={() => setRenaming(null)} />
-      <DeleteDialog chat={deleting} onClose={() => setDeleting(null)} currentChatId={currentChatId} />
+      {renaming ? <RenameDialog chat={renaming} onClose={() => setRenaming(null)} /> : null}
+      {deleting ? <DeleteDialog chat={deleting} onClose={() => setDeleting(null)} currentChatId={currentChatId} /> : null}
     </>
   );
 }

@@ -54,11 +54,57 @@ Measured on the scripted `normal` scenario through the built server: 62 events, 
 
 ## 6. Models, thinking, fallback, caching
 
-_pending (step 4)_
+Checked against the bundled Claude API reference on 2026-10-06; the per-model request shape lives in one place, `src/relay/anthropic/thinking-config.ts`, and `request.ts` is the only request builder, used by the live provider, the recorder, and the cache test alike.
+
+| | Sonnet 5.5 (default), Opus 5.5 | Haiku 4.5 |
+| --- | --- | --- |
+| Thinking | `adaptive`, `display: "summarized"` | `enabled`, `budget_tokens: 2048` when "Extended thinking" is on, else none |
+| "Think harder" | `output_config.effort: "high"` (default `"low"`) | the toggle above |
+| Fallbacks | `fallbacks: "default"` under beta `server-side-fallback-2026-07-01` | none |
+| Binding | `thinking.block_binding.prefix_mismatch_behavior: "drop_block"` under beta `thinking-binding-controls-2026-08-01` | none |
+| `max_tokens` | 16,000 | 16,000 |
+
+- **Why `drop_block`.** The binding check covers the system prompt and tools as well as every earlier message, and is enforced by default for API accounts created on or after 2026-08-31. Without it, a deploy that edits the system prompt would turn every existing chat with thinking blocks into a 400. `input_transformations` from `message_start` is logged with the generation so prefix mismatches are visible; a `model_binding_mismatch` after a model switch is expected, not a bug.
+- **Model per message, not per chat.** Sticky routing can serve later turns on the fallback model for about an hour and the requested model may be retried at any time, so `messages.requested_model` and `messages.serving_model` are stored per assistant message. The picker value only chooses the next turn. The serving model is the last `fallback` block's `to.model`, else `message_start.message.model`, cross-checked with a `fallback_message` entry in `usage.iterations` for sticky-routed turns that carry no block.
+- **Fallback in the stream.** A `fallback` block arrives as an ordinary `content_block_start`. Before any text it is invisible except in timing (the latency popover labels the first-token interval "includes a declined attempt") and in `iterations`; after text, the open block closes, the relay emits `fallback_boundary`, the partial is kept, and the UI shows a divider ("Served by Claude Opus 4.8 after a safety fallback"). `history.ts` omits thinking and tool use before a message's final fallback block when echoing it back.
+- **Refusal without fallback** (`stop_reason: "refusal"`, possible on Haiku, on `bio`/`reasoning_extraction`/`general_harms` categories on Sonnet 5.5, or when the whole chain declines) is its own message status. Painted partial text is dimmed, labelled "incomplete and not saved", excluded from later history, and has no retry affordance. Three wordings: category and explanation, category only, neither.
+- **Caching.** The fixed system prompt carries the first `cache_control` breakpoint; the moving breakpoint is the newest user message's last text block. Minimum cacheable prefix is 512 tokens on Sonnet 5.5 and Opus 5.5 and 4096 on Haiku 4.5, so `pnpm test:cache` (opt-in, spends money) sends a fixture above 4096 tokens twice per model and asserts non-zero `cache_read_input_tokens` on the second request. Cache fields are stored per iteration in `usage_events` and shown in the latency popover.
+- **Context.** History is sent whole; Sonnet 5.5 and Opus 5.5 have 1M-token windows and Haiku 4.5 200K. A context-length 400 maps to `kind: "context_full"` and the UI says "This chat is too long to continue. Start a new chat."
+- **Cost (D22).** Each `usage.iterations` entry is priced at its own model's rates (a declined attempt is a `message` entry for the declined model; the serving hop is `fallback_message`). Stopped or interrupted generations are settled as estimates: exact input from `message_start`, output from elapsed streaming time times a rolling tokens-per-second per model, because billed output includes full thinking while only its summary is visible.
+
+## 6a. Identity and the public demo (ADR-0004)
+
+better-auth on the Drizzle adapter: email + password with sign-up disabled, the admin plugin for roles and bans, the anonymous plugin for demo visitors. `proxy.ts` only checks for the session cookie; `getCurrentUser` validates with `auth.api.getSession` once per request and once per SSE connection. "Try the demo" creates an anonymous user, sets its role to `demo` and its session to 24 h; the provider resolver forces replay for `demo` users server-side, so the demo cannot spend money whatever the client asks for. An hourly timer deletes demo users older than 24 h and SQLite cascades remove their sessions, chats, messages and usage. Invites are random 32-byte tokens stored as SHA-256 with a 7-day expiry and single use; issuing a new one revokes the old; the same flow resets a password. The admin console lives at `/${ADMIN_PATH_SLUG}` and renders the not-found page for anyone else (partial prerendering streams the boundary after a 200 shell, so it is a visible 404 rather than an HTTP 404).
 
 ## 7. Performance
 
-_pending (step 7)_
+### Chat route JS budget (D21)
+
+Measured with `pnpm size` (gzipped, the chunks Turbopack lists for `/c/[id]` in `.next/server/app/(chat)/c/[id]/page/build-manifest.json` and `page_client-reference-manifest.js`; `nomodule` polyfills excluded) and attributed with `SOURCEMAPS=1 pnpm build && node scripts/bundle-report.mjs`:
+
+| Step | kB gzipped | Change |
+| --- | ---: | --- |
+| First measurement (step 4, everything in the route bundle) | 283 | |
+| Exclude `nomodule` polyfills from the count | 243 | −40 |
+| Radix menus, dialogs, popover, model picker and scenario panel behind `next/dynamic` (load after first paint, on first use where there is a trigger) | 197 | −46 |
+| `tailwind-merge` replaced by a 2 kB conflict-aware `cn` (`src/shared/cn.ts`) | 188 | −9 |
+
+Where the 188 kB goes:
+
+| Source | kB gzipped |
+| --- | ---: |
+| Next 16.4 app router runtime, React 19.3 (vendored under `next`), cache components client | 133 |
+| `marked` lexer | 14 |
+| `src/client/components` (shell, list, composer, footer, thinking) | 13 |
+| `src/client/markdown`, `store`, `transport`, hooks | 10 |
+| Turbopack runtime | 4 |
+| Button, Slot, lucide icons, clsx | 4 |
+
+The plan set the budget at 180 kB assuming a smaller framework floor; Next 16's runtime alone measures 133 kB, so the CI gate is 190 kB, which caps everything outside the framework at 57 kB. The next lever is `marked` (14 kB): a purpose-built block and inline tokenizer on top of the existing block splitter would recover roughly 10 kB and is scheduled for the step 7 performance pass if the Pixel 7 Fast-3G numbers call for it.
+
+### Long lists (D14)
+
+_pending: long-chat frame-time measurement in step 7 decides whether `@tanstack/react-virtual` is added for the region above the viewport._
 
 ## 8. Rejected alternatives
 

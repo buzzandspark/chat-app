@@ -6,10 +6,22 @@ import { cn } from "@/lib/utils";
 import { clearDraft, draftKey, readDraft, useDraft } from "@client/hooks/use-draft";
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
 import { getChatStore, textOf } from "@client/store/chat-store";
-import { useChat } from "@client/store/hooks";
+import { useChat, useMessage } from "@client/store/hooks";
 import { SCENARIOS, isScenarioName } from "@relay/scenario-catalog";
 import { useChatContext } from "./chat-context";
-import { ModelPicker } from "./model-picker";
+import dynamic from "next/dynamic";
+import { ChevronDown } from "lucide-react";
+
+// D21: the picker's sheet/popover (Radix) loads after first paint.
+const ModelPicker = dynamic(() => import("./model-picker").then((m) => m.ModelPicker), {
+  ssr: false,
+  loading: () => (
+    <Button variant="ghost" size="sm" className="touch-target gap-1 text-muted-foreground" disabled aria-label="Choose model">
+      <span className="truncate">Sonnet 5.5</span>
+      <ChevronDown data-icon="inline-end" className="size-3.5" />
+    </Button>
+  ),
+});
 
 export interface ComposerHandle {
   focus: () => void;
@@ -37,6 +49,23 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
+  // Progressive enhancement: text typed into the server-rendered textarea
+  // before hydration is adopted rather than discarded, and the root carries a
+  // marker so tests know when the composer is live.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = textareaRef.current;
+    const root = rootRef.current;
+    const typedEarly = el && el.value !== "" && el.value !== value ? el.value : null;
+    const frame = requestAnimationFrame(() => {
+      if (typedEarly !== null) setValue(typedEarly);
+      if (root) root.dataset.hydrated = "true";
+    });
+    return () => cancelAnimationFrame(frame);
+    // Mount only: later value changes are React's own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Entering edit mode loads the message text (derived state adjusted during render).
   const [lastEdit, setLastEdit] = useState(editing);
   if (editing !== lastEdit) {
@@ -45,19 +74,16 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     else if (lastEdit) setValue("");
   }
 
-  const { streamingId, lastUserId } = (() => {
-    let streaming: string | null = null;
-    let lastUser: string | null = null;
+  // Subscribe to the last message itself: its status decides Stop vs Send and
+  // whether ↑ may edit (the id list alone does not change when a reply ends).
+  const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
+  const streamingId = lastMessage?.role === "assistant" && lastMessage.status === "streaming" ? lastMessage.generationId : null;
+  const lastUserId = (() => {
     for (let i = chat.messageIds.length - 1; i >= 0; i--) {
       const m = getChatStore().getMessage(chat.messageIds[i]!);
-      if (!m) continue;
-      if (m.role === "assistant" && streaming === null && lastUser === null) streaming = m.status === "streaming" ? m.generationId : null;
-      if (m.role === "user") {
-        lastUser = m.id;
-        break;
-      }
+      if (m?.role === "user") return m.id;
     }
-    return { streamingId: streaming, lastUserId: lastUser };
+    return null;
   })();
 
   const resize = useCallback(() => {
@@ -101,6 +127,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   return (
     <div
+      ref={rootRef}
       className="shrink-0 border-t border-border bg-background px-gutter pt-2"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
       data-testid="composer"

@@ -1,0 +1,64 @@
+import "server-only";
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { nextCookies } from "better-auth/next-js";
+import { admin, anonymous } from "better-auth/plugins";
+import { getDb, schema } from "@db/client";
+import { env } from "@shared/env";
+
+/**
+ * ADR-0004: better-auth on the Drizzle adapter, email + password with
+ * sign-up disabled (invites create accounts), the admin plugin for roles and
+ * bans, and the anonymous plugin for the public demo path (each visitor gets
+ * their own short-lived user, role `demo`).
+ */
+function createAuth() {
+  return betterAuth({
+    appName: "Cadence",
+    baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
+    secret: env.BETTER_AUTH_SECRET ?? (env.isProd ? undefined : "dev-secret-not-for-production-0123456789"),
+    database: drizzleAdapter(getDb(), {
+      provider: "sqlite",
+      usePlural: true,
+      schema: {
+        users: schema.users,
+        sessions: schema.sessions,
+        accounts: schema.accounts,
+        verifications: schema.verifications,
+      },
+    }),
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+      minPasswordLength: 10,
+    },
+    // better-auth's per-IP limiter (3 sign-ins per 10 s) stays on in production;
+    // the e2e harness signs in several users from one address in seconds.
+    rateLimit: { enabled: env.isProd && !env.e2e },
+    session: {
+      expiresIn: 60 * 60 * 24 * 7,
+      updateAge: 60 * 60 * 24,
+      cookieCache: { enabled: false },
+    },
+    user: {
+      additionalFields: {
+        costCapUsd: { type: "number", required: false, input: false },
+        costSpentUsd: { type: "number", required: false, input: false },
+      },
+    },
+    plugins: [
+      admin({ defaultRole: "user", adminRoles: ["admin"] }),
+      anonymous({ emailDomainName: "demo.cadence.invalid" }),
+      nextCookies(),
+    ],
+  });
+}
+
+const g = globalThis as unknown as { __cadenceAuth?: ReturnType<typeof createAuth> };
+export function getAuth(): ReturnType<typeof createAuth> {
+  g.__cadenceAuth ??= createAuth();
+  return g.__cadenceAuth;
+}
+
+export type Auth = ReturnType<typeof createAuth>;
+export const SESSION_COOKIE = "better-auth.session_token";

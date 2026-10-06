@@ -8,6 +8,7 @@ test.describe("edit, regenerate, drafts", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await page.locator('[data-role="user"]').last().getByRole("button", { name: "Message actions" }).click();
     await page.getByRole("menuitem", { name: "Edit" }).click();
+    await expect(page.getByRole("menu")).toBeHidden();
     const box = page.getByRole("textbox", { name: "Message" });
     await expect(box).toHaveValue("first version");
     await box.fill("second version");
@@ -27,6 +28,7 @@ test.describe("edit, regenerate, drafts", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
     await page.getByRole("menuitem", { name: "Regenerate" }).click();
+    await expect(page.getByRole("menu")).toBeHidden();
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await page.reload();
     await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
