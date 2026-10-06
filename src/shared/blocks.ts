@@ -1,0 +1,49 @@
+import type Anthropic from "@anthropic-ai/sdk";
+
+/** What `messages.content` stores: the API's content blocks, fallback blocks kept in place (D8). */
+export type StoredContentBlock = Anthropic.Beta.BetaContentBlock;
+export type IterationUsage = NonNullable<Anthropic.Beta.BetaUsage["iterations"]>;
+
+/**
+ * What the client renders. Thinking and text are the visible stream; a
+ * `divider` marks a mid-stream safety fallback (D12). Tool use is unused in
+ * v1 and collapses to nothing on the client.
+ */
+export type ClientBlock =
+  | { type: "text"; text: string }
+  | { type: "thinking"; text: string; redacted?: boolean }
+  | { type: "divider"; from: string; to: string; category: string | null };
+
+export function toClientBlocks(content: readonly StoredContentBlock[]): ClientBlock[] {
+  const out: ClientBlock[] = [];
+  for (const block of content) {
+    switch (block.type) {
+      case "text":
+        out.push({ type: "text", text: block.text });
+        break;
+      case "thinking":
+        out.push({ type: "thinking", text: block.thinking });
+        break;
+      case "redacted_thinking":
+        out.push({ type: "thinking", text: "", redacted: true });
+        break;
+      case "fallback":
+        out.push({
+          type: "divider",
+          from: block.from.model,
+          to: block.to.model,
+          category: block.trigger?.category ?? null,
+        });
+        break;
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
+export function plainText(content: readonly StoredContentBlock[]): string {
+  let s = "";
+  for (const block of content) if (block.type === "text") s += block.text;
+  return s;
+}

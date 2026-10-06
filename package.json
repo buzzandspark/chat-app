@@ -19,7 +19,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "docker:build": "docker build -t cadence:local .",
-    "docker:run": "docker run --rm -p 3000:3000 -v cadence-data:/data --env-file .env cadence:local"
+    "docker:run": "docker run --rm -p 3000:3000 -v cadence-data:/data --env-file .env cadence:local",
+    "fixtures": "tsx scripts/make-fixtures.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
@@ -37,6 +38,7 @@
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
     "shadcn": "^4.21.3",
+    "shiki": "4.5.0",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.5"
   },

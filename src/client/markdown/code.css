@@ -1,0 +1,14 @@
+/* Dual-theme shiki tokens (D15): colours switch with the .dark class, no re-render. */
+.markdown-code [data-shiki] {
+  color: var(--shiki-light);
+}
+.dark .markdown-code [data-shiki] {
+  color: var(--shiki-dark);
+}
+.markdown-code pre,
+.markdown-code code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  tab-size: 2;
+}
