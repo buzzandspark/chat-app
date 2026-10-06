@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1.7
+# D1: one long-lived Node process. Both stages are Debian slim (glibc) because
+# better-sqlite3 ships prebuilt glibc binaries; Alpine (musl) would force a
+# source build at every install.
+
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+# Fallback toolchain in case a prebuilt better-sqlite3 binary is unavailable
+# for this Node version and node-gyp has to compile from source.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm build
+
+FROM node:24-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+# Next.js installs its own SIGTERM handler that exits immediately unless this is
+# set; our handler in instrumentation.ts drains in-flight generations first (D3).
+ENV NEXT_MANUAL_SIG_HANDLE=true
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+ENV DATABASE_PATH=/data/app.db
+RUN mkdir -p /data && chown node:node /data
+# The standalone output's file trace includes better-sqlite3 and the `bindings`
+# package it loads its binary through; copying node_modules/better-sqlite3 alone
+# would miss `bindings`.
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/src/db/migrations ./src/db/migrations
+COPY --from=build --chown=node:node /app/fixtures ./fixtures
+USER node
+EXPOSE 3000
+VOLUME ["/data"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# Exec form so Node receives SIGTERM directly rather than via a shell or pnpm.
+CMD ["node", "server.js"]

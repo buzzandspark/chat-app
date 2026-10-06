@@ -1,26 +1,242 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
+/*
+ * D28 design tokens. Defined for the phone first (type ramp, spacing, sheet
+ * radii) and extended at md. The palette is a warm paper neutral with a
+ * sea-teal accent; the shadcn semantic names map onto it so the primitives
+ * pick it up without per-component overrides.
+ */
 @theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: var(--font-sans);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* App-specific semantic colours */
+  --color-bubble: var(--bubble);
+  --color-bubble-foreground: var(--bubble-foreground);
+  --color-code: var(--code);
+  --color-code-foreground: var(--code-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-sheet: var(--sheet-radius);
+  --radius-bubble: var(--bubble-radius);
+
+  /* Phone-first type ramp. Inputs never go below 16px so iOS does not zoom. */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-small: 0.875rem;
+  --text-small--line-height: 1.25rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.6;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.5rem;
+  --text-display: 1.75rem;
+  --text-display--line-height: 2rem;
+
+  /* Layout */
+  --spacing-gutter: var(--gutter);
+  --spacing-thread: var(--thread-width);
+  --spacing-touch: 2.75rem; /* 44px minimum tap target */
+  --spacing-composer: var(--composer-height);
 }
 
-@media (prefers-color-scheme: dark) {
+:root {
+  --gutter: 1rem;
+  --thread-width: 48rem;
+  --composer-height: 3.5rem;
+  --radius: 0.75rem;
+  --sheet-radius: 1.25rem;
+  --bubble-radius: 1.125rem;
+
+  --background: oklch(0.985 0.004 80);
+  --foreground: oklch(0.21 0.012 60);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.012 60);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.012 60);
+  --primary: oklch(0.47 0.09 200);
+  --primary-foreground: oklch(0.985 0.004 80);
+  --secondary: oklch(0.955 0.006 80);
+  --secondary-foreground: oklch(0.27 0.012 60);
+  --muted: oklch(0.955 0.006 80);
+  --muted-foreground: oklch(0.5 0.012 60);
+  --accent: oklch(0.94 0.02 200);
+  --accent-foreground: oklch(0.3 0.06 200);
+  --destructive: oklch(0.56 0.2 27);
+  --warning: oklch(0.72 0.15 70);
+  --warning-foreground: oklch(0.35 0.08 70);
+  --success: oklch(0.6 0.13 155);
+  --border: oklch(0.9 0.008 80);
+  --input: oklch(0.9 0.008 80);
+  --ring: oklch(0.6 0.08 200);
+  --bubble: oklch(0.93 0.012 80);
+  --bubble-foreground: oklch(0.21 0.012 60);
+  --code: oklch(0.96 0.006 80);
+  --code-foreground: oklch(0.25 0.012 60);
+  --chart-1: oklch(0.47 0.09 200);
+  --chart-2: oklch(0.6 0.13 155);
+  --chart-3: oklch(0.72 0.15 70);
+  --chart-4: oklch(0.56 0.2 27);
+  --chart-5: oklch(0.5 0.012 60);
+  --sidebar: oklch(0.965 0.006 80);
+  --sidebar-foreground: oklch(0.21 0.012 60);
+  --sidebar-primary: oklch(0.47 0.09 200);
+  --sidebar-primary-foreground: oklch(0.985 0.004 80);
+  --sidebar-accent: oklch(0.92 0.01 80);
+  --sidebar-accent-foreground: oklch(0.21 0.012 60);
+  --sidebar-border: oklch(0.9 0.008 80);
+  --sidebar-ring: oklch(0.6 0.08 200);
+}
+
+.dark {
+  --background: oklch(0.17 0.008 60);
+  --foreground: oklch(0.93 0.006 80);
+  --card: oklch(0.21 0.008 60);
+  --card-foreground: oklch(0.93 0.006 80);
+  --popover: oklch(0.22 0.008 60);
+  --popover-foreground: oklch(0.93 0.006 80);
+  --primary: oklch(0.72 0.1 200);
+  --primary-foreground: oklch(0.15 0.02 200);
+  --secondary: oklch(0.25 0.008 60);
+  --secondary-foreground: oklch(0.93 0.006 80);
+  --muted: oklch(0.25 0.008 60);
+  --muted-foreground: oklch(0.68 0.01 70);
+  --accent: oklch(0.3 0.04 200);
+  --accent-foreground: oklch(0.9 0.04 200);
+  --destructive: oklch(0.7 0.17 25);
+  --warning: oklch(0.78 0.14 75);
+  --warning-foreground: oklch(0.9 0.08 75);
+  --success: oklch(0.72 0.14 155);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.6 0.08 200);
+  --bubble: oklch(0.26 0.01 60);
+  --bubble-foreground: oklch(0.93 0.006 80);
+  --code: oklch(0.21 0.008 60);
+  --code-foreground: oklch(0.88 0.006 80);
+  --chart-1: oklch(0.72 0.1 200);
+  --chart-2: oklch(0.72 0.14 155);
+  --chart-3: oklch(0.78 0.14 75);
+  --chart-4: oklch(0.7 0.17 25);
+  --chart-5: oklch(0.68 0.01 70);
+  --sidebar: oklch(0.2 0.008 60);
+  --sidebar-foreground: oklch(0.93 0.006 80);
+  --sidebar-primary: oklch(0.72 0.1 200);
+  --sidebar-primary-foreground: oklch(0.15 0.02 200);
+  --sidebar-accent: oklch(0.27 0.008 60);
+  --sidebar-accent-foreground: oklch(0.93 0.006 80);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.6 0.08 200);
+}
+
+/* Desktop expansion (D0, D19): wider gutters, larger radii. */
+@media (min-width: 768px) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --gutter: 1.5rem;
+    --sheet-radius: 1rem;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground text-body;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  input,
+  textarea,
+  select {
+    /* 16px floor prevents iOS Safari from zooming on focus (D19). */
+    font-size: max(1rem, 1em);
+  }
+  code,
+  kbd,
+  pre {
+    @apply font-mono;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@utility safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility safe-x {
+  padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+}
+@utility touch-target {
+  min-height: var(--spacing-touch);
+  min-width: var(--spacing-touch);
 }
