@@ -22,3 +22,11 @@ export async function sendText(page: Page, text: string): Promise<void> {
 export function assistantText(row: Locator): Promise<string> {
   return row.locator(".markdown").allInnerTexts().then((parts) => parts.join("\n"));
 }
+
+/** Opens the sidebar if it is closed, on any project, without toggling it shut. */
+export async function ensureSidebarOpen(page: Page): Promise<void> {
+  const aside = page.getByRole("complementary", { name: "Chats" });
+  if ((await aside.getAttribute("data-open")) === "true") return;
+  await page.getByRole("button", { name: "Show sidebar" }).click();
+  await expect(aside).toHaveAttribute("data-open", "true");
+}

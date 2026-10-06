@@ -1,25 +1,29 @@
-// D21: 180 KB gzipped JS budget on the chat route. Paths come from the app
-// build manifest so the budget tracks exactly what the chat page loads.
+// D21: 180 KB gzipped JS budget on the chat route. Turbopack (Next 16) writes
+// per-route manifests under .next/server/app/<route>/: the runtime chunks in
+// page/build-manifest.json and the client component chunks in
+// page_client-reference-manifest.js. Lazy imports (shiki, per-language
+// grammars) are separate chunks and are not in either, as intended.
 const fs = require("node:fs");
 const path = require("node:path");
 
-const manifestPath = path.join(__dirname, ".next", "app-build-manifest.json");
-if (!fs.existsSync(manifestPath)) {
+const routeDir = path.join(__dirname, ".next", "server", "app", "(chat)", "c", "[id]");
+const buildManifestPath = path.join(routeDir, "page", "build-manifest.json");
+const clientRefsPath = path.join(routeDir, "page_client-reference-manifest.js");
+if (!fs.existsSync(buildManifestPath) || !fs.existsSync(clientRefsPath)) {
   throw new Error("Run `pnpm build` before `pnpm size`.");
 }
-const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-const route = "/(chat)/c/[id]/page";
-const files = (manifest.pages[route] ?? [])
-  .filter((f) => f.endsWith(".js"))
-  .map((f) => path.join(".next", f));
-if (files.length === 0) {
-  throw new Error(`No JS files found for route ${route} in app-build-manifest.json`);
-}
+const buildManifest = JSON.parse(fs.readFileSync(buildManifestPath, "utf8"));
+// polyfillFiles are injected with `nomodule`, so modern browsers never fetch them.
+const files = new Set([...(buildManifest.rootMainFiles ?? [])]);
+const refs = fs.readFileSync(clientRefsPath, "utf8");
+for (const m of refs.matchAll(/"(static\/chunks\/[^"]+\.js)"/g)) files.add(m[1]);
+const paths = [...files].map((f) => path.join(".next", f)).filter((f) => fs.existsSync(f));
+if (paths.length === 0) throw new Error("No chat route chunks found");
 
 module.exports = [
   {
     name: "chat route JS (gzip)",
-    path: files,
+    path: paths,
     limit: "180 kB",
     gzip: true,
   },

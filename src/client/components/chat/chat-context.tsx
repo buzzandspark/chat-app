@@ -9,14 +9,25 @@ export interface ChatSettings {
   scenario: string | null;
 }
 
+export interface EditingState {
+  userMessageId: string;
+  text: string;
+}
+
 export interface ChatContextValue {
   chatId: string;
+  userId: string;
   client: GenerationClient;
   settings: ChatSettings;
   setSettings: (patch: Partial<ChatSettings>) => void;
   /** Send a new user turn (used by Continue after max_tokens and by the composer). */
   send: (text: string, scenario?: string) => void;
+  /** Regenerate from a user message, dropping that reply and everything after it. */
   retry: (userMessageId: string, fromMessageId: string) => void;
+  /** D10 edit-last-message: load a user message into the composer. */
+  editMessage: (userMessageId: string) => void;
+  editing: EditingState | null;
+  cancelEdit: () => void;
   focusComposer: () => void;
   autoFollow: { engaged: boolean; engage: () => void };
 }

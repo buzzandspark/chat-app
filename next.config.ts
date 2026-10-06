@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // `SOURCEMAPS=1 pnpm build` for scripts/bundle-report.mjs (D21 attribution).
+  productionBrowserSourceMaps: process.env.SOURCEMAPS === "1",
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,

@@ -22,7 +22,8 @@
     "docker:run": "docker run --rm -p 3000:3000 -v cadence-data:/data --env-file .env cadence:local",
     "fixtures": "tsx scripts/make-fixtures.ts",
     "screenshots": "tsx scripts/screenshots.ts",
-    "test:shutdown": "sh scripts/shutdown-test.sh"
+    "test:shutdown": "sh scripts/shutdown-test.sh",
+    "test:cache": "CACHE_TEST=1 vitest run --project server src/relay/anthropic/cache.live.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",

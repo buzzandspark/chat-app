@@ -1,29 +1,36 @@
 "use client";
-import { Plus, X } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getSidebarStore, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
+import { DeleteDialog, RenameDialog } from "./chat-dialogs";
 import { ThemeToggle } from "./theme-toggle";
 
 interface SidebarProps {
   initialChats: ChatSummary[];
   open: boolean;
   onClose: () => void;
+  onSearch: () => void;
   userLabel: string;
 }
 
 /**
  * One sidebar (D0): an overlay on phones, docked and collapsible at `md`.
- * The menu button is the primary way to open it; the swipe gesture starts
- * 24 px in from the edge so it never collides with the platform back gesture.
+ * Message and chat actions sit behind a visible "⋯" button; with a hovering
+ * pointer the button appears on hover or focus (`@media (hover: hover)`, not
+ * a width breakpoint, so iPads at the `md` layout still see it).
  */
-export function Sidebar({ initialChats, open, onClose, userLabel }: SidebarProps) {
+export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: SidebarProps) {
   const chats = useSidebarChats();
   const pathname = usePathname();
   const router = useRouter();
+  const [renaming, setRenaming] = useState<ChatSummary | null>(null);
+  const [deleting, setDeleting] = useState<ChatSummary | null>(null);
+  const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
 
   useEffect(() => {
     getSidebarStore().hydrate(initialChats);
@@ -57,9 +64,12 @@ export function Sidebar({ initialChats, open, onClose, userLabel }: SidebarProps
           !open && "md:hidden",
         )}
       >
-        <div className="flex h-14 items-center justify-between gap-2 px-3">
-          <span className="text-small font-semibold tracking-tight">Cadence</span>
-          <div className="flex items-center gap-1">
+        <div className="flex h-14 items-center justify-between gap-1 px-2">
+          <span className="px-1 text-small font-semibold tracking-tight">Cadence</span>
+          <div className="flex items-center">
+            <Button variant="ghost" size="icon" className="touch-target" aria-label="Search chats" onClick={onSearch}>
+              <Search />
+            </Button>
             <Button asChild variant="ghost" size="icon" className="touch-target" aria-label="New chat">
               <Link href="/c/new" onClick={onClose}>
                 <Plus />
@@ -77,9 +87,9 @@ export function Sidebar({ initialChats, open, onClose, userLabel }: SidebarProps
             <ul className="space-y-0.5">
               {chats.map((chat) => {
                 const href = `/c/${chat.id}`;
-                const active = pathname === href;
+                const active = chat.id === currentChatId;
                 return (
-                  <li key={chat.id}>
+                  <li key={chat.id} className="group/item relative flex items-center">
                     <Link
                       href={href}
                       prefetch={false}
@@ -89,12 +99,34 @@ export function Sidebar({ initialChats, open, onClose, userLabel }: SidebarProps
                       onFocus={() => router.prefetch(href)}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex min-h-11 items-center rounded-lg px-3 text-small transition-colors",
+                        "flex min-h-11 min-w-0 flex-1 items-center rounded-lg pl-3 pr-11 text-small transition-colors",
                         active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/70 active:bg-sidebar-accent",
                       )}
                     >
                       <span className="truncate">{chat.title}</span>
                     </Link>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Actions for ${chat.title}`}
+                          className="absolute right-0.5 top-1/2 size-10 -translate-y-1/2 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
+                        >
+                          <MoreHorizontal />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem className="min-h-11" onClick={() => setRenaming(chat)}>
+                          <Pencil />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="min-h-11" variant="destructive" onClick={() => setDeleting(chat)}>
+                          <Trash2 />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </li>
                 );
               })}
@@ -106,6 +138,8 @@ export function Sidebar({ initialChats, open, onClose, userLabel }: SidebarProps
           <ThemeToggle />
         </div>
       </aside>
+      <RenameDialog chat={renaming} onClose={() => setRenaming(null)} />
+      <DeleteDialog chat={deleting} onClose={() => setDeleting(null)} currentChatId={currentChatId} />
     </>
   );
 }

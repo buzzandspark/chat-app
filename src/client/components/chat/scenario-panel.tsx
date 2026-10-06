@@ -3,7 +3,7 @@ import { FlaskConical } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
+import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenario-catalog";
 import { useChatContext } from "./chat-context";
 
 /**

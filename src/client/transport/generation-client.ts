@@ -300,8 +300,22 @@ export class GenerationClient {
     if (terminal) {
       this.bodies.delete(generationId);
       this.store.markClientTiming(messageId, "done");
+      this.persistClientTimings(messageId);
     }
     return terminal;
+  }
+
+  /** D20: client stamps join the server's by message id; first paint lands a frame after `done`. */
+  private persistClientTimings(messageId: string): void {
+    setTimeout(() => {
+      const client = this.store.getMessage(messageId)?.timings?.client;
+      if (!client) return;
+      void this.fetchImpl(`/api/messages/${messageId}/timings`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(client),
+      }).catch(() => {});
+    }, 250);
   }
 
   private dispatch(event: RelayEvent, messageId: string): void {

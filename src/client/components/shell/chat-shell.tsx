@@ -1,10 +1,13 @@
 "use client";
 import { Menu, PanelLeft } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { ChatSummary } from "@client/store/sidebar-store";
+import { useSidebarChats } from "@client/store/sidebar-store";
 import { useIsDesktop } from "@client/hooks/use-media-query";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
+import { SearchDialog } from "./search-dialog";
 import { Sidebar } from "./sidebar";
 
 interface ChatShellProps {
@@ -13,25 +16,43 @@ interface ChatShellProps {
   children: ReactNode;
 }
 
+function isModifier(e: KeyboardEvent): boolean {
+  return navigator.platform.includes("Mac") ? e.metaKey : e.ctrlKey;
+}
+
 export function ChatShell({ initialChats, userLabel, children }: ChatShellProps) {
   const desktop = useIsDesktop();
+  const router = useRouter();
+  const pathname = usePathname();
+  const chats = useSidebarChats();
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
+  const [searchOpen, setSearchOpen] = useState(false);
   useVisualViewport();
 
   const open = desktop ? desktopOpen : phoneOpen;
   const close = useCallback(() => (desktop ? setDesktopOpen(false) : setPhoneOpen(false)), [desktop]);
   const toggle = useCallback(() => (desktop ? setDesktopOpen((v) => !v) : setPhoneOpen((v) => !v)), [desktop]);
 
-  // D19: Esc closes an open overlay first.
+  const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
+  const title = currentChatId ? (chats.find((c) => c.id === currentChatId)?.title ?? "") : pathname === "/c/new" ? "New chat" : "";
+
+  // D19 shortcuts: ⌘/Ctrl+Shift+O new chat, ⌘/Ctrl+K search, Esc closes the phone sidebar first.
   useEffect(() => {
-    if (desktop || !phoneOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPhoneOpen(false);
+      if (isModifier(e) && e.shiftKey && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        router.push("/c/new");
+      } else if (isModifier(e) && !e.shiftKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      } else if (e.key === "Escape" && !desktop && phoneOpen) {
+        setPhoneOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [desktop, phoneOpen]);
+  }, [desktop, phoneOpen, router]);
 
   // Inset swipe-to-open: starts at least 24 px in from the left edge (D0).
   useEffect(() => {
@@ -67,7 +88,7 @@ export function ChatShell({ initialChats, userLabel, children }: ChatShellProps)
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background">
-      <Sidebar initialChats={initialChats} open={open} onClose={close} userLabel={userLabel} />
+      <Sidebar initialChats={initialChats} open={open} onClose={close} onSearch={() => setSearchOpen(true)} userLabel={userLabel} />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border px-2 md:px-3">
           <Button
@@ -80,10 +101,13 @@ export function ChatShell({ initialChats, userLabel, children }: ChatShellProps)
           >
             {desktop ? <PanelLeft /> : <Menu />}
           </Button>
-          <div id="chat-header-slot" className="flex min-w-0 flex-1 items-center gap-2" />
+          <h1 className="min-w-0 flex-1 truncate px-1 text-small font-medium" data-testid="chat-title">
+            {title}
+          </h1>
         </header>
         {children}
       </div>
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

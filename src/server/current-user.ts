@@ -1,5 +1,6 @@
 import "server-only";
 import { eq } from "drizzle-orm";
+import { unstable_rethrow } from "next/navigation";
 import { connection } from "next/server";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
@@ -52,6 +53,9 @@ export function jsonError(status: number, body: Record<string, unknown>, headers
 }
 
 export function errorResponse(err: unknown): Response {
+  // Next's own control-flow errors (prerender interrupts from `connection()`,
+  // redirects, notFound) must propagate, or a static route prerenders as a 500.
+  unstable_rethrow(err);
   if (err instanceof HttpError) return jsonError(err.status, err.body);
   console.error("[route] unhandled", err);
   return jsonError(500, { error: "internal" });

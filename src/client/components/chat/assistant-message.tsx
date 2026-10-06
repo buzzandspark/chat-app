@@ -14,6 +14,7 @@ import { getChatStore, textOf, type MessageState } from "@client/store/chat-stor
 import { useChat } from "@client/store/hooks";
 import { modelDisplayName } from "@shared/models";
 import { useChatContext } from "./chat-context";
+import { LatencyPopover } from "./latency-popover";
 import { ServedBy, StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
 
@@ -121,6 +122,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
       {!streaming ? (
         <div className="flex items-center gap-1">
           <ServedBy message={message} />
+          <LatencyPopover timings={message.timings} usage={message.usage} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

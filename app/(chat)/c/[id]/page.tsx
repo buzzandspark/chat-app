@@ -20,7 +20,7 @@ async function ChatLoader({ params }: { params: PageProps<"/c/[id]">["params"] }
   const user = await requireUser();
   const scenarioPanel = env.scenarioPanel || user.role === "demo";
   if (id === "new") {
-    return <ChatView key="new" chatId={uuidv7()} title={null} initialMessages={[]} isNew scenarioPanel={scenarioPanel} />;
+    return <ChatView key="new" chatId={uuidv7()} userId={user.id} title={null} initialMessages={[]} isNew scenarioPanel={scenarioPanel} />;
   }
   if (!isUuid(id)) notFound();
   const data = getChatWithMessages(id, user.id);
@@ -29,6 +29,7 @@ async function ChatLoader({ params }: { params: PageProps<"/c/[id]">["params"] }
     <ChatView
       key={id}
       chatId={id}
+      userId={user.id}
       title={data.chat.title}
       initialMessages={data.messages}
       isNew={false}
