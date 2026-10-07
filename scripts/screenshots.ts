@@ -62,7 +62,8 @@ async function capture(frame: "phone" | "desktop", dark: boolean): Promise<void>
   await page.waitForSelector('[data-role="assistant"][data-status="done"]', { timeout: 60_000 });
   await shot(page, `${tag}-05-done-fallback`);
   await runScenario(page, "giant_code_block");
-  await page.waitForSelector('[data-role="assistant"][data-status="done"] >> nth=-1', { timeout: 60_000 });
+  // The newest reply must be done (an earlier done row would match too soon and the next send is refused while streaming).
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-role="assistant"]')].at(-1)?.getAttribute("data-status") === "done", null, { timeout: 90_000 });
   await page.waitForTimeout(1200);
   await shot(page, `${tag}-06-code-block`);
   await runScenario(page, "refusal_partial");
