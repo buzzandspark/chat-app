@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { ChatShell } from "@client/components/shell/chat-shell";
 import { listChats } from "@server/chats";
 import { getCurrentUser } from "@server/current-user";
-import { env } from "@shared/env";
 
 export default function ChatLayout({ children }: LayoutProps<"/">) {
   return (
@@ -23,7 +22,7 @@ async function ShellWithData({ children }: { children: React.ReactNode }) {
   }
   const chats = listChats(user.id);
   return (
-    <ChatShell initialChats={chats} userId={user.id} userLabel={user.email} scenarioPanel={env.scenarioPanel || user.role === "demo"}>
+    <ChatShell initialChats={chats} userId={user.id} userLabel={user.email} scenarioPanel>
       {children}
     </ChatShell>
   );

@@ -38,7 +38,6 @@ export default defineConfig({
       PORT: String(port),
       HOSTNAME: "127.0.0.1",
       REPLAY_MODE: "1",
-      SCENARIO_PANEL: "1",
       DATABASE_PATH: path.resolve(process.cwd(), "data/e2e.db"),
       BETTER_AUTH_SECRET: "e2e-secret-not-for-production-0123456789",
       BETTER_AUTH_URL: baseURL,

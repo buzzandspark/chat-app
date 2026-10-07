@@ -12,7 +12,6 @@ const schema = z.object({
   ADMIN_PATH_SLUG: z.string().regex(/^[a-z0-9-]+$/).default("admin"),
   DEV_USER_ID: z.string().default("dev-user"),
   REPLAY_MODE: z.string().optional(),
-  SCENARIO_PANEL: z.string().optional(),
   RECORD: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
   E2E: z.string().optional(),
@@ -33,7 +32,6 @@ export const env = {
   isDev: parsed.NODE_ENV === "development",
   /** D24: a missing key or REPLAY_MODE=1 boots the whole app in replay mode. */
   replayMode: flag(parsed.REPLAY_MODE) || !parsed.ANTHROPIC_API_KEY,
-  scenarioPanel: flag(parsed.SCENARIO_PANEL),
   record: flag(parsed.RECORD),
   e2e: flag(parsed.E2E),
 };

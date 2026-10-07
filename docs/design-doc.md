@@ -32,6 +32,7 @@ Composer ──POST /api/chat──▶ route ──engine.start()──▶ rows 
                                client ChatStore ◀─ GET /events?after=seq ─┘ (resume: buffered slice, then live)
 ```
 
+- **Scenarios** (D24) are available to every signed-in user: the provider resolver serves a named scenario from the scripted provider whatever the account, so they spend nothing and need no flag.
 - **Providers** (`src/relay/providers/`) all yield raw Anthropic stream events. `ScriptedProvider` and the on-disk fixtures share `scriptToFixture`, so a scenario behaves identically from memory or from `fixtures/<model>/<scenario>.jsonl`. `RecordingProvider` wraps the live provider under `RECORD=1`.
 - **Normalizer** (`src/relay/anthropic/parse-stream.ts`) turns `message_start`, block start/delta/stop, `message_delta`, and SSE-level `error` events into the relay vocabulary. A `fallback` block before any text is an invisible boundary (timing and `iterations` only); after text it emits a visible `fallback_boundary` and the partial is kept. The serving model is the last fallback block's `to.model`, else `message_start.message.model`, cross-checked against a `fallback_message` iteration entry for sticky-routed turns.
 - **Accumulator** (`accumulate.ts`) builds the `ContentBlock[]` to persist at any point in the stream; the engine writes it every 2 s and at every terminal event.

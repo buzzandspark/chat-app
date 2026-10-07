@@ -4,7 +4,6 @@ import { DrainingError, ForbiddenError } from "@relay/engine";
 import { QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { MODEL_IDS } from "@shared/models";
-import { env } from "@shared/env";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
@@ -29,9 +28,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (!parsed.success) return jsonError(400, { error: "bad_request", issues: parsed.error.issues });
     const body = parsed.data;
     if (isDraining()) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
-    if (body.scenario && !(env.scenarioPanel || user.role === "demo")) {
-      return jsonError(400, { error: "scenario_not_allowed" });
-    }
     const { engine, store, rateLimiter } = getRelay();
     const limit = rateLimiter.check(user.id, false);
     if (!limit.ok) {

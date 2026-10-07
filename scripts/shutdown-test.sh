@@ -12,7 +12,7 @@ rm -f "$DB" "$DB-wal" "$DB-shm"
 
 uuid() { node -e 'console.log(crypto.randomUUID())'; }
 boot() {
-  PORT=$PORT HOSTNAME=127.0.0.1 REPLAY_MODE=1 SCENARIO_PANEL=1 E2E=1 DATABASE_PATH="$DB" sh scripts/standalone.sh > "$OUT/server-$1.log" 2>&1 &
+  PORT=$PORT HOSTNAME=127.0.0.1 REPLAY_MODE=1 E2E=1 DATABASE_PATH="$DB" sh scripts/standalone.sh > "$OUT/server-$1.log" 2>&1 &
   for i in $(seq 1 60); do curl -fsS "$BASE/api/health" >/dev/null 2>&1 && return 0; sleep 0.5; done
   echo "server did not start"; cat "$OUT/server-$1.log"; exit 1
 }

@@ -1,7 +1,6 @@
 import { getDb, schema } from "@db/client";
 import { uuidv7 } from "@shared/id";
-import { env } from "@shared/env";
-import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import { errorResponse, requireUser } from "@server/current-user";
 import { getLimiters, tooMany } from "@server/ratelimit";
 
 const FILLER = [
@@ -15,7 +14,6 @@ const FILLER = [
 export async function POST(): Promise<Response> {
   try {
     const user = await requireUser();
-    if (!(env.scenarioPanel || user.role === "demo")) return jsonError(400, { error: "scenario_not_allowed" });
     const limit = getLimiters().seedLongChat.check(user.id);
     if (!limit.ok) return tooMany(limit.retryAfterMs);
     const db = getDb();
