@@ -7,3 +7,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Working next to a running dev server (Cadence)
+
+The developer runs `pnpm dev` in this checkout. Next 16 serves one dev server per checkout (`.next/dev/lock`) and hot-reloads every file write in it. Do not edit sources, run `next build`/`next typegen`, Playwright, the screenshot pass, or the shutdown script here while that lock names a live process: the server's clients are driven and re-chunked by those actions, and a tab can end up with "module factory is not available". `scripts/dev-lock-guard.mjs` refuses those scripts in that state. Work in a worktree instead:
+
+```sh
+pnpm worktree            # creates ../claude-app-wt with its own node_modules and data/
+cd ../claude-app-wt && DATABASE_PATH=$PWD/data/wt.db pnpm exec next dev -p 3141
+```
+
+Land multi-file refactors as one write (`git apply`, `git checkout`), not file by file over seconds, so the watcher compiles one consistent state.

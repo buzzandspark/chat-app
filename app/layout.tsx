@@ -50,7 +50,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* beforeInteractive: runs before hydration and is not re-rendered as a React element on client fallback. */}
+        <Script id="cadence-theme" strategy="beforeInteractive">
+          {themeScript}
+        </Script>
       </head>
       <body className="min-h-dvh flex flex-col">
         {children}
