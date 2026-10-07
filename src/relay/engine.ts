@@ -52,6 +52,11 @@ export interface ProviderContext {
 }
 export type ProviderResolver = (ctx: ProviderContext) => Provider;
 
+/** D22: only the live provider (and its recorder) spends money; scripted and replayed runs cost nothing. */
+export function isBillable(provider: Provider): boolean {
+  return provider.name === "anthropic" || provider.name === "recording";
+}
+
 export interface EngineFaults {
   /** D24 producer restart: abort this generation after N relayed events and emit `interrupted`. */
   interruptAfterEvents?: number;
@@ -123,6 +128,8 @@ interface Active {
   partialTimer: ReturnType<typeof setInterval> | null;
   promise: Promise<void>;
   faults: EngineFaults;
+  /** False for scripted and replayed runs: no reservation, zero-cost usage rows, no TPS sample. */
+  billable: boolean;
 }
 
 /** Relay engine (D2 to D5, D22): a generation runs as a detached promise that outlives the response. */
@@ -161,13 +168,23 @@ export class Engine {
     if (existingRow) return { created: false, reason: "exists" };
     if (this.isDraining()) throw new DrainingError();
 
+    const provider = this.providers({
+      userId: input.userId,
+      userRole: input.userRole,
+      model: input.model,
+      scenario: input.scenario,
+    });
+    const billable = isBillable(provider);
     const chatText = input.text ?? "";
-    this.quota.reserve(
-      input.userId,
-      input.generationId,
-      input.model,
-      QuotaManager.estimateInputTokens(this.chatChars(input.chatId) + chatText.length),
-    );
+    // A scripted or replayed run spends nothing, so it neither reserves against the cap nor can be refused by it.
+    if (billable) {
+      this.quota.reserve(
+        input.userId,
+        input.generationId,
+        input.model,
+        QuotaManager.estimateInputTokens(this.chatChars(input.chatId) + chatText.length),
+      );
+    }
 
     const now = new Date(this.now());
     try {
@@ -245,12 +262,7 @@ export class Engine {
             userMessageId: input.userMessageId,
             status: "running",
             requestedModel: input.model,
-            provider: this.providers({
-              userId: input.userId,
-              userRole: input.userRole,
-              model: input.model,
-              scenario: input.scenario,
-            }).name,
+            provider: provider.name,
             scenario: input.scenario ?? null,
             startedAt: now,
           })
@@ -278,6 +290,7 @@ export class Engine {
       partialTimer: null,
       promise: Promise.resolve(),
       faults: input.faults ?? {},
+      billable,
     };
     this.active.set(active.id, active);
     this.append(active, {
@@ -515,12 +528,13 @@ export class Engine {
     const servingModel = resolveServingModel(acc) ?? active.requestedModel;
     timings.done = this.now();
     timings.declinedAttempt = hadDeclinedAttempt(acc);
-    const rows = this.priceFinal(active, servingModel);
+    const rows = this.free(active, this.priceFinal(active, servingModel));
     const usage = summarize(rows, false);
     const refused = acc.stopReason === "refusal";
     const status: MessageStatus = refused ? "refused" : "done";
     const content = toContentBlocks(acc);
-    if (active.firstTokenAt !== null && !refused) {
+    // Only real streams teach the estimator; a scripted pace would skew what stopped replies are billed.
+    if (active.billable && active.firstTokenAt !== null && !refused) {
       this.tps.record(servingModel, usage.outputTokens, timings.done - active.firstTokenAt);
     }
     this.settle(
@@ -617,6 +631,11 @@ export class Engine {
     );
   }
 
+  /** Usage rows for a run that spends nothing keep their tokens and model but cost zero. */
+  private free(active: Active, rows: UsageRow[]): UsageRow[] {
+    return active.billable ? rows : rows.map((r) => ({ ...r, costUsd: 0 }));
+  }
+
   // D22: input tokens are exact from message_start; output is elapsed time times measured tokens/s,
   // because billed output includes full thinking while only its summary is visible.
   private estimateRows(active: Active, servingModel: string): UsageRow[] {
@@ -624,7 +643,7 @@ export class Engine {
     if (!active.acc.apiMessageId) return [];
     const from = active.firstTokenAt ?? active.startedAt;
     const outputTokens = this.tps.estimateOutputTokens(servingModel, this.now() - from);
-    return priceIterations(
+    return this.free(active, priceIterations(
       [
         {
           type: "message",
@@ -637,7 +656,7 @@ export class Engine {
         },
       ],
       servingModel,
-    );
+    ));
   }
 
   private finalize(active: Active, final: FinalState): void {

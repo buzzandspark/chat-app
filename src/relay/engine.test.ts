@@ -5,6 +5,7 @@ import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
 import { Engine, ForbiddenError, type StartInput } from "./engine";
 import { ScriptedProvider } from "./providers/scripted";
+import { TpsStats } from "./tps";
 import { QuotaExceededError } from "./quota";
 import { scenarioScript, type ScenarioName } from "./scenarios";
 import { EventStore } from "./store";
@@ -17,7 +18,9 @@ const USER = "u1";
 
 function makeEngine(speed: number, extra: Partial<ConstructorParameters<typeof Engine>[0]> = {}) {
   const scripted = new ScriptedProvider((req) => scenarioScript((req.scenario as ScenarioName) ?? "normal", req), speed);
-  return new Engine({ db, store, providers: () => scripted, partialPersistMs: 50, ...extra });
+  // Scripts stand in for the live provider here, so the billing paths under test are the real ones.
+  const asLive = { name: "anthropic" as const, stream: scripted.stream.bind(scripted) };
+  return new Engine({ db, store, providers: () => asLive, partialPersistMs: 50, ...extra });
 }
 
 function input(overrides: Partial<StartInput> = {}): StartInput {
@@ -116,6 +119,26 @@ describe("Engine", () => {
     const row = db.select().from(messages).where(eq(messages.id, inp.assistantMessageId)).get()!;
     expect(row.status).toBe("interrupted");
     expect(engine.runningCount()).toBe(0);
+  });
+
+  it("a scripted run costs nothing, teaches the estimator nothing, and is never refused by the cap (D22)", async () => {
+    const scripted = new ScriptedProvider((req) => scenarioScript((req.scenario as ScenarioName) ?? "normal", req), 0);
+    const tps = new TpsStats();
+    const before = tps.get("claude-sonnet-5-5");
+    engine = new Engine({ db, store, providers: () => scripted, partialPersistMs: 50, tps });
+    db.update(users).set({ costCapUsd: 0.000001, costSpentUsd: 0 }).where(eq(users.id, USER)).run();
+    const inp = input({ scenario: "normal" });
+    expect(engine.start(inp)).toEqual({ created: true });
+    const events = await collectUntilTerminal(store, inp.generationId);
+    expect(events[events.length - 1]!.type).toBe("done");
+    const usage = db.select().from(usageEvents).where(eq(usageEvents.generationId, inp.generationId)).all();
+    expect(usage).toHaveLength(1);
+    expect(usage[0]!.costUsd).toBe(0);
+    expect(usage[0]!.outputTokens).toBeGreaterThan(0);
+    expect(db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd).toBe(0);
+    expect(tps.get("claude-sonnet-5-5")).toBe(before);
+    const gen = db.select().from(generations).where(eq(generations.id, inp.generationId)).get()!;
+    expect(gen.provider).toBe("scripted");
   });
 
   it("is idempotent on generationId", async () => {
