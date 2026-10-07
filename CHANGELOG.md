@@ -2,6 +2,10 @@
 
 All notable changes, newest first. Dates are the day the work landed.
 
+## 2026-10-07
+
+- Fix: "Cannot update a component (ChatShell) while rendering a different component (ChatView)". The chat store is now one instance per shell provided through context (fresh per server render, long-lived on the client) and render-time seeding notifies subscribers in a microtask. The server no longer accumulates rendered chats in a module singleton.
+
 ## 2026-10-06
 
 - Performance pass (step 7): throttled Pixel 7 perf spec (CPU 4x, Fast 3G over CDP) recording CLS, paint timings, font status, first painted token, and streaming frame times into `docs/perf/`; a seeded 200-message chat scenario settles D14 (no virtualiser: p95 16.8 ms); the thread column got `min-h-0` so a long thread can never push the composer below the fold; test-id locators scoped to visible elements because Next keeps the previous page mounted hidden after a client-side navigation. Design iterations documented in `docs/design/README.md`; comparison method and the Cadence column in `docs/comparison.md`.
