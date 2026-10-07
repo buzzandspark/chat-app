@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@db/client";
 import { errorResponse, requireUser } from "@server/current-user";
 
@@ -10,7 +10,11 @@ export interface SearchHit {
   updatedAt: number;
 }
 
-/** D19: scans the user's chats in JS; one process (D1) has no search service and a history is small. */
+/**
+ * D19: one process (D1) has no search service. SQLite does the scanning (`like` over the stored JSON,
+ * in C) and only matching rows are parsed; before, every message of every chat was JSON-parsed in
+ * JS on each keystroke, about 30 MB for a large history.
+ */
 export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireUser();
@@ -25,10 +29,11 @@ export async function GET(request: NextRequest): Promise<Response> {
       .limit(500)
       .all();
     if (chats.length === 0) return Response.json({ hits: [] }, { headers: { "cache-control": "no-store" } });
+    const needle = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
     const rows = db
       .select({ chatId: schema.messages.chatId, content: schema.messages.content, position: schema.messages.position })
       .from(schema.messages)
-      .where(inArray(schema.messages.chatId, chats.map((c) => c.id)))
+      .where(and(inArray(schema.messages.chatId, chats.map((c) => c.id)), sql`lower(${schema.messages.content}) like ${needle} escape '\\'`))
       .orderBy(schema.messages.position)
       .all();
     const snippetByChat = new Map<string, string>();
