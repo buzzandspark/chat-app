@@ -1,0 +1,77 @@
+import { expect, test } from "@playwright/test";
+import { CHAT_URL, ensureSidebarOpen, lastAssistant, openNewChat, sendText, visible, waitForComposer } from "./helpers";
+
+// ADR-0005: the chat route renders from the client store; the server seeds it.
+test.describe("chat route", () => {
+  test("the first send does not remount the view", async ({ page }) => {
+    await openNewChat(page);
+    await visible(page, "composer").evaluate((el) => el.setAttribute("data-token", "before-send"));
+    await sendText(page, "no remount please");
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await expect(page).toHaveURL(CHAT_URL);
+    await expect(visible(page, "composer")).toHaveAttribute("data-token", "before-send");
+    await expect(page.getByTestId("thread-skeleton")).toHaveCount(0);
+  });
+
+  test("per-chat settings survive switching chats and coming back", async ({ page }, info) => {
+    const title = `settings ${info.project.name}`;
+    await openNewChat(page);
+    await sendText(page, title);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await page.getByRole("button", { name: "Choose model" }).click();
+    await page.getByRole("option", { name: /Claude Haiku 4.5/ }).click();
+    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 4.5");
+    const settingsUrl = page.url();
+    await ensureSidebarOpen(page);
+    await page.getByRole("link", { name: "New chat" }).click();
+    await expect(page).not.toHaveURL(settingsUrl);
+    await waitForComposer(page);
+    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Sonnet 5.5");
+    await ensureSidebarOpen(page);
+    await page.getByRole("complementary", { name: "Chats" }).getByRole("link", { name: title }).click();
+    await expect(page).toHaveURL(settingsUrl);
+    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 4.5");
+  });
+
+  test("a refused first send keeps the typed message and the page usable", async ({ page }) => {
+    await openNewChat(page);
+    const path = new URL(page.url()).pathname;
+    await page.route("**/api/chat", (route) =>
+      route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "rate_limited", retryAfterMs: 500 }) }),
+    );
+    await sendText(page, "please keep me");
+    const row = lastAssistant(page);
+    await expect(row).toHaveAttribute("data-status", "error", { timeout: 15_000 });
+    await expect(row).toContainText("Rate limited");
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("please keep me");
+    await page.unroute("**/api/chat");
+    await row.getByRole("button", { name: "Retry" }).click();
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    expect(new URL(page.url()).pathname).toBe(path);
+    await page.reload();
+    await waitForComposer(page);
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("please keep me");
+  });
+
+  test("a chat opened from the sidebar renders from memory on a revisit", async ({ page }, info) => {
+    const title = `memory ${info.project.name}`;
+    await openNewChat(page);
+    await sendText(page, title);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    const url = page.url();
+    await ensureSidebarOpen(page);
+    await page.getByRole("link", { name: "New chat" }).click();
+    await expect(page).not.toHaveURL(url);
+    await waitForComposer(page);
+    const seeds: string[] = [];
+    page.on("request", (r) => {
+      if (r.url().includes("/api/chats/")) seeds.push(r.url());
+    });
+    await ensureSidebarOpen(page);
+    await page.getByRole("complementary", { name: "Chats" }).getByRole("link", { name: title }).click();
+    await expect(page).toHaveURL(url);
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText(title);
+    await expect(page.getByTestId("thread-skeleton")).toHaveCount(0);
+    expect(seeds.filter((u) => /\/api\/chats\/[0-9a-f-]{36}$/.test(u))).toHaveLength(0);
+  });
+});

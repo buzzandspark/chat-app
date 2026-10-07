@@ -6,7 +6,6 @@ import { clearDraft, draftKey, readDraft, useDraft } from "@client/hooks/use-dra
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
 import { textOf } from "@client/store/chat-store";
 import { useChat, useChatStore, useMessage } from "@client/store/hooks";
-import { SCENARIOS, isScenarioName } from "@relay/scenario-catalog";
 import { useChatContext } from "./chat-context";
 import dynamic from "next/dynamic";
 import { ChevronDown } from "lucide-react";
@@ -99,7 +98,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const submit = () => {
     // One generation at a time: while a reply streams, Enter and the button do nothing.
     if (!value.trim() || streamingId) return;
-    send(value, settings.scenario ?? undefined);
+    send(value, settings.scenario?.name);
     setValue("");
     clearDraft(key);
     if (settings.scenario) setSettings({ scenario: null });
@@ -124,7 +123,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     }
   };
 
-  const scenario = settings.scenario && isScenarioName(settings.scenario) ? SCENARIOS[settings.scenario] : null;
+  const scenario = settings.scenario;
   const editingText = editing ? textOf(store.getMessage(editing.userMessageId)?.blocks ?? []) : "";
 
   return (

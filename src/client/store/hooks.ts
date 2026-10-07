@@ -21,4 +21,17 @@ export function useChat(chatId: string): ChatState {
   );
 }
 
+/**
+ * Whether the chat's rows are in the store. The server snapshot is always false: the server renders
+ * the skeleton, hydration matches it, and React re-renders with the seeded store before paint.
+ */
+export function useChatSeeded(chatId: string): boolean {
+  const store = useChatStore();
+  return useSyncExternalStore(
+    (cb) => store.subscribeChat(chatId, cb),
+    () => store.getChat(chatId).seeded,
+    () => false,
+  );
+}
+
 export { useChatStore } from "./context";

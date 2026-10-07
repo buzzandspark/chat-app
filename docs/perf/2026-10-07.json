@@ -1,20 +1,20 @@
 {
   "giant_code_block": {
-    "frames": 1401,
+    "frames": 1382,
     "p50": 16.7,
     "p95": 33.3,
     "p99": 33.4,
-    "longFrames": 1,
-    "at": "2026-10-07T11:58:00.026Z"
+    "longFrames": 0,
+    "at": "2026-10-07T15:12:50.604Z"
   },
   "shell": {
     "cls": 0,
     "shifts": 0,
-    "ttfbMs": 2,
-    "domContentLoadedMs": 1369,
+    "ttfbMs": 3,
+    "domContentLoadedMs": 1381,
     "paints": {
-      "first-paint": 1488,
-      "first-contentful-paint": 1488
+      "first-paint": 1504,
+      "first-contentful-paint": 1504
     },
     "fonts": [
       "Inter:unloaded",
@@ -34,28 +34,28 @@
       "JetBrains Mono Fallback:unloaded"
     ],
     "interLoaded": true,
-    "transferredKb": 348,
-    "hydratedMs": 4016,
-    "at": "2026-10-07T11:56:58.236Z"
+    "transferredKb": 349,
+    "hydratedMs": 4062,
+    "at": "2026-10-07T15:11:51.436Z"
   },
   "long_reply": {
-    "firstPaintMs": 1234,
-    "frames": 577,
+    "firstPaintMs": 1196,
+    "frames": 579,
     "p50": 16.7,
     "p95": 16.7,
     "p99": 16.8,
     "longFrames": 0,
-    "assistantRows": 2,
-    "at": "2026-10-07T11:57:12.019Z"
+    "assistantRows": 1,
+    "at": "2026-10-07T15:12:05.276Z"
   },
   "long_chat": {
     "rows": 200,
-    "loadMs": 942,
-    "frames": 550,
+    "loadMs": 1470,
+    "frames": 561,
     "p50": 16.7,
     "p95": 16.8,
-    "p99": 66.7,
-    "longFrames": 6,
-    "at": "2026-10-07T11:57:27.959Z"
+    "p99": 33.4,
+    "longFrames": 4,
+    "at": "2026-10-07T15:12:21.227Z"
   }
 }

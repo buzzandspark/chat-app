@@ -10,6 +10,13 @@ import { useIsDesktop } from "@client/hooks/use-media-query";
 import { MODEL_IDS, MODELS, type ModelId } from "@shared/models";
 import type { ThinkingOptions } from "@shared/types";
 
+// Shown only in the picker, so the main chunk carries names, not copy (D21).
+const MODEL_BLURBS: Record<ModelId, string> = {
+  "claude-sonnet-5-5": "Fast and capable for everyday work",
+  "claude-opus-5-5": "Deepest reasoning for hard problems",
+  "claude-haiku-4-5": "Quickest replies, lowest cost",
+};
+
 interface ModelPickerProps {
   model: ModelId;
   thinking: ThinkingOptions;
@@ -53,7 +60,7 @@ export function ModelPicker({ model, thinking, onChange }: ModelPickerProps) {
           >
             <span className="flex flex-col">
               <span className="text-body font-medium">{m.name}</span>
-              <span className="text-caption text-muted-foreground">{m.blurb}</span>
+              <span className="text-caption text-muted-foreground">{MODEL_BLURBS[id]}</span>
             </span>
             {selected ? <Check className="size-4 shrink-0" /> : null}
           </button>

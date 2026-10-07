@@ -1,9 +1,8 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { newChatHref } from "@client/hooks/use-new-chat";
+import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
@@ -66,7 +65,7 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
 }
 
 export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
-  const router = useRouter();
+  const newChat = useNewChat();
   const [busy, setBusy] = useState(false);
   const confirm = async () => {
     if (busy) return;
@@ -76,7 +75,7 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       if (res.ok) {
         getSidebarStore().remove(chat.id);
         onOpenChange(false);
-        if (currentChatId === chat.id) router.push(newChatHref());
+        if (currentChatId === chat.id) newChat();
       }
     } finally {
       setBusy(false);

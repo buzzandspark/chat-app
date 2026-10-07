@@ -1,10 +1,12 @@
 import type { ClientBlock, StoredContentBlock } from "@shared/blocks";
 import { toClientBlocks } from "@shared/blocks";
+import { DEFAULT_MODEL, type ModelId } from "@shared/models";
 import type {
   InterruptedReason,
   MessageStatus,
   RefusalInfo,
   RelayError,
+  ThinkingOptions,
   Timings,
   UsageSummary,
 } from "@shared/types";
@@ -37,7 +39,19 @@ export interface MessageState {
   /** The last producer seq applied; control events never move it. */
   lastSeq: number;
   createdAt: number;
+  /** Added by this client and not yet listed by the server (a POST in flight, or one it refused). */
+  local: boolean;
 }
+
+/** Per-chat composer settings (ADR-0005): kept here so a remount or an Activity eviction never resets them. */
+export interface ChatSettings {
+  model: ModelId;
+  thinking: ThinkingOptions;
+  /** An armed scenario with its label, so the composer chip needs no catalogue (D21). */
+  scenario: { name: string; title: string } | null;
+}
+
+export const DEFAULT_SETTINGS: ChatSettings = { model: DEFAULT_MODEL, thinking: { harder: false }, scenario: null };
 
 export interface ChatState {
   id: string;
@@ -45,6 +59,24 @@ export interface ChatState {
   title: string | null;
   /** True once the server's rows have been applied (or the chat was created locally), so an empty list means a new chat. */
   seeded: boolean;
+  settings: ChatSettings;
+}
+
+/** A message row as the page and `GET /api/chats/:id` deliver it. */
+export interface SeedRow {
+  id: string;
+  chatId: string;
+  role: "user" | "assistant";
+  content: StoredContentBlock[];
+  status: MessageStatus;
+  requestedModel: string | null;
+  servingModel: string | null;
+  stopReason: string | null;
+  refusal: RefusalInfo | null;
+  error: RelayError | null;
+  timings: Timings | null;
+  generationId: string | null;
+  createdAt: number;
 }
 
 interface Internal {
@@ -54,7 +86,13 @@ interface Internal {
 
 type Listener = () => void;
 
-export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false };
+export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS };
+
+function emptyChat(id: string): ChatState {
+  return { id, messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS };
+}
+
+const TERMINAL: ReadonlySet<MessageStatus> = new Set(["done", "stopped", "interrupted", "error", "refused"]);
 
 export function createMessageState(partial: Partial<MessageState> & Pick<MessageState, "id" | "chatId" | "role">): MessageState {
   return {
@@ -76,8 +114,23 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
     thinkingEndedAt: null,
     lastSeq: -1,
     createdAt: Date.now(),
+    local: false,
     ...partial,
   };
+}
+
+/**
+ * Stream block index to position among the client blocks of saved content. The accumulator writes
+ * blocks in stream order and only omits empty ones, which are trailing in practice (a block that
+ * has started but not received a delta), so position and index agree for every saved block.
+ */
+export function blockIndexFromContent(content: readonly StoredContentBlock[]): Map<number, number> {
+  const map = new Map<number, number>();
+  let pos = 0;
+  content.forEach((b, i) => {
+    if (b.type === "text" || b.type === "thinking" || b.type === "redacted_thinking" || b.type === "fallback") map.set(i, pos++);
+  });
+  return map;
 }
 
 export function textOf(blocks: readonly ClientBlock[]): string {
@@ -166,43 +219,73 @@ export class ChatStore {
     if (set) for (const l of set) l();
   }
 
-  /** Keeps in-flight messages. deferNotify: the caller seeds during its own render, so notify in a microtask. */
-  hydrateChat(chatId: string, title: string | null, incoming: MessageState[], options: { deferNotify?: boolean } = {}): void {
+  /** A chat created on this client: known to be empty, no server round trip needed to say so. */
+  createChat(chatId: string): void {
+    const previous = this.chats.get(chatId);
+    if (previous?.seeded) return;
+    this.chats.set(chatId, { ...(previous ?? emptyChat(chatId)), seeded: true });
+    this.notifyChat(chatId);
+  }
+
+  setSettings(chatId: string, patch: Partial<ChatSettings>): void {
+    const chat = this.chats.get(chatId) ?? emptyChat(chatId);
+    this.chats.set(chatId, { ...chat, settings: { ...chat.settings, ...patch } });
+    this.notifyChat(chatId);
+  }
+
+  /**
+   * Reconciles the server's rows into the store (ADR-0005). Local in-flight messages win; a finished
+   * local reply is never replaced by a stale `streaming` row; optimistic messages the server has
+   * not listed yet stay, after the server's rows. deferNotify: the caller seeds during its own
+   * render, so subscribers are notified in a microtask.
+   */
+  seedChat(chatId: string, title: string | null, rows: readonly SeedRow[], options: { deferNotify?: boolean } = {}): void {
+    const previous = this.chats.get(chatId);
     const ids: string[] = [];
     const touched: string[] = [];
-    for (const m of incoming) {
-      const existing = this.messages.get(m.id);
-      if (existing && existing.status === "streaming") {
-        ids.push(m.id);
-        continue;
+    const listed = new Set<string>();
+    for (const row of rows) {
+      listed.add(row.id);
+      ids.push(row.id);
+      const existing = this.messages.get(row.id);
+      if (existing) {
+        if (existing.status === "streaming") continue;
+        if (TERMINAL.has(existing.status) && row.status === "streaming") continue;
+        if (sameRow(existing, row)) continue;
       }
-      this.messages.set(m.id, m);
-      this.internals.set(m.id, { blockIndex: new Map() });
-      if (m.generationId) this.byGeneration.set(m.generationId, m.id);
-      ids.push(m.id);
-      touched.push(m.id);
+      const m = messageStateFromRow(row);
+      this.messages.set(row.id, m);
+      this.internals.set(row.id, { blockIndex: blockIndexFromContent(row.content) });
+      if (m.generationId) this.byGeneration.set(m.generationId, row.id);
+      touched.push(row.id);
     }
-    const previous = this.chats.get(chatId);
+    if (previous) {
+      for (const id of previous.messageIds) {
+        if (!listed.has(id) && this.messages.get(id)?.local) ids.push(id);
+      }
+    }
+    const nextTitle = title ?? previous?.title ?? null;
     const same =
-      previous &&
+      previous !== undefined &&
       previous.seeded &&
-      previous.title === title &&
+      previous.title === nextTitle &&
       previous.messageIds.length === ids.length &&
       previous.messageIds.every((id, i) => id === ids[i]);
-    if (!same) this.chats.set(chatId, { id: chatId, messageIds: ids, title, seeded: true });
+    if (!same) this.chats.set(chatId, { ...(previous ?? emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true });
     const notify = () => {
       for (const id of touched) this.notifyMessage(id);
       if (!same) this.notifyChat(chatId);
     };
+    if (touched.length === 0 && same) return;
     if (options.deferNotify) queueMicrotask(notify);
     else notify();
   }
 
   addMessage(message: MessageState): void {
-    this.messages.set(message.id, message);
+    this.messages.set(message.id, { ...message, local: true });
     this.internals.set(message.id, { blockIndex: new Map() });
     if (message.generationId) this.byGeneration.set(message.generationId, message.id);
-    const chat = this.chats.get(message.chatId) ?? { id: message.chatId, messageIds: [], title: null, seeded: false };
+    const chat = this.chats.get(message.chatId) ?? emptyChat(message.chatId);
     if (!chat.messageIds.includes(message.id)) {
       this.chats.set(message.chatId, { ...chat, messageIds: [...chat.messageIds, message.id] });
       this.notifyChat(message.chatId);
@@ -244,7 +327,7 @@ export class ChatStore {
   }
 
   setChatTitle(chatId: string, title: string | null): void {
-    const chat = this.chats.get(chatId) ?? { id: chatId, messageIds: [], title: null, seeded: false };
+    const chat = this.chats.get(chatId) ?? emptyChat(chatId);
     if (chat.title === title) return;
     this.chats.set(chatId, { ...chat, title });
     this.notifyChat(chatId);
@@ -441,22 +524,16 @@ export class ChatStore {
   }
 }
 
+/** True when a saved row carries nothing the store does not already show, so the row object can stay. */
+function sameRow(existing: MessageState, row: SeedRow): boolean {
+  if (existing.local || existing.status !== row.status || existing.stopReason !== row.stopReason) return false;
+  const blocks = toClientBlocks(row.content);
+  if (blocks.length !== existing.blocks.length) return false;
+  return textOf(blocks) === textOf(existing.blocks);
+}
+
 /** Server-rendered message rows to client state. */
-export function messageStateFromRow(row: {
-  id: string;
-  chatId: string;
-  role: "user" | "assistant";
-  content: StoredContentBlock[];
-  status: MessageStatus;
-  requestedModel: string | null;
-  servingModel: string | null;
-  stopReason: string | null;
-  refusal: RefusalInfo | null;
-  error: RelayError | null;
-  timings: Timings | null;
-  generationId: string | null;
-  createdAt: number;
-}): MessageState {
+export function messageStateFromRow(row: SeedRow): MessageState {
   const blocks = toClientBlocks(row.content);
   return createMessageState({
     id: row.id,

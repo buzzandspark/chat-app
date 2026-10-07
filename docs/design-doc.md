@@ -16,7 +16,7 @@ A chat client modelled on the Claude desktop app that demonstrates streaming qua
 
 ## 3. Key decisions
 
-See `docs/adr/` for transport (0001), topology (0002), persistence (0003), identity (0004). Decision numbers D0 to D28 referenced in code comments map to the build plan.
+See `docs/adr/` for transport (0001), topology (0002), persistence (0003), identity (0004), the chat route rendering from the client store (0005). Decision numbers D0 to D28 referenced in code comments map to the build plan.
 
 ## 4. Streaming pipeline
 
@@ -130,6 +130,32 @@ The plan set the budget at 180 kB assuming a smaller framework floor; Next 16's 
 | 600-line code block streaming: frame time p50 / p95 / p99 | 16.7 / 33.3 / 33.4 ms, 0 frames over 50 ms of 1,402 |
 
 Lighthouse is not wired in; CLS, paint timings, and font status are read from `PerformanceObserver` and `document.fonts` inside the same run, which gives the two numbers the plan asked for (CLS 0, no font flash) without a second toolchain.
+
+### Chat route: client store first, server rows as a seed (ADR-0005)
+
+```
+sidebar row ──hover/focus/touchstart──▶ router.prefetch(shell) + GET /api/chats/:id ──▶ store.seedChat()
+     │ click (onNavigate: pending id → row highlight, header title at once)
+     ▼
+/c/<id>  static shell: <Suspense fallback=ChatViewSkeleton> <ChatView>            ◀── useParams(), reads the store
+                                                      └ <Suspense> <ChatSeed params/> ──▶ <SeedChat rows/> ──▶ store.seedChat()
+```
+
+- `ChatView` is in the route's static shell and reads its id from `useParams()`, which resolves synchronously on a client navigation. It renders `MessageList` from the store when the chat is seeded and a thread skeleton (the list's own spacing) when it is not; the composer is always the real one.
+- `SeedChat` reconciles the server's rows during its render, so a hard load paints them in the first frame (the server renders the skeleton, hydration matches it, and `useSyncExternalStore`'s consistency check re-renders with the seeded store before paint). Rules: a local `streaming` message wins; a finished local reply is never replaced by a `streaming` row; optimistic messages the server has not listed yet stay after the server's rows; identical rows are not replaced, so a revisit re-renders nothing.
+- New chat is `/c/<uuidv7>` chosen on the client and created in the store as seeded-empty, so it never shows a skeleton; the engine creates the row on the first send. `/c/new` is a 307 alias in `proxy.ts`. An id with no rows renders an empty view; a refused first POST (429, 503, 402) leaves the typed message on screen with its retry.
+- Per-chat settings (model, "Think harder", scenario) live in `ChatState.settings`; drafts stay in `localStorage` per (user, chat). The first send does not navigate, so nothing remounts: the phone keyboard stays up and the picker keeps its value.
+
+Measured on 2026-10-07 against the production build with 100 ms of emulated network latency (CDP), milliseconds from the row's `pointerdown`; desktop at 1x CPU, Pixel 7 emulation at 4x. "Before" is commit `79f3845`, where every switch waited for the server-rendered thread.
+
+| Case | Before: row highlight | Before: thread painted | After: row highlight | After: thread painted |
+| --- | ---: | ---: | ---: | ---: |
+| Loaded chat, desktop | 26 | 126 | 10 | 27 |
+| Loaded chat, Pixel 7 4x | 30 | 130 | 13 | 29 |
+| Cold chat (after a reload), desktop | 26 | 126 | 10 | 128 (skeleton at 27) |
+| Cold chat, Pixel 7 4x | 29 | 131 | 13 | 131 (skeleton at 30) |
+
+The composer measures 115 px on a phone and 135 px on desktop throughout; before, the page-level skeleton collapsed it to 56 px while a chat loaded. In development and over a real network the "before" round trip was about 650 ms; the "after" numbers for a loaded chat do not depend on the network at all.
 
 ### Long lists (D14): decision
 

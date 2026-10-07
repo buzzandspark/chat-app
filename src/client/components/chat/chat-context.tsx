@@ -1,13 +1,9 @@
 "use client";
 import { createContext, useContext } from "react";
+import type { ChatSettings } from "@client/store/chat-store";
 import type { GenerationClient } from "@client/transport/generation-client";
-import type { ModelId, ThinkingOptions } from "@shared/types";
 
-export interface ChatSettings {
-  model: ModelId;
-  thinking: ThinkingOptions;
-  scenario: string | null;
-}
+export type { ChatSettings };
 
 export interface EditingState {
   userMessageId: string;

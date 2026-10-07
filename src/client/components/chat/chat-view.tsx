@@ -1,25 +1,19 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { messageStateFromRow, textOf } from "@client/store/chat-store";
-import { useChat, useChatStore } from "@client/store/hooks";
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Button } from "@/components/ui/button";
+import { useNewChat } from "@client/hooks/use-new-chat";
+import { textOf, type ChatSettings } from "@client/store/chat-store";
+import { useChat, useChatSeeded, useChatStore } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
-import type { MessageRow } from "@server/chats";
-import { DEFAULT_MODEL } from "@shared/models";
-import { ChatContext, type ChatSettings, type EditingState } from "./chat-context";
+import { isUuid } from "@shared/id";
+import { ChatContext, type EditingState } from "./chat-context";
 import { Composer, type ComposerHandle } from "./composer";
 import { LiveRegion } from "./live-region";
 import { MessageList, type MessageListHandle } from "./message-list";
-
-interface ChatViewProps {
-  chatId: string;
-  userId: string;
-  title: string | null;
-  updatedAt?: number;
-  initialMessages: MessageRow[];
-  isNew: boolean;
-  scenarioPanel: boolean;
-}
+import { useShellUser } from "../shell/shell-user";
+import { ThreadSkeleton } from "./thread-skeleton";
 
 async function truncateOnServer(chatId: string, fromMessageId: string): Promise<boolean> {
   try {
@@ -34,49 +28,32 @@ async function truncateOnServer(chatId: string, fromMessageId: string): Promise<
   }
 }
 
-export function ChatView({ chatId, userId, title, updatedAt, initialMessages, isNew, scenarioPanel }: ChatViewProps) {
+/**
+ * ADR-0005: the view renders from the client store at once; the id comes from the URL and the
+ * server's rows arrive through `children` (a Suspense child that seeds the store) whenever they do.
+ */
+export function ChatView({ children }: { children: ReactNode }) {
+  const { id: chatId } = useParams<{ id: string }>();
+  const { userId, scenarioPanel } = useShellUser();
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
-  // Seed the store during the first render so the first paint has the messages;
-  // notifications are deferred so no ancestor subscriber is updated mid-render.
-  const [hydratedFor] = useState(() => {
-    store.hydrateChat(chatId, title, initialMessages.map(messageStateFromRow), { deferNotify: true });
-    return chatId;
-  });
-  if (hydratedFor !== chatId) store.hydrateChat(chatId, title, initialMessages.map(messageStateFromRow), { deferNotify: true });
-
   const chat = useChat(chatId);
-  const [settings, setSettingsState] = useState<ChatSettings>({ model: DEFAULT_MODEL, thinking: { harder: false }, scenario: null });
-  const setSettings = useCallback((patch: Partial<ChatSettings>) => setSettingsState((s) => ({ ...s, ...patch })), []);
+  const settings = chat.settings;
+  const setSettings = useCallback((patch: Partial<ChatSettings>) => store.setSettings(chatId, patch), [store, chatId]);
   const [editing, setEditing] = useState<EditingState | null>(null);
   const composerRef = useRef<ComposerHandle>(null);
   const listRef = useRef<MessageListHandle>(null);
   const [followEngaged, setFollowEngaged] = useState(true);
+  const isEmpty = chat.seeded && chat.messageIds.length === 0;
 
-  // A chat opened by navigation joins the sidebar list even if the layout rendered before it existed.
+  // Desktop only (a phone would pop the keyboard): focus the composer on a new chat.
   useEffect(() => {
-    if (!isNew && title) getSidebarStore().ensure({ id: chatId, title, updatedAt: updatedAt ?? 0 });
-  }, [chatId, title, isNew, updatedAt]);
-
-  // Desktop only (a phone would pop the keyboard): focus on a new chat and after a reload mid-stream.
-  useEffect(() => {
-    if (!window.matchMedia("(hover: hover) and (min-width: 768px)").matches) return;
-    const last = initialMessages.at(-1);
-    if (!isNew && last?.status !== "streaming") return;
+    if (!isEmpty || !window.matchMedia("(hover: hover) and (min-width: 768px)").matches) return;
     const t = setTimeout(() => composerRef.current?.focus(), 80);
     return () => clearTimeout(t);
-  }, [isNew, chatId, initialMessages]);
+  }, [isEmpty, chatId]);
 
-  // D2: a reload mid-stream reattaches to the generation through the resume path.
-  useEffect(() => {
-    for (const row of initialMessages) {
-      if (row.role === "assistant" && row.status === "streaming" && row.generationId) {
-        client.attach(row.generationId, row.id);
-      }
-    }
-  }, [client, initialMessages]);
-
-  // The URL already is this chat's own (ADR-0005), so a send only has to name it in the sidebar.
+  // The URL already is this chat's own, so a send only has to name it in the sidebar.
   const announceChat = useCallback(
     (text: string) => {
       getSidebarStore().upsert({ id: chatId, title: chat.title ?? text.slice(0, 60), updatedAt: Date.now() });
@@ -92,7 +69,7 @@ export function ChatView({ chatId, userId, title, updatedAt, initialMessages, is
       const lastId = store.getChat(chatId).messageIds.at(-1);
       const last = lastId ? store.getMessage(lastId) : undefined;
       if (last?.role === "assistant" && last.status === "streaming") return;
-      const opts = { chatId, model: settings.model, thinking: settings.thinking, scenario: scenario ?? settings.scenario ?? undefined };
+      const opts = { chatId, model: settings.model, thinking: settings.thinking, scenario: scenario ?? settings.scenario?.name };
       if (editing) {
         // D10: replace the edited user message and everything after it, then regenerate.
         const from = editing.userMessageId;
@@ -111,9 +88,11 @@ export function ChatView({ chatId, userId, title, updatedAt, initialMessages, is
 
   const retry = useCallback(
     (userMessageId: string, fromMessageId: string) => {
+      // The text travels with the retry: after a refused first POST the server has no user row to retry from.
+      const text = textOf(store.getMessage(userMessageId)?.blocks ?? []) || undefined;
       store.truncateFrom(fromMessageId);
       void truncateOnServer(chatId, fromMessageId).then(() =>
-        client.retry({ chatId, userMessageId, model: settings.model, thinking: settings.thinking, scenario: settings.scenario ?? undefined }),
+        client.retry({ chatId, userMessageId, text, model: settings.model, thinking: settings.thinking, scenario: settings.scenario?.name }),
       );
       listRef.current?.engage();
     },
@@ -149,13 +128,43 @@ export function ChatView({ chatId, userId, title, updatedAt, initialMessages, is
     [chatId, userId, client, settings, setSettings, send, retry, editMessage, editing, followEngaged, scenarioPanel],
   );
 
+  if (!isUuid(chatId)) return <MissingChat />;
+
   return (
     <ChatContext.Provider value={ctx}>
       <div className="flex min-h-0 flex-1 flex-col">
-        <MessageList ref={listRef} chatId={chatId} onFollowChange={setFollowEngaged} />
+        {children}
+        <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />
         <LiveRegion chatId={chatId} />
         <Composer ref={composerRef} chatId={chatId} />
       </div>
     </ChatContext.Provider>
+  );
+}
+
+/** The skeleton stands in only until the chat is seeded; the composer around it is the real one. */
+function Thread({
+  chatId,
+  listRef,
+  onFollowChange,
+}: {
+  chatId: string;
+  listRef: RefObject<MessageListHandle | null>;
+  onFollowChange: (engaged: boolean) => void;
+}) {
+  const seeded = useChatSeeded(chatId);
+  if (!seeded) return <ThreadSkeleton />;
+  return <MessageList ref={listRef} chatId={chatId} onFollowChange={onFollowChange} />;
+}
+
+function MissingChat() {
+  const newChat = useNewChat();
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-gutter text-center">
+      <p className="text-body text-muted-foreground">This chat link is not valid.</p>
+      <Button variant="outline" className="touch-target" onClick={newChat}>
+        New chat
+      </Button>
+    </div>
   );
 }

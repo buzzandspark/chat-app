@@ -15,6 +15,8 @@ export interface SendInput {
 export interface RetryInput {
   chatId: string;
   userMessageId: string;
+  /** The user message's text, so a retry after a refused first POST (the server never saw it) can create it. */
+  text?: string;
   model: ModelId;
   thinking: ThinkingOptions;
   scenario?: string;
@@ -138,6 +140,7 @@ export class GenerationClient {
       generationId,
       messageId: input.userMessageId,
       assistantMessageId,
+      text: input.text,
       model: input.model,
       thinking: input.thinking,
       scenario: input.scenario,

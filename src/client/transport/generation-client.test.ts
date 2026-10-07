@@ -80,6 +80,16 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("GenerationClient", () => {
+  it("retry carries the user text so a refused first send can be retried", async () => {
+    const client = makeClient((_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };
+      return sseResponse(makeEvents(body.generationId, body.assistantMessageId, "ok"));
+    });
+    const { assistantMessageId } = client.retry({ chatId: "c1", userMessageId: "u1", text: "again", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    await settle(assistantMessageId);
+    expect(calls[0]!.body).toMatchObject({ messageId: "u1", text: "again" });
+  });
+
   it("streams a POST into the store with timings", async () => {
     const client = makeClient((_url, init) => {
       const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };

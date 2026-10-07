@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RelayEvent, RelayEventBody } from "@relay/events";
-import { ChatStore, createMessageState, textOf } from "./chat-store";
+import type { StoredContentBlock } from "@shared/blocks";
+import { ChatStore, createMessageState, textOf, type SeedRow } from "./chat-store";
 
 function makeStore() {
   const scheduled: Array<() => void> = [];
@@ -24,6 +25,22 @@ function seed(store: ChatStore) {
 }
 
 const ev = (seq: number | null, body: RelayEventBody): RelayEvent => ({ seq, generationId: "g1", t: 0, ...body }) as RelayEvent;
+
+const text = (t: string): StoredContentBlock => ({ type: "text", text: t, citations: null });
+const row = (partial: Partial<SeedRow> & Pick<SeedRow, "id" | "role">): SeedRow => ({
+  chatId: "c1",
+  content: [],
+  status: "done",
+  requestedModel: null,
+  servingModel: null,
+  stopReason: null,
+  refusal: null,
+  error: null,
+  timings: null,
+  generationId: null,
+  createdAt: 1,
+  ...partial,
+});
 
 describe("ChatStore", () => {
   it("batches producer events per frame and publishes one state per touched message", () => {
@@ -143,18 +160,72 @@ describe("ChatStore", () => {
     expect(m.servingModel).toBe("claude-opus-4-8");
   });
 
-  it("hydrate keeps an in-flight message and truncateFrom removes the tail", () => {
+  it("seed keeps an in-flight message and truncateFrom removes the tail", () => {
     const { store } = makeStore();
     seed(store);
-    store.hydrateChat("c1", "Title", [
-      createMessageState({ id: "u1", chatId: "c1", role: "user", blocks: [{ type: "text", text: "q" }] }),
-      createMessageState({ id: "a1", chatId: "c1", role: "assistant", status: "done" }),
-    ]);
+    store.seedChat("c1", "Title", [row({ id: "u1", role: "user", content: [text("q")] }), row({ id: "a1", role: "assistant", status: "done" })]);
     expect(store.getChat("c1").messageIds).toEqual(["u1", "a1"]);
     expect(store.getMessage("a1")!.status).toBe("streaming");
     store.truncateFrom("a1");
     expect(store.getChat("c1").messageIds).toEqual(["u1"]);
     expect(store.getMessage("a1")).toBeUndefined();
+  });
+
+  describe("seedChat (ADR-0005)", () => {
+    it("marks the chat seeded and keeps settings and a local title across seeds", () => {
+      const { store } = makeStore();
+      store.setSettings("c1", { model: "claude-haiku-4-5" });
+      store.setChatTitle("c1", "typed first");
+      store.seedChat("c1", null, []);
+      const chat = store.getChat("c1");
+      expect(chat.seeded).toBe(true);
+      expect(chat.settings.model).toBe("claude-haiku-4-5");
+      expect(chat.title).toBe("typed first");
+      store.seedChat("c1", "From server", []);
+      expect(store.getChat("c1").title).toBe("From server");
+    });
+
+    it("never replaces a finished local reply with a stale streaming row", () => {
+      const { store } = makeStore();
+      store.addMessage(createMessageState({ id: "a1", chatId: "c1", role: "assistant", status: "done", blocks: [{ type: "text", text: "final" }] }));
+      store.seedChat("c1", "T", [row({ id: "a1", role: "assistant", status: "streaming", generationId: "g1", content: [text("fin")] })]);
+      expect(store.getMessage("a1")!.status).toBe("done");
+      expect(textOf(store.getMessage("a1")!.blocks)).toBe("final");
+    });
+
+    it("keeps optimistic messages the server has not listed yet, after the server's rows", () => {
+      const { store } = makeStore();
+      store.seedChat("c1", "T", [row({ id: "u0", role: "user", content: [text("old")] })]);
+      store.addMessage(createMessageState({ id: "u1", chatId: "c1", role: "user", blocks: [{ type: "text", text: "sent" }] }));
+      store.addMessage(createMessageState({ id: "a1", chatId: "c1", role: "assistant", status: "error", generationId: "g1" }));
+      store.seedChat("c1", "T", [row({ id: "u0", role: "user", content: [text("old")] })]);
+      expect(store.getChat("c1").messageIds).toEqual(["u0", "u1", "a1"]);
+      // Once the server lists them they are the server's rows.
+      store.seedChat("c1", "T", [row({ id: "u0", role: "user", content: [text("old")] }), row({ id: "u1", role: "user", content: [text("sent")] })]);
+      expect(store.getChat("c1").messageIds).toEqual(["u0", "u1", "a1"]);
+      expect(store.getMessage("u1")!.local).toBe(false);
+    });
+
+    it("does not notify or replace anything when the rows are unchanged", () => {
+      const { store } = makeStore();
+      const rows = [row({ id: "u1", role: "user", content: [text("q")] }), row({ id: "a1", role: "assistant", content: [text("a")] })];
+      store.seedChat("c1", "T", rows);
+      const before = store.getMessage("a1");
+      let chatNotified = 0;
+      let messageNotified = 0;
+      store.subscribeChat("c1", () => chatNotified++);
+      store.subscribeMessage("a1", () => messageNotified++);
+      store.seedChat("c1", "T", rows.map((r) => ({ ...r })));
+      expect(chatNotified).toBe(0);
+      expect(messageNotified).toBe(0);
+      expect(store.getMessage("a1")).toBe(before);
+    });
+
+    it("createChat marks a client-made chat as seeded and empty", () => {
+      const { store } = makeStore();
+      store.createChat("c9");
+      expect(store.getChat("c9")).toMatchObject({ seeded: true, messageIds: [], title: null });
+    });
   });
 
   it("records client timings once", () => {

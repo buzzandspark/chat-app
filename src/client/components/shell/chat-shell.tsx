@@ -1,7 +1,7 @@
 "use client";
 import { Menu, MessageSquareText, PanelLeft } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import type { ChatSummary } from "@client/store/sidebar-store";
@@ -14,6 +14,7 @@ import { useIsDesktop } from "@client/hooks/use-media-query";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
 import dynamic from "next/dynamic";
+import { ShellUserProvider } from "./shell-user";
 import { Sidebar } from "./sidebar";
 
 const SearchDialog = dynamic(() => import("./search-dialog").then((m) => m.SearchDialog), { ssr: false });
@@ -22,7 +23,9 @@ const RenameDialog = dynamic(() => import("./chat-dialogs").then((m) => m.Rename
 
 interface ChatShellProps {
   initialChats: ChatSummary[];
+  userId: string;
   userLabel: string;
+  scenarioPanel: boolean;
   children: ReactNode;
 }
 
@@ -30,17 +33,20 @@ function isModifier(e: KeyboardEvent): boolean {
   return navigator.platform.includes("Mac") ? e.metaKey : e.ctrlKey;
 }
 
-export function ChatShell(props: ChatShellProps) {
+export function ChatShell({ userId, scenarioPanel, ...props }: ChatShellProps) {
+  const user = useMemo(() => ({ userId, scenarioPanel }), [userId, scenarioPanel]);
   return (
     <ChatStoreProvider>
-      <ModalProvider>
-        <ChatShellInner {...props} />
-      </ModalProvider>
+      <ShellUserProvider value={user}>
+        <ModalProvider>
+          <ChatShellInner {...props} />
+        </ModalProvider>
+      </ShellUserProvider>
     </ChatStoreProvider>
   );
 }
 
-function ChatShellInner({ initialChats, userLabel, children }: ChatShellProps) {
+function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellProps, "userId" | "scenarioPanel">) {
   const desktop = useIsDesktop();
   const pathname = usePathname();
   const chats = useSidebarChats();

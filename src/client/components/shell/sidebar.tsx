@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
-import { newChatHref } from "@client/hooks/use-new-chat";
+import { useNewChat } from "@client/hooks/use-new-chat";
 import { setPendingChat, usePendingChat } from "@client/store/nav-store";
 import { getSidebarStore, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { useModals } from "../ui/modal-manager";
@@ -41,6 +41,7 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
   const pathname = usePathname();
   const router = useRouter();
   const { show } = useModals();
+  const newChat = useNewChat();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
   // D21: the clicked row is active at once; the router catches up when the thread arrives.
   const pendingChatId = usePendingChat();
@@ -92,7 +93,7 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
                 onClick={onNavigate}
                 onNavigate={(e) => {
                   e.preventDefault();
-                  router.push(newChatHref());
+                  newChat();
                 }}
               >
                 <Plus />

@@ -7,7 +7,6 @@ export interface ModelInfo {
   id: ModelId;
   name: string;
   short: string;
-  blurb: string;
   /** Context window in tokens (D12). */
   contextWindow: number;
   /** Whether "Think harder" maps to effort (adaptive thinking) or a toggle (budget). */
@@ -19,7 +18,6 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     id: "claude-sonnet-5-5",
     name: "Claude Sonnet 5.5",
     short: "Sonnet 5.5",
-    blurb: "Fast and capable for everyday work",
     contextWindow: 1_000_000,
     thinking: "adaptive",
   },
@@ -27,7 +25,6 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     id: "claude-opus-5-5",
     name: "Claude Opus 5.5",
     short: "Opus 5.5",
-    blurb: "Deepest reasoning for hard problems",
     contextWindow: 1_000_000,
     thinking: "adaptive",
   },
@@ -35,7 +32,6 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     id: "claude-haiku-4-5",
     name: "Claude Haiku 4.5",
     short: "Haiku 4.5",
-    blurb: "Quickest replies, lowest cost",
     contextWindow: 200_000,
     thinking: "budget",
   },
