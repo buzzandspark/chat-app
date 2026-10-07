@@ -14,7 +14,15 @@ export async function POST(request: Request): Promise<Response> {
     if (!limit.ok) return tooMany(limit.retryAfterMs);
     const auth = getAuth();
     const reqHeaders = await headers();
-    const result = await auth.api.signInAnonymous({ headers: reqHeaders, returnHeaders: true });
+    // A returning visitor: a live demo session is reused; an expired or purged one must not block a new one.
+    const existing = await auth.api.getSession({ headers: reqHeaders }).catch(() => null);
+    const current = existing?.user as { id: string; role?: string | null; banned?: boolean | null } | undefined;
+    if (current && current.role === "demo" && !current.banned) {
+      return Response.json({ ok: true, reused: true }, { headers: { "cache-control": "no-store" } });
+    }
+    const fresh = new Headers(reqHeaders);
+    fresh.delete("cookie");
+    const result = await auth.api.signInAnonymous({ headers: fresh, returnHeaders: true });
     const user = result.response?.user;
     if (!user) return jsonError(500, { error: "demo_failed" });
     const db = getDb();

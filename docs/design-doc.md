@@ -99,6 +99,10 @@ Measured with `pnpm size` (gzipped, the chunks Turbopack lists for `/c/[id]` in 
 | Radix menus, dialogs, popover, model picker and scenario panel behind `next/dynamic` (load after first paint, on first use where there is a trigger) | 197 | −46 |
 | `tailwind-merge` replaced by a 2 kB conflict-aware `cn` (`src/shared/cn.ts`) | 188 | −9 |
 | `tailwind-merge` restored: the small merger treated `top`/`left` and `inset-x`/`inset-y` as one family and dropped classes shadcn relies on (centred dialogs rendered off screen) | 198 | +10 |
+| Client store first (ADR-0005): seed, settings, skeletons, pending-chat store | 200.7 | +1.4 |
+| Scenario labels and model blurbs leave the composer for the chunks that need them | 199.8 | −0.9 |
+| Prefetch helper; unused shadcn button variants and sizes dropped | 199.9 | +0.1 |
+| Resume by seq and both watchdogs; Radix `Slot` out of the first paint (`asChild` served two links); dead class and method removed | 198.8 | −1.1 |
 
 Where the 188 kB goes:
 
@@ -166,9 +170,17 @@ The composer measures 115 px on a phone and 135 px on desktop throughout; before
 - The sidebar is two states, not one: `phoneOpen` drives the overlay below `md` (`translate-x`), `desktopOpen` drives the dock at `md` (`md:flex` / `md:hidden`). The server renders the dock, because `desktopOpen` starts true and needs no media query, and hydration changes nothing; before, one merged `open` depended on `useIsDesktop()`, whose server snapshot is `false`, so every desktop cold load painted without the sidebar and shifted when hydration added it (CLS 0.20). `e2e/perf.spec.ts` ("desktop cold load") asserts CLS 0 and that the HTML already carries the docked class.
 - The theme bootstrap is an inline `<script>` in `<head>`, rendered by `ThemeScript` from a `useSyncExternalStore` server snapshot: present in the server HTML (where it runs before any Next script and before the first paint, after the render-blocking stylesheet), matched during hydration, removed by the next render, and never created by a client render, so React's "Encountered a script tag while rendering" warning cannot fire on a client-render fallback. `next/script` with `beforeInteractive` was pushed through Next's `__next_s` queue and ran after the first paint for dark-mode users. `e2e/theme.spec.ts` checks the stored preference is applied before `first-paint` and that the script precedes the first `/_next/` script in the document.
 
+### Code blocks: tokenise off the main thread, commit in line groups (D15)
+
+`src/client/markdown/highlight.ts` keeps highlighted lines by content hash and hands tokenising to a Web Worker (`highlight.worker.ts`, shiki core with the JavaScript regex engine and one chunk per language, the same module the main thread falls back to where there is no `Worker`). A block seen once never tokenises again, so reopening a chat is a cache hit. `CodeBlock` commits the spans in groups of 40 lines across idle callbacks, with the rest of the block kept as one plain string, so the text never changes and no single frame inserts thousands of nodes. The review measured a 1.8 s main-thread freeze when a 600-line block finished and again when the chat reopened; `e2e/perf.spec.ts` records the longest frame at both moments and gates them under 250 ms on the throttled Pixel 7.
+
+### Sessions, errors and lazy chunks
+
+`proxy.ts` only checks that a session cookie exists (ADR-0004); an expired, purged or banned one is caught by the chat layout, which redirects to `/login?next=<path>` (the proxy forwards the path) instead of throwing inside a Server Component. `app/(chat)/error.tsx`, `app/error.tsx` and `app/global-error.tsx` replace the dead page, and `ChunkBoundary` wraps every lazily loaded control (dialogs, the model picker, the scenario panel, message and chat menus), so a chunk that fails to load costs one control, not the thread. Sign out is a full document load to `/login`: nothing of the old session may survive in memory. "Try the demo" reuses a live demo session and otherwise signs in anonymously without the stale cookie.
+
 ### Long lists (D14): decision
 
-Rows use `content-visibility: auto` with `contain-intrinsic-size: auto 6rem`, so rows off screen skip layout and paint but remember their rendered height, and find-in-page keeps working. With 200 finished messages above the viewport, streaming a long reply held p95 at 16.8 ms and p99 at 33.4 ms on the throttled Pixel 7 (table above), under the 16 ms-per-frame threshold the plan set for adding `@tanstack/react-virtual`. The virtualiser is not added; the decision is revisited if a measured chat exceeds that threshold.
+Rows use `content-visibility: auto` with `contain-intrinsic-size: auto 6rem`, so rows off screen skip layout and paint but remember their rendered height, and find-in-page keeps working. This is gated on scroll anchoring that works (`html[data-scroll-anchoring=yes]`, set once by `use-scroll-anchoring`): WebKit answers `@supports (overflow-anchor: auto)` and a synthetic anchoring probe with yes, yet does not keep the viewport still when skipped rows above it take their real size (a 300 px scroll moved content by 479 to 683 px on the iPhone project, the jump the review saw on 38 of 40 steps), so WebKit is identified by vendor and lays every row out; `e2e/scroll.spec.ts` checks the on-screen movement of the top row across 20 scroll-up steps on all three projects. With 200 finished messages above the viewport, streaming a long reply held p95 at 16.8 ms and p99 at 33.4 ms on the throttled Pixel 7 (table above), under the 16 ms-per-frame threshold the plan set for adding `@tanstack/react-virtual`. The virtualiser is not added; the decision is revisited if a measured chat exceeds that threshold.
 
 ## 8. Rejected alternatives
 

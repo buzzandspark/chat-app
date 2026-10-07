@@ -6,6 +6,7 @@ import { Markdown } from "@client/markdown/Markdown";
 import { textOf, type MessageState } from "@client/store/chat-store";
 import { useChat, useChatStore } from "@client/store/hooks";
 import { modelDisplayName } from "@shared/models";
+import { ChunkBoundary } from "../ui/chunk-boundary";
 import { useChatContext } from "./chat-context";
 import { StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
@@ -109,12 +110,14 @@ export function AssistantMessage({ message }: { message: MessageState }) {
         onResume={() => client.resumeAll()}
       />
       {!streaming ? (
-        <AssistantActions
-          message={message}
-          text={text}
-          canRegenerate={Boolean(userMessageId) && message.status !== "refused"}
-          onRegenerate={onRetry}
-        />
+        <ChunkBoundary label="message actions">
+          <AssistantActions
+            message={message}
+            text={text}
+            canRegenerate={Boolean(userMessageId) && message.status !== "refused"}
+            onRegenerate={onRetry}
+          />
+        </ChunkBoundary>
       ) : null}
     </div>
   );

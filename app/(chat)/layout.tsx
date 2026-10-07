@@ -1,7 +1,9 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ChatShell } from "@client/components/shell/chat-shell";
 import { listChats } from "@server/chats";
-import { requireUser } from "@server/current-user";
+import { getCurrentUser } from "@server/current-user";
 import { env } from "@shared/env";
 
 export default function ChatLayout({ children }: LayoutProps<"/">) {
@@ -13,7 +15,12 @@ export default function ChatLayout({ children }: LayoutProps<"/">) {
 }
 
 async function ShellWithData({ children }: { children: React.ReactNode }) {
-  const user = await requireUser();
+  const user = await getCurrentUser();
+  if (!user) {
+    // The cookie got past the proxy but the session is expired, purged or banned: sign in again, then come back.
+    const path = (await headers()).get("x-cadence-path") ?? "/c/new";
+    redirect(`/login?next=${encodeURIComponent(path)}`);
+  }
   const chats = listChats(user.id);
   return (
     <ChatShell initialChats={chats} userId={user.id} userLabel={user.email} scenarioPanel={env.scenarioPanel || user.role === "demo"}>

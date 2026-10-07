@@ -1,5 +1,6 @@
 "use client";
-import { createContext, Fragment, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChunkBoundary } from "./chunk-boundary";
 
 export interface ModalApi {
   open: boolean;
@@ -53,7 +54,9 @@ export function ModalProvider({ children }: { children: ReactNode }) {
     <ModalContext.Provider value={value}>
       {children}
       {entries.map((e) => (
-        <Fragment key={e.id}>{e.render({ open: e.open, close: () => close(e.id) })}</Fragment>
+        <ChunkBoundary key={e.id} label="dialog">
+          {e.render({ open: e.open, close: () => close(e.id) })}
+        </ChunkBoundary>
       ))}
     </ModalContext.Provider>
   );

@@ -11,7 +11,9 @@ import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/context";
 import { prefetchChat } from "@client/store/prefetch";
 import { getSidebarStore, setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
+import { ChunkBoundary } from "../ui/chunk-boundary";
 import { useModals } from "../ui/modal-manager";
+import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
 
 // D21: Radix menus and dialogs load after first paint.
@@ -152,6 +154,7 @@ export function Sidebar({ initialChats, phoneOpen, desktopOpen, open, onClose, o
                     >
                       <span className="truncate">{chat.title}</span>
                     </Link>
+                    <ChunkBoundary label="chat menu">
                     <ChatItemMenu
                       title={chat.title}
                       onRename={() => show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />)}
@@ -161,6 +164,7 @@ export function Sidebar({ initialChats, phoneOpen, desktopOpen, open, onClose, o
                         ))
                       }
                     />
+                    </ChunkBoundary>
                   </li>
                 );
               })}
@@ -169,7 +173,10 @@ export function Sidebar({ initialChats, phoneOpen, desktopOpen, open, onClose, o
         </nav>
         <div className="flex items-center justify-between gap-2 border-t border-sidebar-border px-3 py-2">
           <span className="truncate text-caption text-muted-foreground">{userLabel}</span>
-          <ThemeToggle />
+          <div className="flex items-center">
+            <ThemeToggle />
+            <SignOutButton />
+          </div>
         </div>
       </aside>
 

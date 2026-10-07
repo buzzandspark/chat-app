@@ -22,7 +22,10 @@ export function proxy(request: NextRequest) {
     url.pathname = `/c/${uuidv7()}`;
     return NextResponse.redirect(url, 307);
   }
-  return NextResponse.next();
+  // ADR-0004: validation happens in the layout; it needs the path to send an expired session back here.
+  const headers = new Headers(request.headers);
+  headers.set("x-cadence-path", request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {

@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label";
 import { authClient } from "@auth/client";
 import { newChatHref } from "@client/hooks/use-new-chat";
 
+/** Only a same-origin path: not `//host`, not `/\\host`, not a scheme, and not the `/c/new` alias. */
+function safeNext(next: string | null): string | null {
+  if (!next || !/^\/(?![\/\\])/.test(next) || next === "/c/new") return null;
+  return next;
+}
+
 function LoginFormInner() {
   const router = useRouter();
   const params = useSearchParams();
@@ -38,7 +44,7 @@ function LoginFormInner() {
       setError(result.error.message ?? "Sign-in failed");
       return;
     }
-    router.push(next && next.startsWith("/") && next !== "/c/new" ? next : newChatHref());
+    router.push(safeNext(next) ?? newChatHref());
     router.refresh();
   };
 

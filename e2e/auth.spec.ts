@@ -80,6 +80,7 @@ test.describe("accounts", () => {
 
 test.describe("demo", () => {
   test("Try the demo opens a private chat that streams from replay", async ({ page }) => {
+    await page.setExtraHTTPHeaders({ "x-forwarded-for": `10.7.${(Date.now() / 1000) & 255}.${Date.now() & 255}` });
     await page.goto("/");
     await page.getByTestId("try-demo").click();
     await expect(page).toHaveURL(CHAT_URL);
@@ -114,7 +115,8 @@ test.describe("isolation and limits", () => {
 
   test("the demo endpoint is rate limited per address", async ({ request }) => {
     const statuses: number[] = [];
-    for (let i = 0; i < 7; i++) statuses.push((await request.post("/api/demo/start")).status());
+    const headers = { "x-forwarded-for": `10.8.${(Date.now() / 1000) & 255}.${Date.now() & 255}` };
+    for (let i = 0; i < 7; i++) statuses.push((await request.post("/api/demo/start", { headers })).status());
     expect(statuses.filter((s) => s === 429).length).toBeGreaterThan(0);
     expect(statuses[0]).toBe(200);
   });

@@ -10,6 +10,7 @@ import { useChatContext } from "./chat-context";
 import dynamic from "next/dynamic";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
 
 // D21: the picker's sheet/popover (Radix) loads after first paint.
@@ -44,7 +45,10 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const store = useChatStore();
   const chat = useChat(chatId);
   const key = draftKey(userId, chatId);
-  const [value, setValue] = useState(() => (typeof window === "undefined" ? "" : readDraft(key)));
+  // Empty on both server and client: a draft read during render would enable Send in React while the
+  // server-rendered button stays disabled in the DOM (hydration never patches attributes). It is
+  // adopted after mount instead.
+  const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const desktop = useIsDesktop();
   const hasHover = useHasHover();
@@ -53,14 +57,16 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
-  // Adopt text typed before hydration; data-hydrated tells tests the composer is live.
+  // Adopt text typed before hydration, else the stored draft; data-hydrated tells tests the composer is live.
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = textareaRef.current;
     const root = rootRef.current;
     const typedEarly = el && el.value !== "" && el.value !== value ? el.value : null;
+    const draft = readDraft(key);
     const frame = requestAnimationFrame(() => {
       if (typedEarly !== null) setValue(typedEarly);
+      else if (draft) setValue((v) => (v === "" ? draft : v));
       if (root) root.dataset.hydrated = "true";
     });
     return () => cancelAnimationFrame(frame);
@@ -105,7 +111,8 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && enterSends && !e.nativeEvent.isComposing) {
+    // keyCode 229: Safari delivers Enter during IME composition without isComposing.
+    if (e.key === "Enter" && !e.shiftKey && enterSends && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229) {
       e.preventDefault();
       submit();
     } else if (e.key === "Escape") {
@@ -164,8 +171,14 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
           />
           <div className="flex items-center justify-between gap-1 px-1.5 pb-1.5">
             <div className="flex min-w-0 items-center gap-0.5">
-              <ModelPicker model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
-              {scenarioPanel ? <ScenarioPanel /> : null}
+              <ChunkBoundary label="model picker">
+                <ModelPicker model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
+              </ChunkBoundary>
+              {scenarioPanel ? (
+                <ChunkBoundary label="scenario panel">
+                  <ScenarioPanel />
+                </ChunkBoundary>
+              ) : null}
             </div>
             {streamingId ? (
               <IconButton
