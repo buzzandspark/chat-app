@@ -28,6 +28,11 @@ const DeleteDialog = dynamic(() => import("./chat-dialogs").then((m) => m.Delete
 
 interface SidebarProps {
   initialChats: ChatSummary[];
+  /** The phone overlay (below md). */
+  phoneOpen: boolean;
+  /** The desktop dock (md and up); true on the server so the first paint is already docked (no CLS). */
+  desktopOpen: boolean;
+  /** Whichever applies to the current viewport; exposed as data-open for tests. */
   open: boolean;
   onClose: () => void;
   /** Called after a link is followed; the shell closes the overlay on phones and keeps the dock on desktop. */
@@ -37,7 +42,7 @@ interface SidebarProps {
 }
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
-export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, userLabel }: SidebarProps) {
+export function Sidebar({ initialChats, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel }: SidebarProps) {
   const chats = useSidebarChats();
   const pathname = usePathname();
   const router = useRouter();
@@ -74,19 +79,21 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
         onClick={onClose}
         className={cn(
           "fixed inset-0 z-30 bg-foreground/30 backdrop-blur-[1px] transition-opacity md:hidden",
-          open ? "opacity-100" : "pointer-events-none opacity-0",
+          phoneOpen ? "opacity-100" : "pointer-events-none opacity-0",
         )}
       />
       <aside
         aria-label="Chats"
         data-open={open}
+        // Off-screen on a phone it is also out of the tab order and the accessibility tree.
+        inert={!phoneOpen && !desktopOpen ? true : undefined}
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-full flex-col bg-sidebar text-sidebar-foreground",
           "border-r border-sidebar-border transition-transform duration-200 ease-out",
           "safe-top pb-[env(safe-area-inset-bottom,0px)]",
-          open ? "translate-x-0" : "-translate-x-full",
+          phoneOpen ? "translate-x-0" : "-translate-x-full",
           "md:static md:z-0 md:w-72 md:translate-x-0 md:transition-[width,transform]",
-          !open && "md:hidden",
+          desktopOpen ? "md:flex" : "md:hidden",
         )}
       >
         <div className="flex h-14 items-center justify-between gap-1 px-2">

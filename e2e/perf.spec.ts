@@ -238,3 +238,46 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     record("giant_code_block", { frames: frames.length, p50: p(0.5), p95: p(0.95), p99: p(0.99), longFrames: frames.filter((f) => f > 50).length });
   });
 });
+
+// The sidebar is docked at md by CSS from the first paint, so a desktop cold load must not shift (the
+// review measured CLS 0.20 when the dock appeared only after hydration).
+test.describe("desktop cold load", () => {
+  test.skip(({ browserName, isMobile }) => browserName !== "chromium" || !!isMobile, "measured on the desktop project");
+
+  test("no layout shift and the dock is in the first paint", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as Window & { __cls?: number; __shifts?: number };
+      w.__cls = 0;
+      w.__shifts = 0;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as PerformanceEntry[]) {
+          const e = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number };
+          if (!e.hadRecentInput) {
+            w.__cls = (w.__cls ?? 0) + (e.value ?? 0);
+            w.__shifts = (w.__shifts ?? 0) + 1;
+          }
+        }
+      }).observe({ type: "layout-shift", buffered: true });
+    });
+    await openNewChat(page);
+    await sendText(page, "desktop cls anchor");
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 60_000 });
+    await page.reload();
+    await expect(visible(page, "composer")).toHaveAttribute("data-hydrated", "true", { timeout: 60_000 });
+    await page.waitForTimeout(1500);
+    const metrics = await page.evaluate(() => {
+      const w = window as Window & { __cls?: number; __shifts?: number };
+      return { cls: Number((w.__cls ?? 0).toFixed(4)), shifts: w.__shifts ?? 0 };
+    });
+    const html = await (await page.request.get(page.url())).text();
+    const dockedInHtml = /<aside[^>]*aria-label="Chats"[^>]*class="[^"]*md:flex/.test(html);
+    fs.mkdirSync(path.resolve("docs/perf"), { recursive: true });
+    const file = path.join(path.resolve("docs/perf"), `${new Date().toISOString().slice(0, 10)}.json`);
+    const existing = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>) : {};
+    existing.desktop_shell = { ...metrics, dockedInHtml, at: new Date().toISOString() };
+    fs.writeFileSync(file, `${JSON.stringify(existing, null, 2)}\n`);
+    console.log("[perf] desktop_shell", JSON.stringify({ ...metrics, dockedInHtml }));
+    expect(dockedInHtml).toBe(true);
+    expect(metrics.cls).toBeLessThanOrEqual(0.0);
+  });
+});

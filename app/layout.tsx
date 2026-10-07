@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { Monitoring } from "@client/components/shell/monitoring";
+import { ThemeScript } from "@client/components/shell/theme-script";
 import "./globals.css";
 
 // D21: next/font with metric-matched fallbacks; `optional` avoids a swap flash on slow loads.
@@ -37,9 +38,6 @@ export const viewport: Viewport = {
   ],
 };
 
-// Applies the stored theme before first paint so there is no flash.
-const themeScript = `(function(){try{var t=localStorage.getItem('cadence-theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
-
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -48,10 +46,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
-        {/* beforeInteractive: runs before hydration and is not re-rendered as a React element on client fallback. */}
-        <Script id="cadence-theme" strategy="beforeInteractive">
-          {themeScript}
-        </Script>
+        <ThemeScript />
       </head>
       <body className="min-h-dvh flex flex-col">
         {children}

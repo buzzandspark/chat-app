@@ -144,6 +144,8 @@ function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellPro
     <div className="flex h-dvh w-full overflow-hidden bg-background">
       <Sidebar
         initialChats={initialChats}
+        phoneOpen={phoneOpen}
+        desktopOpen={desktopOpen}
         open={open}
         onClose={close}
         onNavigate={() => setPhoneOpen(false)}

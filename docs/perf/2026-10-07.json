@@ -100,5 +100,11 @@
       "threadMs": 31
     },
     "at": "2026-10-07T16:26:26.640Z"
+  },
+  "desktop_shell": {
+    "cls": 0,
+    "shifts": 0,
+    "dockedInHtml": true,
+    "at": "2026-10-07T16:35:49.073Z"
   }
 }
