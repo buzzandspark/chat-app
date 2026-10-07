@@ -92,6 +92,18 @@ export type ResumeOutcome =
 
 type AbortReason = "stop" | "shutdown" | "scenario";
 
+interface FinalState {
+  content: StoredContentBlock[];
+  status: MessageStatus;
+  generationStatus: GenerationStatus;
+  interruptedReason?: InterruptedReason;
+  servingModel: string | null;
+  stopReason: string | null;
+  timings: ServerTimings;
+  rows: UsageRow[];
+  error?: RelayError;
+}
+
 interface Active {
   id: string;
   chatId: string;
@@ -285,12 +297,28 @@ export class Engine {
     return true;
   }
 
-  /** D2 resume branches. The caller subscribes via `store` when `live`. */
+  /** Stop and wait until the generation has written its rows and settled its cost. */
+  async stopAndWait(generationId: string): Promise<void> {
+    const active = this.active.get(generationId);
+    if (!active) return;
+    this.stop(generationId);
+    await active.promise;
+  }
+
+  /** Callers that delete a chat's rows must settle its generations first. */
+  async stopChat(chatId: string): Promise<void> {
+    const ids = [...this.active.values()].filter((a) => a.chatId === chatId).map((a) => a.id);
+    await Promise.all(ids.map((id) => this.stopAndWait(id)));
+  }
+
+  /** D2 resume branches. Ownership is checked before any buffer is served. */
   resume(generationId: string, userId: string | null): ResumeOutcome {
+    const owner = this.owner(generationId);
+    if (owner === null) return { kind: "not_found" };
+    if (userId !== null && owner !== userId) throw new ForbiddenError();
     if (this.store.has(generationId)) return { kind: "live" };
     const row = this.db.select().from(generations).where(eq(generations.id, generationId)).get();
     if (!row) return { kind: "not_found" };
-    if (userId !== null && row.userId !== userId) throw new ForbiddenError();
     if (row.status === "running") {
       // The process restarted while this was running: nothing can finish it.
       this.markInterrupted(row.id, row.messageId, "crash");
@@ -449,20 +477,14 @@ export class Engine {
     const refused = acc.stopReason === "refusal";
     const status: MessageStatus = refused ? "refused" : "done";
     const content = toContentBlocks(acc);
-    this.finalize(active, {
-      content,
-      status,
-      generationStatus: "done",
-      servingModel,
-      stopReason: acc.stopReason,
-      timings,
-      rows,
-    });
     if (active.firstTokenAt !== null && !refused) {
       this.tps.record(servingModel, usage.outputTokens, timings.done - active.firstTokenAt);
     }
-    this.append(active, { type: "done", stopReason: acc.stopReason, servingModel, usage, timings });
-    this.cleanup(active);
+    this.settle(
+      active,
+      { content, status, generationStatus: "done", servingModel, stopReason: acc.stopReason, timings, rows },
+      { type: "done", stopReason: acc.stopReason, servingModel, usage, timings },
+    );
   }
 
   private finishAborted(active: Active, reason: AbortReason, timings: ServerTimings): void {
@@ -471,17 +493,11 @@ export class Engine {
       timings.done = this.now();
       const rows = this.estimateRows(active, servingModel ?? active.requestedModel);
       const usage = rows.length ? summarize(rows, true) : null;
-      this.finalize(active, {
-        content: toContentBlocks(active.acc),
-        status: "stopped",
-        generationStatus: "stopped",
-        servingModel,
-        stopReason: null,
-        timings,
-        rows,
-      });
-      this.append(active, { type: "stopped", servingModel, usage });
-      this.cleanup(active);
+      this.settle(
+        active,
+        { content: toContentBlocks(active.acc), status: "stopped", generationStatus: "stopped", servingModel, stopReason: null, timings, rows },
+        { type: "stopped", servingModel, usage },
+      );
       return;
     }
     this.finishInterrupted(active, reason === "shutdown" ? "shutdown" : "crash", timings);
@@ -491,35 +507,47 @@ export class Engine {
     const servingModel = resolveServingModel(active.acc);
     timings.done = this.now();
     const rows = this.estimateRows(active, servingModel ?? active.requestedModel);
-    this.finalize(active, {
-      content: toContentBlocks(active.acc),
-      status: "interrupted",
-      generationStatus: "interrupted",
-      interruptedReason: reason,
-      servingModel,
-      stopReason: null,
-      timings,
-      rows,
-    });
-    this.append(active, { type: "interrupted", reason, message });
-    this.cleanup(active);
+    this.settle(
+      active,
+      { content: toContentBlocks(active.acc), status: "interrupted", generationStatus: "interrupted", interruptedReason: reason, servingModel, stopReason: null, timings, rows },
+      { type: "interrupted", reason, message },
+    );
   }
 
   private finishError(active: Active, error: RelayError, timings: ServerTimings): void {
     const servingModel = resolveServingModel(active.acc);
     timings.done = this.now();
     const rows = active.acc.apiMessageId ? this.estimateRows(active, servingModel ?? active.requestedModel) : [];
-    this.finalize(active, {
-      content: toContentBlocks(active.acc),
-      status: "error",
-      generationStatus: "error",
-      servingModel,
-      stopReason: null,
-      timings,
-      rows,
-      error,
-    });
-    this.append(active, { type: "error", error });
+    this.settle(
+      active,
+      { content: toContentBlocks(active.acc), status: "error", generationStatus: "error", servingModel, stopReason: null, timings, rows, error },
+      { type: "error", error },
+    );
+  }
+
+  /**
+   * The terminal event, the cost settlement and the cleanup happen whatever the
+   * database says: a chat deleted mid-stream must not leave a buffer without an
+   * end, a quota reservation held, or spend unrecorded.
+   */
+  private settle(active: Active, final: FinalState, terminal: RelayEventBody): void {
+    const cost = final.rows.reduce((s, r) => s + r.costUsd, 0);
+    try {
+      this.finalize(active, final);
+    } catch (err) {
+      console.error(`[engine] finalize failed for ${active.id} (rows gone?)`, err);
+    }
+    try {
+      this.quota.settle(active.userId, active.id, cost);
+    } catch (err) {
+      console.error(`[engine] settle failed for ${active.id}`, err);
+      this.quota.release(active.userId, active.id);
+    }
+    try {
+      this.append(active, terminal);
+    } catch (err) {
+      console.error(`[engine] terminal event failed for ${active.id}`, err);
+    }
     this.cleanup(active);
   }
 
@@ -565,23 +593,9 @@ export class Engine {
     );
   }
 
-  private finalize(
-    active: Active,
-    final: {
-      content: StoredContentBlock[];
-      status: MessageStatus;
-      generationStatus: GenerationStatus;
-      interruptedReason?: InterruptedReason;
-      servingModel: string | null;
-      stopReason: string | null;
-      timings: ServerTimings;
-      rows: UsageRow[];
-      error?: RelayError;
-    },
-  ): void {
+  private finalize(active: Active, final: FinalState): void {
     const now = new Date(this.now());
     const estimated = final.generationStatus !== "done";
-    const cost = final.rows.reduce((s, r) => s + r.costUsd, 0);
     this.db.transaction((tx) => {
       tx.update(messages)
         .set({
@@ -628,7 +642,6 @@ export class Engine {
       }
       tx.update(chats).set({ updatedAt: now, lastMessageAt: now }).where(eq(chats.id, active.chatId)).run();
     });
-    this.quota.settle(active.userId, active.id, cost);
   }
 
   private markInterrupted(generationId: string, messageId: string, reason: InterruptedReason): void {

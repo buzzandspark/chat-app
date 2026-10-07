@@ -65,6 +65,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       throw err;
     }
     if (created) rateLimiter.check(user.id, true);
+    // A duplicate POST attaches to an existing generation only for its owner.
+    if (!created && engine.owner(body.generationId) !== user.id) return jsonError(403, { error: "forbidden" });
     if (!store.has(body.generationId)) {
       // Duplicate POST after the buffer was evicted: serve the saved state.
       const outcome = engine.resume(body.generationId, user.id);

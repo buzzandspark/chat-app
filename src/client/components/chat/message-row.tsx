@@ -12,6 +12,7 @@ export const MessageRow = memo(function MessageRow({ id }: { id: string }) {
       className="[content-visibility:auto] [contain-intrinsic-size:auto_6rem]"
       data-role={message.role}
       data-message-id={id}
+      data-generation-id={message.generationId ?? undefined}
       data-status={message.status}
     >
       {message.role === "user" ? <UserMessage message={message} /> : <AssistantMessage message={message} />}

@@ -37,6 +37,19 @@ class SidebarStore {
     this.emit();
   }
 
+  /** Adds a chat the list does not know yet, without reordering anything (opening is not activity). */
+  ensure(chat: ChatSummary): void {
+    if (this.chats.some((c) => c.id === chat.id)) return;
+    this.chats = [...this.chats, chat].sort((a, b) => b.updatedAt - a.updatedAt);
+    this.emit();
+  }
+
+  /** Updates fields in place; only a changed `updatedAt` moves a chat. */
+  patch(id: string, fields: Partial<ChatSummary>): void {
+    this.chats = this.chats.map((c) => (c.id === id ? { ...c, ...fields } : c)).sort((a, b) => b.updatedAt - a.updatedAt);
+    this.emit();
+  }
+
   upsert(chat: ChatSummary): void {
     const rest = this.chats.filter((c) => c.id !== chat.id);
     this.chats = [chat, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);

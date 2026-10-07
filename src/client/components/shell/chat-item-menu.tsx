@@ -10,7 +10,7 @@ export function ChatItemMenu({ title, onRename, onDelete }: { title: string; onR
         <IconButton
           label={`Actions for ${title}`}
           tipAlign="end"
-          className="absolute right-0.5 top-1/2 size-10 -translate-y-1/2 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
+          className="size-10 shrink-0 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
         >
           <MoreHorizontal />
         </IconButton>

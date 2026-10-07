@@ -76,6 +76,14 @@ Checked against the bundled Claude API reference on 2026-10-06; the per-model re
 
 better-auth on the Drizzle adapter: email + password with sign-up disabled, the admin plugin for roles and bans, the anonymous plugin for demo visitors. `proxy.ts` only checks for the session cookie; `getCurrentUser` validates with `auth.api.getSession` once per request and once per SSE connection. "Try the demo" creates an anonymous user, sets its role to `demo` and its session to 24 h; the provider resolver forces replay for `demo` users server-side, so the demo cannot spend money whatever the client asks for. An hourly timer deletes demo users older than 24 h and SQLite cascades remove their sessions, chats, messages and usage. Invites are random 32-byte tokens stored as SHA-256 with a 7-day expiry and single use; issuing a new one revokes the old; the same flow resets a password. The admin console lives at `/${ADMIN_PATH_SLUG}` and renders the not-found page for anyone else (partial prerendering streams the boundary after a 200 shell, so it is a visible 404 rather than an HTTP 404).
 
+## 6b. Abuse and isolation
+
+- Anonymous (demo) users are created only by `/api/demo/start` through a server-side call; the HTTP endpoint for anonymous sign-in returns 404, and a database hook forces role `demo` on any anonymous user, so demo visitors are always replay-only, capped by construction, and purged after 24 h.
+- Every buffer read checks ownership first: `Engine.resume`, the duplicate-POST attach path, and stop. A generation id is not a capability.
+- The engine's terminal path runs in `settle`: the database write, the cost settlement, the terminal event and the cleanup each run regardless of the others' failure, so a chat deleted mid-stream cannot strand a buffer, hold a quota reservation, or leave spend unrecorded. Delete and truncate stop and await running generations before removing rows.
+- Open write endpoints are rate limited in memory (D1): demo start per address, feedback and the long-chat seed per user; feedback requires a user and validates the latency payload strictly. Sends are limited per user (D17) and better-auth limits sign-ins per address in production.
+- `.env` never enters the Docker build context.
+
 ## 7. Performance
 
 ### Chat route JS budget (D21)

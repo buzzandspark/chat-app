@@ -3,12 +3,15 @@ import { headers } from "next/headers";
 import { getAuth } from "@auth/server";
 import { getDb, schema } from "@db/client";
 import { errorResponse, jsonError } from "@server/current-user";
+import { clientIp, getLimiters, tooMany } from "@server/ratelimit";
 import { isDraining } from "@server/shutdown";
 
 /** ADR-0004: anonymous demo user with a 24 h session; the provider resolver forces replay for `demo`. */
-export async function POST(): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   try {
     if (isDraining()) return jsonError(503, { error: "draining" });
+    const limit = getLimiters().demoStart.check(clientIp(request));
+    if (!limit.ok) return tooMany(limit.retryAfterMs);
     const auth = getAuth();
     const reqHeaders = await headers();
     const result = await auth.api.signInAnonymous({ headers: reqHeaders, returnHeaders: true });

@@ -31,6 +31,7 @@ async function ChatLoader({ params }: { params: PageProps<"/c/[id]">["params"] }
       chatId={id}
       userId={user.id}
       title={data.chat.title}
+      updatedAt={data.chat.updatedAt}
       initialMessages={data.messages}
       isNew={false}
       scenarioPanel={scenarioPanel}

@@ -90,3 +90,32 @@ test.describe("demo", () => {
     await expect(page.getByText(/demo\.cadence\.invalid|Demo visitor/).first()).toBeVisible();
   });
 });
+
+test.describe("isolation and limits", () => {
+  test("a signed-in user cannot read another user's stream, live or saved", async ({ page, browser }) => {
+    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await page.getByTestId("scenario-panel-trigger").locator("visible=true").first().click();
+    await page.getByTestId("scenario-slow_tokens").click();
+    const row = page.locator('[data-role="assistant"]:visible').last();
+    await expect(row).toHaveAttribute("data-generation-id", /[0-9a-f-]{36}/);
+    const generationId = (await row.getAttribute("data-generation-id"))!;
+    const other = await freshPage(browser);
+    await other.goto("/");
+    await other.getByTestId("try-demo").click();
+    await expect(other).toHaveURL(/\/c\/new$/);
+    const live = await other.request.get(`/api/generations/${generationId}/events?after=-1`);
+    expect(live.status()).toBe(403);
+    await expect(row).toHaveAttribute("data-status", /done|stopped/, { timeout: 60_000 });
+    const saved = await other.request.get(`/api/generations/${generationId}/events?after=-1`);
+    expect(saved.status()).toBe(403);
+    const stop = await other.request.post(`/api/generations/${generationId}/stop`);
+    expect(stop.status()).toBe(403);
+  });
+
+  test("the demo endpoint is rate limited per address", async ({ request }) => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 7; i++) statuses.push((await request.post("/api/demo/start")).status());
+    expect(statuses.filter((s) => s === 429).length).toBeGreaterThan(0);
+    expect(statuses[0]).toBe(200);
+  });
+});

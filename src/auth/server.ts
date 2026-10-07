@@ -41,6 +41,17 @@ function createAuth() {
         costSpentUsd: { type: "number", required: false, input: false },
       },
     },
+    databaseHooks: {
+      user: {
+        create: {
+          // Anonymous users are demo visitors whatever path created them: replay only, purged after 24 h.
+          before: async (user) => {
+            const anon = (user as { isAnonymous?: boolean }).isAnonymous === true;
+            return anon ? { data: { ...user, role: "demo", name: "Demo visitor" } } : { data: user };
+          },
+        },
+      },
+    },
     plugins: [
       admin({ defaultRole: "user", adminRoles: ["admin"] }),
       anonymous({ emailDomainName: "demo.cadence.invalid" }),

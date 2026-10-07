@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { generations, messages, usageEvents, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
-import { Engine, type StartInput } from "./engine";
+import { Engine, ForbiddenError, type StartInput } from "./engine";
 import { ScriptedProvider } from "./providers/scripted";
 import { QuotaExceededError } from "./quota";
 import { scenarioScript, type ScenarioName } from "./scenarios";
@@ -220,5 +220,57 @@ describe("Engine", () => {
     engine.start(retry);
     await collectUntilTerminal(store, retry.generationId);
     expect(db.select().from(messages).where(eq(messages.chatId, chatId)).all()).toHaveLength(5);
+  });
+
+  it("stopAndWait settles before the caller deletes rows; nothing leaks", async () => {
+    engine = makeEngine(1);
+    db.update(users).set({ costCapUsd: 1 }).where(eq(users.id, USER)).run();
+    const inp = input({ scenario: "slow_tokens" });
+    engine.start(inp);
+    await waitFor(() => (store.get(inp.generationId)?.events.some((e) => e.type === "text_delta") ?? false), 5000);
+    await engine.stopAndWait(inp.generationId);
+    expect(store.get(inp.generationId)!.terminal).toBe(true);
+    expect(engine.runningCount()).toBe(0);
+    db.delete(generations).where(eq(generations.id, inp.generationId)).run();
+    // The reservation was released: a capped user can start again.
+    expect(engine.start(input({ scenario: "normal" }))).toEqual({ created: true });
+  });
+
+  it("rows deleted mid-stream still end with a terminal event, settled cost and no reservation", async () => {
+    engine = makeEngine(1);
+    db.update(users).set({ costCapUsd: 1 }).where(eq(users.id, USER)).run();
+    const inp = input({ scenario: "slow_tokens" });
+    engine.start(inp);
+    await waitFor(() => (store.get(inp.generationId)?.events.some((e) => e.type === "text_delta") ?? false), 5000);
+    // A chat delete cascades the generation and its messages away without stopping anything.
+    db.delete(generations).where(eq(generations.id, inp.generationId)).run();
+    db.delete(messages).where(eq(messages.chatId, inp.chatId)).run();
+    engine.stop(inp.generationId);
+    const events = await collectUntilTerminal(store, inp.generationId);
+    expect(events[events.length - 1]!.type).toBe("stopped");
+    expect(engine.runningCount()).toBe(0);
+    expect(db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd).toBeGreaterThan(0);
+    expect(engine.start(input({ scenario: "normal" }))).toEqual({ created: true });
+  });
+
+  it("stopChat settles every running generation of a chat", async () => {
+    engine = makeEngine(1);
+    const inp = input({ scenario: "slow_tokens" });
+    engine.start(inp);
+    await waitFor(() => (store.get(inp.generationId)?.events.some((e) => e.type === "message_start") ?? false));
+    await engine.stopChat(inp.chatId);
+    expect(engine.runningCount()).toBe(0);
+    expect(db.select().from(generations).where(eq(generations.id, inp.generationId)).get()!.status).toBe("stopped");
+  });
+
+  it("resume refuses another user's buffer while it is live", async () => {
+    seedUser(db, "u2");
+    engine = makeEngine(1);
+    const inp = input({ scenario: "slow_tokens" });
+    engine.start(inp);
+    expect(() => engine.resume(inp.generationId, "u2")).toThrow(ForbiddenError);
+    expect(engine.resume(inp.generationId, USER)).toEqual({ kind: "live" });
+    await engine.stopAndWait(inp.generationId);
+    expect(() => engine.resume(inp.generationId, "u2")).toThrow(ForbiddenError);
   });
 });

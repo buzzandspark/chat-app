@@ -1,20 +1,20 @@
 {
   "giant_code_block": {
-    "frames": 1410,
+    "frames": 1401,
     "p50": 16.7,
     "p95": 33.3,
     "p99": 33.4,
-    "longFrames": 2,
-    "at": "2026-10-07T02:49:35.247Z"
+    "longFrames": 1,
+    "at": "2026-10-07T11:58:00.026Z"
   },
   "shell": {
     "cls": 0,
     "shifts": 0,
     "ttfbMs": 2,
-    "domContentLoadedMs": 1376,
+    "domContentLoadedMs": 1369,
     "paints": {
-      "first-paint": 1500,
-      "first-contentful-paint": 1500
+      "first-paint": 1488,
+      "first-contentful-paint": 1488
     },
     "fonts": [
       "Inter:unloaded",
@@ -35,27 +35,27 @@
     ],
     "interLoaded": true,
     "transferredKb": 348,
-    "hydratedMs": 4039,
-    "at": "2026-10-07T02:48:33.463Z"
+    "hydratedMs": 4016,
+    "at": "2026-10-07T11:56:58.236Z"
   },
   "long_reply": {
-    "firstPaintMs": 1232,
+    "firstPaintMs": 1234,
     "frames": 577,
     "p50": 16.7,
     "p95": 16.7,
     "p99": 16.8,
     "longFrames": 0,
     "assistantRows": 2,
-    "at": "2026-10-07T02:48:47.253Z"
+    "at": "2026-10-07T11:57:12.019Z"
   },
   "long_chat": {
     "rows": 200,
-    "loadMs": 933,
-    "frames": 557,
+    "loadMs": 942,
+    "frames": 550,
     "p50": 16.7,
     "p95": 16.8,
-    "p99": 16.8,
-    "longFrames": 4,
-    "at": "2026-10-07T02:49:03.177Z"
+    "p99": 66.7,
+    "longFrames": 6,
+    "at": "2026-10-07T11:57:27.959Z"
   }
 }

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@db/client";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import { getRelay } from "@server/relay";
 
 const Patch = z.object({ title: z.string().trim().min(1).max(120) });
 
@@ -16,7 +17,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/
     const db = getDb();
     const result = db
       .update(schema.chats)
-      .set({ title: parsed.data.title, updatedAt: new Date() })
+      .set({ title: parsed.data.title })
       .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, user.id)))
       .run();
     if (result.changes === 0) return jsonError(404, { error: "not_found" });
@@ -32,11 +33,15 @@ export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/chat
     const user = await requireUser();
     const { id } = await ctx.params;
     const db = getDb();
-    const result = db
-      .delete(schema.chats)
+    const owned = db
+      .select({ id: schema.chats.id })
+      .from(schema.chats)
       .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, user.id)))
-      .run();
-    if (result.changes === 0) return jsonError(404, { error: "not_found" });
+      .get();
+    if (!owned) return jsonError(404, { error: "not_found" });
+    // A reply still streaming is stopped and settled before its rows cascade away.
+    await getRelay().engine.stopChat(id);
+    db.delete(schema.chats).where(eq(schema.chats.id, id)).run();
     return Response.json({ id, deleted: true }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);

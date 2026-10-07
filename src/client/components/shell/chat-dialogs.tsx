@@ -32,7 +32,7 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
         body: JSON.stringify({ title: value.trim() }),
       });
       if (res.ok) {
-        getSidebarStore().upsert({ ...chat, title: value.trim(), updatedAt: Date.now() });
+        getSidebarStore().patch(chat.id, { title: value.trim() });
         store.setChatTitle(chat.id, value.trim());
         onOpenChange(false);
       }

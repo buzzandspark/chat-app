@@ -33,7 +33,8 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[
       .where(and(eq(schema.messages.chatId, id), gte(schema.messages.position, from.position)))
       .all();
     const { engine } = getRelay();
-    for (const v of victims) if (v.generationId) engine.stop(v.generationId);
+    // Settle first: deleting a running generation's rows would strand its buffer and reservation.
+    await Promise.all(victims.map((v) => (v.generationId ? engine.stopAndWait(v.generationId) : Promise.resolve())));
     const ids = victims.map((v) => v.id);
     if (ids.length > 0) {
       db.transaction((tx) => {

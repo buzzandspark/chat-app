@@ -16,6 +16,7 @@ interface ChatViewProps {
   chatId: string;
   userId: string;
   title: string | null;
+  updatedAt?: number;
   initialMessages: MessageRow[];
   isNew: boolean;
   scenarioPanel: boolean;
@@ -34,7 +35,7 @@ async function truncateOnServer(chatId: string, fromMessageId: string): Promise<
   }
 }
 
-export function ChatView({ chatId, userId, title, initialMessages, isNew, scenarioPanel }: ChatViewProps) {
+export function ChatView({ chatId, userId, title, updatedAt, initialMessages, isNew, scenarioPanel }: ChatViewProps) {
   const store = useChatStore();
   const router = useRouter();
   const client = useMemo(() => getGenerationClient(store), [store]);
@@ -57,8 +58,8 @@ export function ChatView({ chatId, userId, title, initialMessages, isNew, scenar
 
   // A chat opened by navigation joins the sidebar list even if the layout rendered before it existed.
   useEffect(() => {
-    if (!isNew && title) getSidebarStore().upsert({ id: chatId, title, updatedAt: Date.now() });
-  }, [chatId, title, isNew]);
+    if (!isNew && title) getSidebarStore().ensure({ id: chatId, title, updatedAt: updatedAt ?? 0 });
+  }, [chatId, title, isNew, updatedAt]);
 
   // Desktop only (a phone would pop the keyboard): focus on a new chat, and after the
   // first send, when router.replace remounts this view under the chat's own URL.

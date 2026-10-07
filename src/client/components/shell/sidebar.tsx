@@ -15,7 +15,7 @@ import { ThemeToggle } from "./theme-toggle";
 const ChatItemMenu = dynamic(() => import("./chat-item-menu").then((m) => m.ChatItemMenu), {
   ssr: false,
   loading: () => (
-    <Button variant="ghost" size="icon" className="absolute right-0.5 top-1/2 size-10 -translate-y-1/2 text-muted-foreground opacity-0" aria-hidden disabled>
+    <Button variant="ghost" size="icon" className="size-10 shrink-0 text-muted-foreground opacity-0" aria-hidden disabled>
       <MoreHorizontal />
     </Button>
   ),
@@ -98,7 +98,13 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
                 const href = `/c/${chat.id}`;
                 const active = chat.id === currentChatId;
                 return (
-                  <li key={chat.id} className="group/item relative flex items-center">
+                  <li
+                    key={chat.id}
+                    className={cn(
+                      "group/item flex items-center justify-between gap-1 rounded-lg pr-0.5 transition-colors",
+                      active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/70 active:bg-sidebar-accent",
+                    )}
+                  >
                     <Link
                       href={href}
                       prefetch={false}
@@ -107,10 +113,7 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
                       onPointerEnter={() => router.prefetch(href)}
                       onFocus={() => router.prefetch(href)}
                       aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "flex min-h-11 min-w-0 flex-1 items-center rounded-lg pl-3 pr-11 text-small transition-colors",
-                        active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/70 active:bg-sidebar-accent",
-                      )}
+                      className={cn("flex min-h-11 min-w-0 flex-1 items-center rounded-lg pl-3 text-small", active && "font-medium")}
                     >
                       <span className="truncate">{chat.title}</span>
                     </Link>
