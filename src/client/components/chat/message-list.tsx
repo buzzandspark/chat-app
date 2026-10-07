@@ -1,6 +1,6 @@
 "use client";
 import { ArrowDown } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@client/store/hooks";
 import { MessageRow } from "./message-row";
@@ -44,7 +44,9 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
 
     useImperativeHandle(ref, () => ({ engage }), [engage]);
 
-    // With per-frame store flushes the ResizeObserver fires at most once per frame.
+    // With per-frame store flushes the ResizeObserver fires at most once per frame. The scroller
+    // itself is observed too: when the Android keyboard opens the viewport shrinks and the thread
+    // must stay pinned to its end.
     useEffect(() => {
       const el = scrollRef.current;
       const inner = endRef.current?.parentElement;
@@ -53,10 +55,12 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
         if (engagedRef.current) el.scrollTop = el.scrollHeight;
       });
       ro.observe(inner);
+      ro.observe(el);
       return () => ro.disconnect();
     }, [chatId]);
 
-    useEffect(() => {
+    // Before paint, so a long chat appears already at its end instead of oldest-first and then jumping.
+    useLayoutEffect(() => {
       scrollToBottom();
       lastTopRef.current = scrollRef.current?.scrollTop ?? 0;
     }, [chatId, scrollToBottom]);
@@ -67,7 +71,9 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
       const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
       const movedUp = lastTopRef.current - el.scrollTop;
       lastTopRef.current = el.scrollTop;
-      if (movedUp > DISENGAGE_PX || (movedUp > 0 && distance > DISENGAGE_PX)) setEngaged(false);
+      // Only a scroll that leaves the end disengages; a content shrink (a thinking block collapsing)
+      // moves scrollTop up without leaving the end and must keep following.
+      if (movedUp > 0 && distance > DISENGAGE_PX) setEngaged(false);
       else if (distance <= 2) setEngaged(true);
     }, [setEngaged]);
 

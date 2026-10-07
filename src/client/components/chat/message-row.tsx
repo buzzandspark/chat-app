@@ -9,7 +9,10 @@ export const MessageRow = memo(function MessageRow({ id }: { id: string }) {
   if (!message) return null;
   return (
     <div
-      className="[content-visibility:auto] [contain-intrinsic-size:auto_6rem]"
+      // D14, only where scroll anchoring really works (a tested flag on <html>, see
+      // use-scroll-anchoring): without it, skipped rows resize under the viewport and every
+      // scroll-up step jumps, as iPhone Safari did.
+      className="[html[data-scroll-anchoring=yes]_&]:[content-visibility:auto] [html[data-scroll-anchoring=yes]_&]:[contain-intrinsic-size:auto_6rem]"
       data-role={message.role}
       data-message-id={id}
       data-generation-id={message.generationId ?? undefined}

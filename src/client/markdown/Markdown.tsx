@@ -301,12 +301,19 @@ function renderToken(token: Token, key: number): ReactNode {
 }
 
 function renderListItem(item: Tokens.ListItem, key: number): ReactNode {
-  // Task items carry a leading checkbox token; render the rest inline after it.
+  // Task items carry a leading checkbox token; render the rest inline after it. A loose item (blank
+  // lines between paragraphs) keeps its paragraphs as blocks; a tight one stays inline.
   return (
-    <li key={key} className={item.task ? "list-none -ml-6 pl-0" : undefined}>
+    <li key={key} className={cn(item.task && "list-none -ml-6 pl-0", item.loose && "space-y-2")}>
       {item.tokens.map((t, i) =>
         t.type === "paragraph" || t.type === "text" ? (
-          <span key={i}>{children(t as Tokens.Paragraph)}</span>
+          item.loose && t.type === "paragraph" ? (
+            <p key={i} className="leading-relaxed">
+              {children(t as Tokens.Paragraph)}
+            </p>
+          ) : (
+            <span key={i}>{children(t as Tokens.Paragraph)}</span>
+          )
         ) : (
           renderToken(t, i)
         ),

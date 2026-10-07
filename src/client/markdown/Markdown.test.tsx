@@ -25,6 +25,17 @@ describe("Markdown", () => {
     expect(container.querySelectorAll("th")[1]).toHaveClass("text-right");
   });
 
+  it("renders the paragraphs of a loose list item as blocks, not one run-on line", () => {
+    const { container } = render(<Markdown streaming={false} text={"- first paragraph\n\n  second paragraph\n\n- next item"} />);
+    const items = container.querySelectorAll("li");
+    expect(items).toHaveLength(2);
+    expect(items[0]!.querySelectorAll("p")).toHaveLength(2);
+    expect(items[0]).toHaveClass("space-y-2");
+    // A tight list keeps inline content.
+    const tight = render(<Markdown streaming={false} text={"- one\n- two"} />).container;
+    expect(tight.querySelectorAll("li p")).toHaveLength(0);
+  });
+
   it("renders an unclosed fence as plain monospace without highlight spans", () => {
     const { container } = render(<Markdown streaming text={"```ts\nconst a = 1;\nconst b"} />);
     const pre = container.querySelector("pre");

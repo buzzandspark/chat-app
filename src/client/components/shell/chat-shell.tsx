@@ -11,6 +11,7 @@ import { ChatStoreProvider } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
 import { useIsDesktop } from "@client/hooks/use-media-query";
 import { useNewChat } from "@client/hooks/use-new-chat";
+import { useScrollAnchoringFlag } from "@client/hooks/use-scroll-anchoring";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
 import dynamic from "next/dynamic";
 import { ShellUserProvider } from "./shell-user";
@@ -55,6 +56,7 @@ function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellPro
   const newChat = useNewChat();
   const searchCloser = useRef<(() => void) | null>(null);
   useVisualViewport();
+  useScrollAnchoringFlag();
 
   const open = desktop ? desktopOpen : phoneOpen;
   const close = useCallback(() => (desktop ? setDesktopOpen(false) : setPhoneOpen(false)), [desktop]);
