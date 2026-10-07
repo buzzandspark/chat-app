@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
 import { newChatHref } from "@client/hooks/use-new-chat";
+import { setPendingChat, usePendingChat } from "@client/store/nav-store";
 import { getSidebarStore, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { useModals } from "../ui/modal-manager";
 import { ThemeToggle } from "./theme-toggle";
@@ -41,6 +42,9 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
   const router = useRouter();
   const { show } = useModals();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
+  // D21: the clicked row is active at once; the router catches up when the thread arrives.
+  const pendingChatId = usePendingChat();
+  const activeChatId = pendingChatId ?? currentChatId;
 
   useEffect(() => {
     getSidebarStore().hydrate(initialChats);
@@ -106,7 +110,7 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
             <ul className="space-y-0.5">
               {chats.map((chat) => {
                 const href = `/c/${chat.id}`;
-                const active = chat.id === currentChatId;
+                const active = chat.id === activeChatId;
                 return (
                   <li
                     key={chat.id}
@@ -119,6 +123,7 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
                       href={href}
                       prefetch={false}
                       onClick={onNavigate}
+                      onNavigate={() => setPendingChat(chat.id)}
                       onTouchStart={() => router.prefetch(href)}
                       onPointerEnter={() => router.prefetch(href)}
                       onFocus={() => router.prefetch(href)}

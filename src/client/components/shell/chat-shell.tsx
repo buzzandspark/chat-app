@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import type { ChatSummary } from "@client/store/sidebar-store";
+import { setPendingChat, usePendingChat } from "@client/store/nav-store";
 import { useSidebarChats } from "@client/store/sidebar-store";
 import { useChat } from "@client/store/hooks";
 import { ChatStoreProvider } from "@client/store/context";
@@ -55,12 +56,21 @@ function ChatShellInner({ initialChats, userLabel, children }: ChatShellProps) {
   const toggle = useCallback(() => (desktop ? setDesktopOpen((v) => !v) : setPhoneOpen((v) => !v)), [desktop]);
 
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
+  const pendingChatId = usePendingChat();
+  // The pending chat is released once the router has committed it (or left the chat routes).
+  useEffect(() => {
+    if (pendingChatId !== null && (pendingChatId === currentChatId || currentChatId === null)) setPendingChat(null);
+  }, [pendingChatId, currentChatId]);
   const openChat = useChat(currentChatId ?? "");
   const currentSummary = currentChatId ? chats.find((c) => c.id === currentChatId) : undefined;
-  // An id the server knows nothing about is a new chat; until the rows have arrived the title stays blank.
-  const title = currentChatId
-    ? (currentSummary?.title ?? openChat.title ?? (openChat.seeded && openChat.messageIds.length === 0 ? "New chat" : ""))
-    : "";
+  const pendingSummary = pendingChatId ? chats.find((c) => c.id === pendingChatId) : undefined;
+  // D21: the header switches to the clicked chat's title on click. An id the server knows nothing
+  // about is a new chat; until its rows have arrived the title stays blank.
+  const title =
+    pendingSummary?.title ??
+    (currentChatId
+      ? (currentSummary?.title ?? openChat.title ?? (openChat.seeded && openChat.messageIds.length === 0 ? "New chat" : ""))
+      : "");
 
   const openSearch = useCallback(() => {
     searchCloser.current?.();

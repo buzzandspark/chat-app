@@ -194,11 +194,10 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
             )}
           </div>
         </div>
-        {enterSends ? (
-          <p className="mt-1 hidden text-caption text-muted-foreground md:block">
-            Enter to send · Shift+Enter for a new line · ↑ edits your last message · Esc stops · ⌘K search · ⌘⇧O new chat
-          </p>
-        ) : null}
+        {/* Shown by CSS where a hardware keyboard is likely (md + hover), so the server, the skeleton and the client agree on the height. */}
+        <p className="mt-1 hidden text-caption text-muted-foreground md:[@media(hover:hover)]:block">
+          Enter to send · Shift+Enter for a new line · ↑ edits your last message · Esc stops · ⌘K search · ⌘⇧O new chat
+        </p>
       </div>
     </div>
   );

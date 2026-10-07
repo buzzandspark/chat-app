@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ChatView } from "@client/components/chat/chat-view";
-import { ThreadSkeleton } from "@client/components/chat/thread-skeleton";
+import { ChatViewSkeleton } from "@client/components/chat/thread-skeleton";
 import { getChatWithMessages } from "@server/chats";
 import { requireUser } from "@server/current-user";
 import { env } from "@shared/env";
@@ -9,7 +9,7 @@ import { isUuid } from "@shared/id";
 
 export default function ChatPage({ params }: PageProps<"/c/[id]">) {
   return (
-    <Suspense fallback={<ThreadSkeleton />}>
+    <Suspense fallback={<ChatViewSkeleton />}>
       <ChatLoader params={params} />
     </Suspense>
   );
