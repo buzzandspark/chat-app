@@ -74,6 +74,50 @@ describe("Engine", () => {
     expect(engine.runningCount()).toBe(0);
   });
 
+  it("writes the covered seq with each partial so a resume never duplicates text (D2)", async () => {
+    engine = makeEngine(1);
+    const inp = input({ scenario: "slow_tokens" });
+    engine.start(inp);
+    await waitFor(() => (store.get(inp.generationId)?.events.filter((e) => e.type === "text_delta").length ?? 0) >= 3, 5000);
+    await waitFor(() => (db.select({ lastSeq: messages.lastSeq }).from(messages).where(eq(messages.id, inp.assistantMessageId)).get()?.lastSeq ?? null) !== null, 2000);
+    const row = db.select().from(messages).where(eq(messages.id, inp.assistantMessageId)).get()!;
+    const events = store.get(inp.generationId)!.events;
+    const covered = events.slice(0, row.lastSeq! + 1);
+    const expected = covered.filter((e) => e.type === "text_delta").map((e) => (e.type === "text_delta" ? e.text : "")).join("");
+    const saved = row.content.filter((b) => b.type === "text").map((b) => (b.type === "text" ? b.text : "")).join("");
+    expect(saved).toBe(expected);
+    engine.stop(inp.generationId);
+    await collectUntilTerminal(store, inp.generationId);
+    const finalRow = db.select().from(messages).where(eq(messages.id, inp.assistantMessageId)).get()!;
+    expect(finalRow.lastSeq).toBe(store.get(inp.generationId)!.events.length - 1);
+  });
+
+  it("ends a generation whose upstream goes silent as interrupted (upstream)", async () => {
+    const silent = {
+      name: "scripted" as const,
+      stream(_req: unknown, { signal }: { signal: AbortSignal }) {
+        return (async function* () {
+          const script = scenarioScript("normal", { model: "claude-sonnet-5-5", thinking: { harder: false }, messages: [] });
+          const { scriptToFixture } = await import("./providers/scripted");
+          const lines = scriptToFixture(script);
+          const first = lines.find((l) => "event" in l);
+          if (first && "event" in first) yield first.event;
+          await new Promise<void>((_, reject) => signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true }));
+        })();
+      },
+    };
+    engine = new Engine({ db, store, providers: () => silent as never, partialPersistMs: 50, upstreamIdleMs: 60 });
+    const inp = input();
+    engine.start(inp);
+    const events = await collectUntilTerminal(store, inp.generationId, 5000);
+    const last = events[events.length - 1]!;
+    expect(last.type).toBe("interrupted");
+    if (last.type === "interrupted") expect(last.reason).toBe("upstream");
+    const row = db.select().from(messages).where(eq(messages.id, inp.assistantMessageId)).get()!;
+    expect(row.status).toBe("interrupted");
+    expect(engine.runningCount()).toBe(0);
+  });
+
   it("is idempotent on generationId", async () => {
     const inp = input();
     expect(engine.start(inp)).toEqual({ created: true });

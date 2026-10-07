@@ -23,6 +23,7 @@ export interface MessageRow {
   error: RelayError | null;
   timings: Timings | null;
   generationId: string | null;
+  lastSeq: number | null;
   createdAt: number;
 }
 
@@ -67,6 +68,7 @@ export function getChatWithMessages(chatId: string, userId: string): { chat: Cha
       error: r.error ?? null,
       timings: r.timings ?? null,
       generationId: r.generationId,
+      lastSeq: r.lastSeq,
       createdAt: r.createdAt.getTime(),
     })),
   };

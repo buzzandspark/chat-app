@@ -40,31 +40,31 @@ export interface BackoffOptions {
 }
 
 const DEFAULT_BACKOFF: BackoffOptions = { baseMs: 500, maxMs: 8000, maxAttempts: 10 };
-
-export class SendError extends Error {
-  constructor(
-    public status: number,
-    public body: Record<string, unknown>,
-  ) {
-    super(String(body.error ?? status));
-    this.name = "SendError";
-  }
-}
+/** D16 watchdog: the server writes a keepalive every 15 s, so longer silence is a half-open socket. */
+const DEFAULT_IDLE_MS = 25_000;
 
 /** D2/D16: failures after the POST go through the resume path with backoff; ids are chosen here. */
 export class GenerationClient {
   private inflight = new Map<string, AbortController>();
   private bodies = new Map<string, PostBody>();
   private backoff: BackoffOptions;
+  private idleMs: number;
   private fetchImpl: typeof fetch;
   private sleepImpl: (ms: number, signal?: AbortSignal) => Promise<void>;
 
   constructor(
     private store: ChatStore,
-    options: { fetch?: typeof fetch; backoff?: Partial<BackoffOptions>; sleep?: (ms: number, signal?: AbortSignal) => Promise<void> } = {},
+    options: {
+      fetch?: typeof fetch;
+      backoff?: Partial<BackoffOptions>;
+      sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+      /** No bytes for this long drops the connection and resumes from the last seq (0 disables). */
+      idleMs?: number;
+    } = {},
   ) {
     this.fetchImpl = options.fetch ?? ((input, init) => fetch(input, init));
     this.backoff = { ...DEFAULT_BACKOFF, ...options.backoff };
+    this.idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
     this.sleepImpl = options.sleep ?? sleep;
     if (typeof window !== "undefined") {
       window.addEventListener("online", () => this.resumeAll());
@@ -267,6 +267,15 @@ export class GenerationClient {
     const decoder = new TextDecoder();
     let terminal = false;
     let firstByte = false;
+    // D16 watchdog: cancelling the reader ends the read loop without a terminal event, and the
+    // caller resumes from the last seq with the usual backoff.
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const armIdle = () => {
+      if (this.idleMs <= 0) return;
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => void reader.cancel().catch(() => {}), this.idleMs);
+    };
+    armIdle();
     const parser = createSseParser((msg) => {
       const event = parseRelayEvent(msg.data);
       if (!event) return;
@@ -277,6 +286,7 @@ export class GenerationClient {
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
+        armIdle();
         if (!firstByte) {
           firstByte = true;
           this.store.markClientTiming(messageId, "firstByte");
@@ -290,6 +300,7 @@ export class GenerationClient {
       if (signal.aborted) return terminal;
       // connection dropped mid-stream
     } finally {
+      if (idleTimer) clearTimeout(idleTimer);
       try {
         reader.releaseLock();
       } catch {

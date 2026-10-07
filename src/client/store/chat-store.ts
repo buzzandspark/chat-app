@@ -76,6 +76,7 @@ export interface SeedRow {
   error: RelayError | null;
   timings: Timings | null;
   generationId: string | null;
+  lastSeq?: number | null;
   createdAt: number;
 }
 
@@ -293,20 +294,6 @@ export class ChatStore {
     this.notifyMessage(message.id);
   }
 
-  removeMessage(id: string): void {
-    const m = this.messages.get(id);
-    if (!m) return;
-    this.messages.delete(id);
-    this.internals.delete(id);
-    if (m.generationId) this.byGeneration.delete(m.generationId);
-    const chat = this.chats.get(m.chatId);
-    if (chat) {
-      this.chats.set(m.chatId, { ...chat, messageIds: chat.messageIds.filter((x) => x !== id) });
-      this.notifyChat(m.chatId);
-    }
-    this.notifyMessage(id);
-  }
-
   /** Remove this message and everything after it in its chat (edit-last-message, D10). */
   truncateFrom(id: string): void {
     const m = this.messages.get(id);
@@ -448,8 +435,14 @@ export class ChatStore {
       }
       case "text_delta":
       case "thinking_delta": {
-        const pos = internal.blockIndex.get(event.index);
-        if (pos === undefined) break;
+        let pos = internal.blockIndex.get(event.index);
+        if (pos === undefined) {
+          // The block started before the seq this client caught up from (an empty block is not saved): create it now.
+          pos = d.blocks.length;
+          internal.blockIndex.set(event.index, pos);
+          d.blocks.push(event.type === "text_delta" ? { type: "text", text: "" } : { type: "thinking", text: "" });
+          if (event.type === "thinking_delta" && d.thinkingStartedAt === null) d.thinkingStartedAt = this.now();
+        }
         const block = d.blocks[pos];
         if (!block || block.type === "divider") break;
         d.blocks[pos] = { ...block, text: block.text + event.text };
@@ -501,14 +494,22 @@ export class ChatStore {
     return id;
   }
 
-  /** D2: done replaces local state; interrupted/stopped keep longer local text and apply only the status. */
+  /**
+   * D2: a final row (done, refused) replaces local state. Otherwise the side that covers more of the
+   * stream wins: by the saved seq when the row carries one, by text length for rows written before it
+   * existed. Taking the server's content moves the cursor past the seq it covers, so a late replay of
+   * the same deltas is dropped as duplicates instead of appended.
+   */
   private applySnapshot(d: MessageState, snapshot: MessageSnapshot, status: MessageStatus, internal: Internal): void {
     const serverBlocks = toClientBlocks(snapshot.content as StoredContentBlock[]);
-    const keepLocal =
-      (status === "interrupted" || status === "stopped") && textOf(d.blocks).length >= textOf(serverBlocks).length;
-    if (!keepLocal) {
+    const covered = snapshot.lastSeq ?? null;
+    const final = status === "done" || status === "refused";
+    const serverAhead = covered !== null ? covered > d.lastSeq : textOf(serverBlocks).length > textOf(d.blocks).length;
+    if (final || serverAhead) {
       d.blocks = serverBlocks;
       internal.blockIndex.clear();
+      for (const [index, pos] of blockIndexFromContent(snapshot.content as StoredContentBlock[])) internal.blockIndex.set(index, pos);
+      if (covered !== null && covered > d.lastSeq) d.lastSeq = covered;
     }
     d.status = status;
     d.requestedModel = snapshot.requestedModel ?? d.requestedModel;
@@ -527,6 +528,7 @@ export class ChatStore {
 /** True when a saved row carries nothing the store does not already show, so the row object can stay. */
 function sameRow(existing: MessageState, row: SeedRow): boolean {
   if (existing.local || existing.status !== row.status || existing.stopReason !== row.stopReason) return false;
+  if (existing.lastSeq !== (row.lastSeq ?? -1)) return false;
   const blocks = toClientBlocks(row.content);
   if (blocks.length !== existing.blocks.length) return false;
   return textOf(blocks) === textOf(existing.blocks);
@@ -549,6 +551,7 @@ export function messageStateFromRow(row: SeedRow): MessageState {
     timings: row.timings,
     generationId: row.generationId,
     discardedText: row.status === "refused" && textOf(blocks).length > 0,
+    lastSeq: row.lastSeq ?? -1,
     createdAt: row.createdAt,
   });
 }

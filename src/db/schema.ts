@@ -38,7 +38,7 @@ export const users = sqliteTable(
     costSpentUsd: real("cost_spent_usd").notNull().default(0),
     lastActiveAt: timestamp("last_active_at"),
   },
-  (t) => [index("users_role_idx").on(t.role), index("users_last_active_idx").on(t.lastActiveAt)],
+  (t) => [index("users_role_idx").on(t.role), index("users_last_active_idx").on(t.lastActiveAt), index("users_created_idx").on(t.createdAt)],
 );
 
 export const sessions = sqliteTable(
@@ -148,6 +148,8 @@ export const messages = sqliteTable(
     error: text("error", { mode: "json" }).$type<RelayError>(),
     generationId: text("generation_id"),
     timings: text("timings", { mode: "json" }).$type<Timings>(),
+    /** The last producer seq folded into `content` by the write that saved it (D2 resume); null for user messages and old rows. */
+    lastSeq: integer("last_seq"),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at").notNull().$defaultFn(now),
   },
@@ -185,6 +187,7 @@ export const generations = sqliteTable(
   (t) => [
     index("generations_chat_idx").on(t.chatId),
     index("generations_status_idx").on(t.status),
+    index("generations_user_idx").on(t.userId),
   ],
 );
 
@@ -224,7 +227,7 @@ export const feedback = sqliteTable(
     userAgent: text("user_agent"),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
   },
-  (t) => [index("feedback_created_idx").on(t.createdAt)],
+  (t) => [index("feedback_created_idx").on(t.createdAt), index("feedback_user_idx").on(t.userId)],
 );
 
 export type User = typeof users.$inferSelect;

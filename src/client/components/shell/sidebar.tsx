@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useNewChat } from "@client/hooks/use-new-chat";
@@ -95,20 +95,22 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
             <IconButton label="Search chats" onClick={onSearch}>
               <Search />
             </IconButton>
-            <IconButton asChild label="New chat">
-              {/* href keeps open-in-new-tab working through the /c/new alias; a plain click goes straight to a fresh id. */}
-              <Link
-                href="/c/new"
-                prefetch={false}
-                onClick={onNavigate}
-                onNavigate={(e) => {
-                  e.preventDefault();
-                  newChat();
-                }}
-              >
-                <Plus />
-              </Link>
-            </IconButton>
+            {/* href keeps open-in-new-tab working through the /c/new alias; a plain click goes straight to a fresh id. */}
+            <Link
+              href="/c/new"
+              prefetch={false}
+              aria-label="New chat"
+              data-tip="New chat"
+              data-tip-side="bottom"
+              className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "tip touch-target")}
+              onClick={onNavigate}
+              onNavigate={(e) => {
+                e.preventDefault();
+                newChat();
+              }}
+            >
+              <Plus />
+            </Link>
             <IconButton label="Close sidebar" tipAlign="end" className="md:hidden" onClick={onClose}>
               <X />
             </IconButton>

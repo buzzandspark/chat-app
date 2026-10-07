@@ -80,6 +80,48 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("GenerationClient", () => {
+  it("drops a silent connection after idleMs and resumes from the last seq", async () => {
+    let posts = 0;
+    const client = (() => {
+      const fetchImpl: typeof fetch = async (input, init) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        calls.push({ url, method: init?.method ?? "GET", body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined });
+        if (url === "/api/chat") {
+          posts++;
+          const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };
+          const events = makeEvents(body.generationId, body.assistantMessageId, "hi");
+          // The first two events, then silence: a half-open socket.
+          const encoder = new TextEncoder();
+          let i = 0;
+          const stream = new ReadableStream<Uint8Array>({
+            pull(controller) {
+              if (i < 2) {
+                controller.enqueue(encoder.encode(encodeSse(events[i]!)));
+                i++;
+                return;
+              }
+              return new Promise(() => {});
+            },
+          });
+          return new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } });
+        }
+        const m = /\/api\/generations\/(.+)\/events\?after=(\d+|-1)/.exec(url)!;
+        const after = Number(m[2]);
+        const id = store.messageIdForGeneration(m[1]!)!;
+        return sseResponse(makeEvents(m[1]!, id, "hi").filter((e) => e.seq !== null && e.seq > after));
+      };
+      return new GenerationClient(store, { fetch: fetchImpl, backoff: { baseMs: 1, maxMs: 2, maxAttempts: 5 }, sleep: async () => {}, idleMs: 30 });
+    })();
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const m = await settle(assistantMessageId, 5000);
+    expect(m.status).toBe("done");
+    expect(textOf(m.blocks)).toBe("hi");
+    expect(posts).toBe(1);
+    const resumes = calls.filter((c) => c.url.includes("/events?after="));
+    expect(resumes).toHaveLength(1);
+    expect(resumes[0]!.url).toMatch(/after=1$/);
+  });
+
   it("retry carries the user text so a refused first send can be retried", async () => {
     const client = makeClient((_url, init) => {
       const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };

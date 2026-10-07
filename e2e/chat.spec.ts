@@ -46,17 +46,43 @@ test.describe("reliability", () => {
     expect(text.split("Section 1\n").length - 1).toBe(1);
   });
 
-  test("reloading mid-stream shows the reply still running and it completes", async ({ page }) => {
+  // The slow_tokens scenario streams exactly this sentence; a resume that replayed from the saved
+  // partial's start would show it twice (the review measured 6,414 characters against 5,444).
+  const SLOW_TOKENS_TEXT =
+    "The relay keeps every generation in an in-memory buffer keyed by id, with sequence numbers as array indices.";
+
+  test("reloading mid-stream shows the reply still running and the final text is identical", async ({ page }) => {
     await openNewChat(page);
     await runScenario(page, "slow_tokens");
     const row = lastAssistant(page);
     await expect(row.locator(".markdown")).not.toHaveText("", { timeout: 20_000 });
+    // Wait for at least one partial write (every 2 s) so the reload seeds a non-empty partial.
+    await page.waitForTimeout(2500);
     await waitForChatUrl(page);
     await page.reload();
     const after = lastAssistant(page);
     await expect(after).toHaveAttribute("data-status", "streaming", { timeout: 10_000 });
     await expect(after).toHaveAttribute("data-status", "done", { timeout: 60_000 });
-    expect(await assistantText(after)).toContain("in-memory buffer");
+    expect((await assistantText(after)).trim()).toBe(SLOW_TOKENS_TEXT);
+  });
+
+  test("a second tab opened mid-stream ends with the same text as the first", async ({ page, context }) => {
+    await openNewChat(page);
+    await runScenario(page, "slow_tokens");
+    const row = lastAssistant(page);
+    await expect(row.locator(".markdown")).not.toHaveText("", { timeout: 20_000 });
+    await page.waitForTimeout(2500);
+    await waitForChatUrl(page);
+    const second = await context.newPage();
+    await second.goto(page.url());
+    const twin = lastAssistant(second);
+    await expect(twin).toHaveAttribute("data-status", "streaming", { timeout: 10_000 });
+    await expect(row).toHaveAttribute("data-status", "done", { timeout: 60_000 });
+    await expect(twin).toHaveAttribute("data-status", "done", { timeout: 60_000 });
+    const first = (await assistantText(row)).trim();
+    expect(first).toBe(SLOW_TOKENS_TEXT);
+    expect((await assistantText(twin)).trim()).toBe(first);
+    await second.close();
   });
 
   test("a producer restart shows interrupted with a retry", async ({ page }) => {

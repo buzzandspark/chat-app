@@ -27,6 +27,20 @@ function seed(store: ChatStore) {
 const ev = (seq: number | null, body: RelayEventBody): RelayEvent => ({ seq, generationId: "g1", t: 0, ...body }) as RelayEvent;
 
 const text = (t: string): StoredContentBlock => ({ type: "text", text: t, citations: null });
+const snapshotMessage = (id: string, content: StoredContentBlock[]) => ({
+  id,
+  chatId: "c1",
+  role: "assistant" as const,
+  content,
+  status: "done" as const,
+  requestedModel: null,
+  servingModel: null,
+  stopReason: null,
+  refusal: null,
+  error: null,
+  timings: null,
+  generationId: "g1",
+});
 const row = (partial: Partial<SeedRow> & Pick<SeedRow, "id" | "role">): SeedRow => ({
   chatId: "c1",
   content: [],
@@ -225,6 +239,70 @@ describe("ChatStore", () => {
       const { store } = makeStore();
       store.createChat("c9");
       expect(store.getChat("c9")).toMatchObject({ seeded: true, messageIds: [], title: null });
+    });
+  });
+
+
+  describe("resume by seq", () => {
+    it("seeds a streaming row with its covered seq and appends only the deltas after it", () => {
+      const { store, runFrame } = makeStore();
+      store.seedChat("c1", "T", [
+        row({ id: "u1", role: "user", content: [text("q")] }),
+        row({ id: "a1", role: "assistant", status: "streaming", generationId: "g1", content: [text("hello ")], lastSeq: 4 }),
+      ]);
+      expect(store.getMessage("a1")!.lastSeq).toBe(4);
+      // A replay from seq 0 (block_start, "hello ") is ignored; seq 5 onwards appends to the saved block.
+      store.enqueue(ev(1, { type: "block_start", index: 0, block: "text" }));
+      store.enqueue(ev(2, { type: "text_delta", index: 0, text: "hello " }));
+      store.enqueue(ev(5, { type: "text_delta", index: 0, text: "world" }));
+      runFrame();
+      expect(textOf(store.getMessage("a1")!.blocks)).toBe("hello world");
+    });
+
+    it("creates a block for a delta whose index it has never seen (an empty block was not saved)", () => {
+      const { store, runFrame } = makeStore();
+      store.seedChat("c1", "T", [row({ id: "a1", role: "assistant", status: "streaming", generationId: "g1", content: [text("done.")], lastSeq: 3 })]);
+      store.enqueue(ev(4, { type: "text_delta", index: 1, text: "more" }));
+      runFrame();
+      expect(store.getMessage("a1")!.blocks.map((b) => b.type === "text" && b.text)).toEqual(["done.", "more"]);
+    });
+
+    it("never replaces a finished local reply with a stale streaming row", () => {
+      const { store } = makeStore();
+      store.addMessage(createMessageState({ id: "a1", chatId: "c1", role: "assistant", status: "done", blocks: [{ type: "text", text: "final" }], lastSeq: 9 }));
+      store.seedChat("c1", "T", [row({ id: "a1", role: "assistant", status: "streaming", generationId: "g1", content: [text("fin")], lastSeq: 5 })]);
+      expect(store.getMessage("a1")!.status).toBe("done");
+      expect(textOf(store.getMessage("a1")!.blocks)).toBe("final");
+    });
+
+    it("ignores a snapshot whose seq is behind the local state and applies only its status", () => {
+      const { store, runFrame } = makeStore();
+      seed(store);
+      store.enqueue(ev(1, { type: "block_start", index: 0, block: "text" }));
+      store.enqueue(ev(2, { type: "text_delta", index: 0, text: "abcdef" }));
+      runFrame();
+      store.enqueue(
+        ev(null, { type: "snapshot", status: "interrupted", message: { ...snapshotMessage("a1", [text("abc")]), lastSeq: 1 } }),
+      );
+      const m = store.getMessage("a1")!;
+      expect(m.status).toBe("interrupted");
+      expect(textOf(m.blocks)).toBe("abcdef");
+      expect(m.lastSeq).toBe(2);
+    });
+
+    it("takes a snapshot's content when its seq is ahead and moves the cursor past it", () => {
+      const { store, runFrame } = makeStore();
+      seed(store);
+      store.enqueue(ev(1, { type: "block_start", index: 0, block: "text" }));
+      store.enqueue(ev(2, { type: "text_delta", index: 0, text: "ab" }));
+      runFrame();
+      store.enqueue(ev(null, { type: "snapshot", status: "stopped", message: { ...snapshotMessage("a1", [text("abcdef")]), lastSeq: 6 } }));
+      const m = store.getMessage("a1")!;
+      expect(textOf(m.blocks)).toBe("abcdef");
+      expect(m.lastSeq).toBe(6);
+      store.enqueue(ev(3, { type: "text_delta", index: 0, text: "cd" })); // a late duplicate
+      runFrame();
+      expect(textOf(store.getMessage("a1")!.blocks)).toBe("abcdef");
     });
   });
 

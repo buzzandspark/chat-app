@@ -20,6 +20,7 @@ import {
   hadDeclinedAttempt,
   normalizeEvent,
   resolveServingModel,
+  type NormalizableEvent,
   type StreamAccumulator,
 } from "./anthropic/parse-stream";
 import { priceIterations, summarize, type UsageRow } from "./anthropic/pricing";
@@ -65,6 +66,8 @@ export interface EngineOptions {
   now?: () => number;
   /** D3: partial content is written this often while streaming. */
   partialPersistMs?: number;
+  /** D16: a generation whose upstream sends nothing for this long ends as `interrupted { reason: "upstream" }`. 0 disables. */
+  upstreamIdleMs?: number;
   isDraining?: () => boolean;
 }
 
@@ -90,7 +93,7 @@ export type ResumeOutcome =
   | { kind: "snapshot"; event: RelayEvent }
   | { kind: "not_found" };
 
-type AbortReason = "stop" | "shutdown" | "scenario";
+type AbortReason = "stop" | "shutdown" | "scenario" | "idle";
 
 interface FinalState {
   content: StoredContentBlock[];
@@ -131,6 +134,7 @@ export class Engine {
   private tps: TpsStats;
   private now: () => number;
   private partialPersistMs: number;
+  private upstreamIdleMs: number;
   private isDraining: () => boolean;
   private active = new Map<string, Active>();
 
@@ -142,6 +146,7 @@ export class Engine {
     this.tps = options.tps ?? new TpsStats();
     this.now = options.now ?? Date.now;
     this.partialPersistMs = options.partialPersistMs ?? 2000;
+    this.upstreamIdleMs = options.upstreamIdleMs ?? 60_000;
     this.isDraining = options.isDraining ?? (() => false);
   }
 
@@ -338,6 +343,7 @@ export class Engine {
       error: message.error ?? null,
       timings: message.timings ?? null,
       generationId: message.generationId,
+      lastSeq: message.lastSeq,
     };
     return {
       kind: "snapshot",
@@ -390,7 +396,17 @@ export class Engine {
         { model: input.model, thinking: input.thinking, messages: history, userId: input.userId, scenario: input.scenario },
         { signal: active.controller.signal },
       );
-      for await (const raw of stream) {
+      const iterator = stream[Symbol.asyncIterator]();
+      for (;;) {
+        const step = await this.nextOrIdle(iterator);
+        if (step === "idle") {
+          active.abortReason = "idle";
+          active.controller.abort(new DOMException("idle", "AbortError"));
+          void iterator.return?.().catch(() => {});
+          break;
+        }
+        if (step.done) break;
+        const raw = step.value;
         if (active.controller.signal.aborted) break;
         const bodies = normalizeEvent(raw, active.acc);
         for (const body of bodies) {
@@ -448,6 +464,32 @@ export class Engine {
     active.relayed++;
   }
 
+  /** D16: the next upstream event, or "idle" when none arrives within `upstreamIdleMs` (a half-open socket must not hold a generation open for ever). */
+  private nextOrIdle(iterator: AsyncIterator<NormalizableEvent>): Promise<IteratorResult<NormalizableEvent> | "idle"> {
+    const next = iterator.next();
+    if (this.upstreamIdleMs <= 0) return next;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const idle = new Promise<"idle">((resolve) => {
+      timer = setTimeout(() => resolve("idle"), this.upstreamIdleMs);
+    });
+    return Promise.race([next, idle]).then(
+      (result) => {
+        if (timer) clearTimeout(timer);
+        if (result === "idle") next.catch(() => {});
+        return result;
+      },
+      (err: unknown) => {
+        if (timer) clearTimeout(timer);
+        throw err;
+      },
+    );
+  }
+
+  /** The seq of the last event folded into the accumulator: both advance in the same synchronous step. */
+  private coveredSeq(active: Active): number {
+    return (this.store.get(active.id)?.events.length ?? 0) - 1;
+  }
+
   private cleanup(active: Active): void {
     if (active.partialTimer) clearInterval(active.partialTimer);
     active.partialTimer = null;
@@ -461,6 +503,7 @@ export class Engine {
       .set({
         content,
         servingModel: resolveServingModel(active.acc),
+        lastSeq: this.coveredSeq(active),
         updatedAt: new Date(this.now()),
       })
       .where(eq(messages.id, active.messageId))
@@ -498,6 +541,10 @@ export class Engine {
         { content: toContentBlocks(active.acc), status: "stopped", generationStatus: "stopped", servingModel, stopReason: null, timings, rows },
         { type: "stopped", servingModel, usage },
       );
+      return;
+    }
+    if (reason === "idle") {
+      this.finishInterrupted(active, "upstream", timings, `No data from the model for ${Math.round(this.upstreamIdleMs / 1000)} s`);
       return;
     }
     this.finishInterrupted(active, reason === "shutdown" ? "shutdown" : "crash", timings);
@@ -606,6 +653,8 @@ export class Engine {
           refusal: active.acc.refusal,
           error: final.error ?? null,
           timings: { server: final.timings },
+          // The terminal event is appended right after this write and takes the next seq.
+          lastSeq: this.coveredSeq(active) + 1,
           updatedAt: now,
         })
         .where(eq(messages.id, active.messageId))

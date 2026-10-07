@@ -36,6 +36,8 @@ export interface MessageSnapshot {
   error: RelayError | null;
   timings: Timings | null;
   generationId: string | null;
+  /** The last producer seq the saved content covers; a client ahead of it keeps its own text (D2). */
+  lastSeq?: number | null;
 }
 
 export type ServerTimings = NonNullable<Timings["server"]>;
