@@ -84,7 +84,7 @@ test.describe("demo", () => {
     await page.getByTestId("try-demo").click();
     await expect(page).toHaveURL(/\/c\/new$/);
     await waitForComposer(page);
-    await expect(page.getByTestId("scenario-panel-trigger")).toBeVisible();
+    await expect(page.getByTestId("scenario-panel-trigger").locator("visible=true").first()).toBeVisible();
     await sendText(page, "hello demo");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 60_000 });
     await expect(page.getByText(/demo\.cadence\.invalid|Demo visitor/).first()).toBeVisible();

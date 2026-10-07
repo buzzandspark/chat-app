@@ -76,7 +76,7 @@ test.describe("chat management", () => {
     await page.getByRole("menuitem", { name: "Rename" }).click();
     await page.getByRole("textbox", { name: "Chat title" }).fill("Renamed chat");
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByTestId("chat-title")).toHaveText("Renamed chat");
+    await expect(page.getByTestId("chat-title").locator("visible=true").first()).toHaveText("Renamed chat");
 
     await page.getByRole("button", { name: "Search chats" }).first().click();
     await page.getByRole("textbox", { name: "Search chats" }).fill("pineapple");

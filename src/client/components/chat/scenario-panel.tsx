@@ -1,5 +1,6 @@
 "use client";
 import { FlaskConical } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -13,7 +14,15 @@ import { useChatContext } from "./chat-context";
  */
 export function ScenarioPanel() {
   const { send } = useChatContext();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const seedLongChat = async () => {
+    setOpen(false);
+    const res = await fetch("/api/scenarios/seed-long-chat", { method: "POST" });
+    if (!res.ok) return;
+    const body = (await res.json()) as { chatId: string };
+    router.push(`/c/${body.chatId}`);
+  };
   return (
     <div className="mx-auto flex w-full max-w-thread justify-end px-gutter pb-1">
       <Sheet open={open} onOpenChange={setOpen}>
@@ -29,6 +38,17 @@ export function ScenarioPanel() {
             <SheetDescription>Replayed and scripted streams. None of these call the live API.</SheetDescription>
           </SheetHeader>
           <ul className="flex flex-col gap-1">
+            <li>
+              <button
+                type="button"
+                data-testid="scenario-long_chat"
+                onClick={() => void seedLongChat()}
+                className="flex min-h-12 w-full flex-col items-start rounded-lg px-3 py-2 text-left hover:bg-muted active:bg-muted"
+              >
+                <span className="text-body font-medium">Extremely long chat</span>
+                <span className="text-caption text-muted-foreground">Opens a seeded chat with 200 finished messages; then run any scenario in it.</span>
+              </button>
+            </li>
             {SCENARIO_NAMES.map((name) => {
               const s = SCENARIOS[name];
               return (

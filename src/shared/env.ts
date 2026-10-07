@@ -23,6 +23,9 @@ function flag(v: string | undefined): boolean {
 }
 
 const parsed = schema.parse(process.env);
+if (parsed.NODE_ENV === "production" && !parsed.BETTER_AUTH_SECRET) {
+  console.warn("[env] BETTER_AUTH_SECRET is not set; sign-in will fail. Set it to a long random string.");
+}
 
 export const env = {
   ...parsed,

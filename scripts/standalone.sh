@@ -19,5 +19,10 @@ cp -r fixtures .next/standalone/fixtures
 mkdir -p data
 export DATABASE_PATH="${DATABASE_PATH:-$PWD/data/app.db}"
 case "$DATABASE_PATH" in /*) ;; *) export DATABASE_PATH="$PWD/$DATABASE_PATH" ;; esac
+# Local harness runs (E2E=1) get a fixed auth secret; production must set its own.
+if [ "${E2E:-}" = "1" ]; then
+  export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-e2e-local-secret-not-for-production-0123456789}"
+  export BETTER_AUTH_URL="${BETTER_AUTH_URL:-http://${HOSTNAME:-127.0.0.1}:${PORT:-3000}}"
+fi
 export NEXT_MANUAL_SIG_HANDLE=true
 exec node .next/standalone/server.js

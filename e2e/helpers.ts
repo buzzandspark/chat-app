@@ -8,12 +8,21 @@ export async function openNewChat(page: Page): Promise<void> {
 /** The composer is server-rendered; wait for hydration before typing into it. */
 export async function waitForComposer(page: Page): Promise<void> {
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
-  await expect(page.getByTestId("composer")).toHaveAttribute("data-hydrated", "true");
+  await expect(visible(page, "composer")).toHaveAttribute("data-hydrated", "true");
+}
+
+/**
+ * Next keeps the previous page mounted but hidden after a client-side
+ * navigation, so test-id locators must be scoped to visible elements (role
+ * queries already skip hidden ones).
+ */
+export function visible(page: Page, testId: string): Locator {
+  return page.getByTestId(testId).locator("visible=true").first();
 }
 
 export async function runScenario(page: Page, name: string): Promise<void> {
-  await page.getByTestId("scenario-panel-trigger").click();
-  await page.getByTestId(`scenario-${name}`).click();
+  await visible(page, "scenario-panel-trigger").click();
+  await visible(page, `scenario-${name}`).click();
 }
 
 export function lastAssistant(page: Page): Locator {

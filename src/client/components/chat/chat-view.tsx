@@ -58,6 +58,11 @@ export function ChatView({ chatId, userId, title, initialMessages, isNew, scenar
   const [followEngaged, setFollowEngaged] = useState(true);
   const startedRef = useRef(!isNew);
 
+  // A chat opened by navigation joins the sidebar list even if the layout rendered before it existed.
+  useEffect(() => {
+    if (!isNew && title) getSidebarStore().upsert({ id: chatId, title, updatedAt: Date.now() });
+  }, [chatId, title, isNew]);
+
   // D2: a reload mid-stream reattaches to the generation through the resume path.
   useEffect(() => {
     for (const row of initialMessages) {

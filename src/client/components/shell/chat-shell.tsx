@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { ChatSummary } from "@client/store/sidebar-store";
 import { useSidebarChats } from "@client/store/sidebar-store";
+import { useChat } from "@client/store/hooks";
 import { useIsDesktop } from "@client/hooks/use-media-query";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
 import dynamic from "next/dynamic";
@@ -39,7 +40,12 @@ export function ChatShell({ initialChats, userLabel, children }: ChatShellProps)
   const toggle = useCallback(() => (desktop ? setDesktopOpen((v) => !v) : setPhoneOpen((v) => !v)), [desktop]);
 
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
-  const title = currentChatId ? (chats.find((c) => c.id === currentChatId)?.title ?? "") : pathname === "/c/new" ? "New chat" : "";
+  const openChat = useChat(currentChatId ?? "");
+  const title = currentChatId
+    ? (chats.find((c) => c.id === currentChatId)?.title ?? openChat.title ?? "")
+    : pathname === "/c/new"
+      ? "New chat"
+      : "";
 
   // D19 shortcuts: ⌘/Ctrl+Shift+O new chat, ⌘/Ctrl+K search, Esc closes the phone sidebar first.
   useEffect(() => {
@@ -93,7 +99,8 @@ export function ChatShell({ initialChats, userLabel, children }: ChatShellProps)
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background">
       <Sidebar initialChats={initialChats} open={open} onClose={close} onSearch={() => setSearchOpen(true)} userLabel={userLabel} />
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold. */}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border px-2 md:px-3">
           <Button
             variant="ghost"

@@ -102,13 +102,44 @@ Where the 188 kB goes:
 
 The plan set the budget at 180 kB assuming a smaller framework floor; Next 16's runtime alone measures 133 kB, so the CI gate is 190 kB, which caps everything outside the framework at 57 kB. The next lever is `marked` (14 kB): a purpose-built block and inline tokenizer on top of the existing block splitter would recover roughly 10 kB and is scheduled for the step 7 performance pass if the Pixel 7 Fast-3G numbers call for it.
 
-### Long lists (D14)
+### Measured on a throttled Pixel 7 (D0, D26)
 
-_pending: long-chat frame-time measurement in step 7 decides whether `@tanstack/react-virtual` is added for the region above the viewport._
+`pnpm e2e --project=pixel7 e2e/perf.spec.ts` emulates a Pixel 7 with CPU 4x slowdown and Playwright's Fast 3G profile through the Chrome DevTools protocol, against the built standalone server on localhost (so TTFB is not representative), and appends to `docs/perf/<date>.json`. 2026-10-06:
+
+| Measure | Value |
+| --- | ---: |
+| Shell: cumulative layout shift | 0 (0 shifts) |
+| Shell: first contentful paint | 1.50 s |
+| Shell: DOMContentLoaded | 1.38 s |
+| Shell: composer hydrated | 3.34 s |
+| Shell: bytes transferred | 325 kB |
+| Shell: fonts | Inter loaded, metric-matched fallback loaded, no swap (`display: optional`) |
+| Long reply streaming: first painted token after tap | 2.0 s (includes the scripted 450 ms TTFT and the sheet closing) |
+| Long reply streaming: frame time p50 / p95 / p99 | 16.7 / 16.8 / 16.8 ms, 0 frames over 50 ms of 625 |
+| 200-message chat: time to hydrated after navigation | 0.93 s |
+| 200-message chat streaming: frame time p50 / p95 / p99 | 16.7 / 16.8 / 33.4 ms, 3 frames over 50 ms of 560 |
+| 600-line code block streaming: frame time p50 / p95 / p99 | 16.7 / 33.3 / 33.4 ms, 0 frames over 50 ms of 1,402 |
+
+Lighthouse is not wired in; CLS, paint timings, and font status are read from `PerformanceObserver` and `document.fonts` inside the same run, which gives the two numbers the plan asked for (CLS 0, no font flash) without a second toolchain.
+
+### Long lists (D14): decision
+
+Rows use `content-visibility: auto` with `contain-intrinsic-size: auto 6rem`, so rows off screen skip layout and paint but remember their rendered height, and find-in-page keeps working. With 200 finished messages above the viewport, streaming a long reply held p95 at 16.8 ms and p99 at 33.4 ms on the throttled Pixel 7 (table above), under the 16 ms-per-frame threshold the plan set for adding `@tanstack/react-virtual`. The virtualiser is not added; the decision is revisited if a measured chat exceeds that threshold.
 
 ## 8. Rejected alternatives
 
-Collected from the ADRs; _pending_ expansion.
+- **`EventSource` for the stream** (ADR-0001): cannot POST, cannot set headers, reconnects on its own schedule; the hand-written SSE codec is 120 lines and shared by both ends.
+- **WebSockets**: bidirectional transport is not needed (stop is a POST), and SSE over plain fetch resumes with the same code path as a cold load.
+- **Serverless or multi-instance** (ADR-0002): a generation must outlive the response and resume must read a shared buffer; the single process keeps both in memory and the design doc records what Redis and leases would add.
+- **Postgres from day one** (ADR-0003): a second service for a single-instance app; SQLite in WAL mode with Drizzle keeps the dialect swap mechanical.
+- **Persisting every event**: resume is served from the in-memory buffer and, after eviction, from the message snapshot; a delta table would multiply writes for no resume benefit.
+- **A parser that re-renders the whole reply per token**: the block splitter memoises finished blocks by hash so only the trailing block re-parses; measured frame times above.
+- **`react-markdown`/remark**: the token-to-React renderer over `marked`'s lexer is a third of the size and never touches `innerHTML`.
+- **Keeping `tailwind-merge`**: 10 kB gzipped for class conflict resolution the codebase needs in a handful of families; replaced by a 2 kB merger with tests.
+- **Radix in the first paint**: menus, dialogs, popover and the picker load after first paint; the first frame needs none of them.
+- **Virtualising the thread** (D14): not needed at the measured frame times; `content-visibility: auto` is enough and keeps find-in-page.
+- **OAuth sign-in, anonymous demo without a user row, a shared demo account** (ADR-0004).
+- **Lighthouse in CI**: the two numbers the plan asked for are read in the same Playwright run instead.
 
 ## 9. Scaling past one process
 
