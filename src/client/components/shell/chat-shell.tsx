@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { ChatSummary } from "@client/store/sidebar-store";
 import { useSidebarChats } from "@client/store/sidebar-store";
 import { useChat } from "@client/store/hooks";
+import { ChatStoreProvider } from "@client/store/context";
 import { useIsDesktop } from "@client/hooks/use-media-query";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
 import dynamic from "next/dynamic";
@@ -24,7 +25,15 @@ function isModifier(e: KeyboardEvent): boolean {
   return navigator.platform.includes("Mac") ? e.metaKey : e.ctrlKey;
 }
 
-export function ChatShell({ initialChats, userLabel, children }: ChatShellProps) {
+export function ChatShell(props: ChatShellProps) {
+  return (
+    <ChatStoreProvider>
+      <ChatShellInner {...props} />
+    </ChatStoreProvider>
+  );
+}
+
+function ChatShellInner({ initialChats, userLabel, children }: ChatShellProps) {
   const desktop = useIsDesktop();
   const router = useRouter();
   const pathname = usePathname();

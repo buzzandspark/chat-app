@@ -379,8 +379,13 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-let singleton: GenerationClient | null = null;
+const clients = new WeakMap<ChatStore, GenerationClient>();
+/** One transport per store; on the server that is per request and never used. */
 export function getGenerationClient(store: ChatStore): GenerationClient {
-  singleton ??= new GenerationClient(store);
-  return singleton;
+  let client = clients.get(store);
+  if (!client) {
+    client = new GenerationClient(store);
+    clients.set(store, client);
+  }
+  return client;
 }

@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { clearDraft, draftKey, readDraft, useDraft } from "@client/hooks/use-draft";
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
-import { getChatStore, textOf } from "@client/store/chat-store";
-import { useChat, useMessage } from "@client/store/hooks";
+import { textOf } from "@client/store/chat-store";
+import { useChat, useChatStore, useMessage } from "@client/store/hooks";
 import { SCENARIOS, isScenarioName } from "@relay/scenario-catalog";
 import { useChatContext } from "./chat-context";
 import dynamic from "next/dynamic";
@@ -38,6 +38,7 @@ const MAX_ROWS_PX = 180;
  */
 export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function Composer({ chatId }, ref) {
   const { send, settings, setSettings, client, userId, editing, cancelEdit, editMessage } = useChatContext();
+  const store = useChatStore();
   const chat = useChat(chatId);
   const key = draftKey(userId, chatId);
   const [value, setValue] = useState(() => (typeof window === "undefined" ? "" : readDraft(key)));
@@ -80,7 +81,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const streamingId = lastMessage?.role === "assistant" && lastMessage.status === "streaming" ? lastMessage.generationId : null;
   const lastUserId = (() => {
     for (let i = chat.messageIds.length - 1; i >= 0; i--) {
-      const m = getChatStore().getMessage(chat.messageIds[i]!);
+      const m = store.getMessage(chat.messageIds[i]!);
       if (m?.role === "user") return m.id;
     }
     return null;
@@ -123,7 +124,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   };
 
   const scenario = settings.scenario && isScenarioName(settings.scenario) ? SCENARIOS[settings.scenario] : null;
-  const editingText = editing ? textOf(getChatStore().getMessage(editing.userMessageId)?.blocks ?? []) : "";
+  const editingText = editing ? textOf(store.getMessage(editing.userMessageId)?.blocks ?? []) : "";
 
   return (
     <div

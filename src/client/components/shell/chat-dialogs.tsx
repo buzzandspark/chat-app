@@ -3,11 +3,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getChatStore } from "@client/store/chat-store";
+import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 export function RenameDialog({ chat, onClose }: { chat: ChatSummary | null; onClose: () => void }) {
+  const store = useChatStore();
   const [value, setValue] = useState(chat?.title ?? "");
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -31,7 +32,7 @@ export function RenameDialog({ chat, onClose }: { chat: ChatSummary | null; onCl
       });
       if (res.ok) {
         getSidebarStore().upsert({ ...chat, title: value.trim(), updatedAt: Date.now() });
-        getChatStore().setChatTitle(chat.id, value.trim());
+        store.setChatTitle(chat.id, value.trim());
         onClose();
       }
     } finally {

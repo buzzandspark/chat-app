@@ -178,9 +178,16 @@ export class ChatStore {
 
   // ---- writes ---------------------------------------------------------------
 
-  /** Replace a chat's messages from a server render or fetch. Keeps live state for in-flight messages. */
-  hydrateChat(chatId: string, title: string | null, incoming: MessageState[]): void {
+  /**
+   * Replace a chat's messages from a server render or fetch. Keeps live state
+   * for in-flight messages. With `deferNotify`, subscribers are told in a
+   * microtask: the caller is seeding during its own render (so the first
+   * paint already has the messages) and a synchronous notification would set
+   * state in an ancestor mid-render.
+   */
+  hydrateChat(chatId: string, title: string | null, incoming: MessageState[], options: { deferNotify?: boolean } = {}): void {
     const ids: string[] = [];
+    const touched: string[] = [];
     for (const m of incoming) {
       const existing = this.messages.get(m.id);
       if (existing && existing.status === "streaming") {
@@ -191,7 +198,7 @@ export class ChatStore {
       this.internals.set(m.id, { blockIndex: new Map() });
       if (m.generationId) this.byGeneration.set(m.generationId, m.id);
       ids.push(m.id);
-      this.notifyMessage(m.id);
+      touched.push(m.id);
     }
     const previous = this.chats.get(chatId);
     const same =
@@ -199,10 +206,13 @@ export class ChatStore {
       previous.title === title &&
       previous.messageIds.length === ids.length &&
       previous.messageIds.every((id, i) => id === ids[i]);
-    if (!same) {
-      this.chats.set(chatId, { id: chatId, messageIds: ids, title });
-      this.notifyChat(chatId);
-    }
+    if (!same) this.chats.set(chatId, { id: chatId, messageIds: ids, title });
+    const notify = () => {
+      for (const id of touched) this.notifyMessage(id);
+      if (!same) this.notifyChat(chatId);
+    };
+    if (options.deferNotify) queueMicrotask(notify);
+    else notify();
   }
 
   addMessage(message: MessageState): void {
@@ -493,8 +503,3 @@ export function messageStateFromRow(row: {
   });
 }
 
-let singleton: ChatStore | null = null;
-export function getChatStore(): ChatStore {
-  singleton ??= new ChatStore();
-  return singleton;
-}

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getChatStore, messageStateFromRow, textOf } from "@client/store/chat-store";
-import { useChat } from "@client/store/hooks";
+import { messageStateFromRow, textOf } from "@client/store/chat-store";
+import { useChat, useChatStore } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
 import type { MessageRow } from "@server/chats";
@@ -40,14 +40,15 @@ async function truncateOnServer(chatId: string, fromMessageId: string): Promise<
 }
 
 export function ChatView({ chatId, userId, title, initialMessages, isNew, scenarioPanel }: ChatViewProps) {
-  const store = getChatStore();
+  const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
-  // Seed the external store before the first subscription so the first paint has the messages.
+  // Seed the store during the first render so the first paint has the messages;
+  // notifications are deferred so no ancestor subscriber is updated mid-render.
   const [hydratedFor] = useState(() => {
-    store.hydrateChat(chatId, title, initialMessages.map(messageStateFromRow));
+    store.hydrateChat(chatId, title, initialMessages.map(messageStateFromRow), { deferNotify: true });
     return chatId;
   });
-  if (hydratedFor !== chatId) store.hydrateChat(chatId, title, initialMessages.map(messageStateFromRow));
+  if (hydratedFor !== chatId) store.hydrateChat(chatId, title, initialMessages.map(messageStateFromRow), { deferNotify: true });
 
   const chat = useChat(chatId);
   const [settings, setSettingsState] = useState<ChatSettings>({ model: DEFAULT_MODEL, thinking: { harder: false }, scenario: null });

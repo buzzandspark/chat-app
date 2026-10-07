@@ -1,9 +1,10 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import { EMPTY_CHAT, getChatStore, type ChatState, type MessageState } from "./chat-store";
+import type { ChatState, MessageState } from "./chat-store";
+import { useChatStore } from "./context";
 
 export function useMessage(id: string): MessageState | undefined {
-  const store = getChatStore();
+  const store = useChatStore();
   return useSyncExternalStore(
     (cb) => store.subscribeMessage(id, cb),
     () => store.getMessage(id),
@@ -12,10 +13,12 @@ export function useMessage(id: string): MessageState | undefined {
 }
 
 export function useChat(chatId: string): ChatState {
-  const store = getChatStore();
+  const store = useChatStore();
   return useSyncExternalStore(
     (cb) => store.subscribeChat(chatId, cb),
     () => store.getChat(chatId),
-    () => EMPTY_CHAT,
+    () => store.getChat(chatId),
   );
 }
+
+export { useChatStore } from "./context";

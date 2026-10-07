@@ -3,8 +3,8 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@client/markdown/Markdown";
-import { getChatStore, textOf, type MessageState } from "@client/store/chat-store";
-import { useChat } from "@client/store/hooks";
+import { textOf, type MessageState } from "@client/store/chat-store";
+import { useChat, useChatStore } from "@client/store/hooks";
 import { modelDisplayName } from "@shared/models";
 import { useChatContext } from "./chat-context";
 import { StatusFooter } from "./status-footer";
@@ -30,6 +30,7 @@ function ModelDivider({ from, to, category }: { from: string; to: string; catego
 
 export function AssistantMessage({ message }: { message: MessageState }) {
   const { chatId, client, retry, send, autoFollow } = useChatContext();
+  const store = useChatStore();
   const chat = useChat(chatId);
   const streaming = message.status === "streaming";
   const text = textOf(message.blocks);
@@ -43,16 +44,16 @@ export function AssistantMessage({ message }: { message: MessageState }) {
     const id = message.id;
     const raf = requestAnimationFrame(() => {
       const channel = new MessageChannel();
-      channel.port1.onmessage = () => getChatStore().markClientTiming(id, "firstPaint");
+      channel.port1.onmessage = () => store.markClientTiming(id, "firstPaint");
       channel.port2.postMessage(0);
     });
     return () => cancelAnimationFrame(raf);
-  }, [hasText, message.id]);
+  }, [hasText, message.id, store]);
 
   const userMessageId = (() => {
     const index = chat.messageIds.indexOf(message.id);
     for (let i = index - 1; i >= 0; i--) {
-      const m = getChatStore().getMessage(chat.messageIds[i]!);
+      const m = store.getMessage(chat.messageIds[i]!);
       if (m?.role === "user") return m.id;
     }
     return null;

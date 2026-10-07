@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getChatStore, textOf } from "@client/store/chat-store";
-import { useChat } from "@client/store/hooks";
+import { textOf } from "@client/store/chat-store";
+import { useChat, useChatStore } from "@client/store/hooks";
 
 const SENTENCE_END = /[.!?](\s|$)/g;
 
@@ -11,6 +11,7 @@ const SENTENCE_END = /[.!?](\s|$)/g;
  * prose rather than a token at a time.
  */
 export function LiveRegion({ chatId }: { chatId: string }) {
+  const store = useChatStore();
   const chat = useChat(chatId);
   const lastId = chat.messageIds[chat.messageIds.length - 1];
   const [announced, setAnnounced] = useState("");
@@ -19,7 +20,7 @@ export function LiveRegion({ chatId }: { chatId: string }) {
     if (!lastId) return;
     let cursor = 0;
     const tick = () => {
-      const m = getChatStore().getMessage(lastId);
+      const m = store.getMessage(lastId);
       if (!m || m.role !== "assistant") return;
       const text = textOf(m.blocks);
       let end = cursor;
@@ -34,7 +35,7 @@ export function LiveRegion({ chatId }: { chatId: string }) {
     };
     const timer = setInterval(tick, 2000);
     return () => clearInterval(timer);
-  }, [lastId]);
+  }, [lastId, store]);
 
   return (
     <div aria-live="polite" aria-atomic="true" className="sr-only">

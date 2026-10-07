@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useNow } from "@client/hooks/use-now";
 import { Markdown } from "@client/markdown/Markdown";
 import { createMessageState } from "@client/store/chat-store";
+import { ChatStoreProvider } from "@client/store/context";
 import { ThinkingBlock } from "../chat/thinking-block";
 import { StatusFooter } from "../chat/status-footer";
 import { UserMessage } from "../chat/user-message";
@@ -39,6 +40,7 @@ export function PreviewGallery() {
     [],
   );
   return (
+    <ChatStoreProvider>
     <main className={dark ? "dark" : ""}>
       <div className="min-h-dvh space-y-6 bg-muted p-4 text-foreground">
         <button type="button" className="touch-target rounded-lg border border-border bg-background px-3" onClick={() => setDark((d) => !d)}>
@@ -63,5 +65,6 @@ export function PreviewGallery() {
         ))}
       </div>
     </main>
+    </ChatStoreProvider>
   );
 }

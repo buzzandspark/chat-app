@@ -2,19 +2,19 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { getChatStore } from "@client/store/chat-store";
+import { useChatStore } from "@client/store/hooks";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 /** D25: feedback goes to the `feedback` table with the chat id and the latest reply's latency breakdown. */
 export function FeedbackDialog({ open, onOpenChange, chatId }: { open: boolean; onOpenChange: (open: boolean) => void; chatId: string | null }) {
   const [body, setBody] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  const store = useChatStore();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!body.trim()) return;
     setState("sending");
-    const store = getChatStore();
     const ids = chatId ? store.getChat(chatId).messageIds : [];
     let messageId: string | undefined;
     let timings: unknown;
