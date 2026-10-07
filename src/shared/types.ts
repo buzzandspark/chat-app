@@ -2,7 +2,7 @@ import type { ModelId } from "./models";
 
 export type { ModelId };
 
-export type UserRole = "admin" | "user" | "demo";
+export type UserRole = "admin" | "user";
 
 /** generations.status (D2, D4, D5). */
 export type GenerationStatus = "running" | "done" | "stopped" | "interrupted" | "error";
@@ -78,8 +78,15 @@ export const ERROR_KINDS = [
   "bad_request",
   "network",
   "offline",
+  /** Our own 503: the server is draining for a restart; the reply can be retried in a moment. */
+  "unavailable",
+  /** The server knew this generation and no longer does: its chat was deleted. */
+  "gone",
   "unknown",
 ] as const;
+
+/** Longest user message the route accepts; the composer counts against it. */
+export const MAX_MESSAGE_CHARS = 32_000;
 export type ErrorKind = (typeof ERROR_KINDS)[number];
 
 export interface RelayError {

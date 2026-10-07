@@ -3,7 +3,6 @@ import { RateLimiter } from "@relay/ratelimit";
 import { env } from "@shared/env";
 
 interface Limiters {
-  demoStart: RateLimiter;
   feedback: RateLimiter;
   seedLongChat: RateLimiter;
 }
@@ -13,7 +12,6 @@ const g = globalThis as unknown as { __cadenceLimiters?: Limiters };
 /** Per-IP or per-user windows for the open write endpoints (one process, D1). */
 export function getLimiters(): Limiters {
   g.__cadenceLimiters ??= {
-    demoStart: new RateLimiter(5, 50),
     feedback: new RateLimiter(5, 50),
     // The e2e projects share one dev user and each seeds a long chat; the harness is not the abuse case.
     seedLongChat: env.e2e ? new RateLimiter(60, 600) : new RateLimiter(2, 10),

@@ -12,7 +12,7 @@ SQLite via Drizzle and `better-sqlite3`. JSON columns are `text` with `{ mode: "
 
 Tables:
 
-- `users` (role `admin | user | demo`, `cost_cap_usd` nullable, `cost_spent_usd`), `sessions`, `accounts`, `verifications`: the better-auth tables, plus the admin plugin fields.
+- `users` (role `admin | user`, `cost_cap_usd` nullable, `cost_spent_usd`), `sessions`, `accounts`, `verifications`: the better-auth tables, plus the admin plugin fields.
 - `invites`: token hash, expiry, `used_at`, `revoked_at`.
 - `chats`.
 - `messages`: `position`, `content`, `status`, `requested_model`, `serving_model`, `stop_reason`, `refusal`, `error`, `timings`.

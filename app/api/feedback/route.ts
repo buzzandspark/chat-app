@@ -25,7 +25,7 @@ const Body = z.object({
   timings: z.object({ server: Stamps.optional(), client: Stamps.optional() }).strict().optional(),
 });
 
-/** D25: feedback from signed-in users (demo visitors included), with the reply's latency breakdown. */
+/** D25: feedback from signed-in users, with the reply's latency breakdown. */
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireUser();

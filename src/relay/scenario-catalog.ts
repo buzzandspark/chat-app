@@ -7,6 +7,7 @@ export const SCENARIO_NAMES = [
   "giant_code_block",
   "table_mid_stream",
   "dropped_connection",
+  "stalled_stream",
   "rate_limited",
   "overloaded",
   "producer_restart",
@@ -30,6 +31,8 @@ export interface ScenarioInfo {
   blurb: string;
   /** Transport fault applied by the route: cut the SSE response after N events. */
   dropAfterEvents?: number;
+  /** Transport fault applied by the route: after N events the response goes silent and never closes (half-open socket). */
+  stallAfterEvents?: number;
   /** Engine fault: abort the generation after N relayed events and emit `interrupted`. */
   interruptAfterEvents?: number;
 }
@@ -46,6 +49,12 @@ export const SCENARIOS: Record<ScenarioName, ScenarioInfo> = {
     title: "Dropped connection",
     blurb: "The SSE response is cut after 40 events; the client resumes.",
     dropAfterEvents: 40,
+  },
+  stalled_stream: {
+    name: "stalled_stream",
+    title: "Stalled stream",
+    blurb: "The SSE response goes silent after 30 events without closing; the watchdog resumes it.",
+    stallAfterEvents: 30,
   },
   rate_limited: { name: "rate_limited", title: "Rate limited (429)", blurb: "Upstream returns 429 with retry-after." },
   overloaded: { name: "overloaded", title: "Overloaded (529)", blurb: "Upstream is overloaded." },

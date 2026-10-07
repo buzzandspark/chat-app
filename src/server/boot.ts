@@ -7,7 +7,6 @@ import { runMigrations } from "@db/migrate";
 import { seedDevUser } from "@db/seed";
 import { costOf } from "@relay/anthropic/pricing";
 import { seedAdmin } from "@auth/admin-seed";
-import { startDemoPurgeTimer, stopDemoPurgeTimer } from "@auth/demo";
 import { installSignalHandlers, onShutdown } from "./shutdown";
 
 const g = globalThis as unknown as { __cadenceBooted?: boolean };
@@ -22,8 +21,6 @@ export async function boot(): Promise<void> {
   backstopInterruptedGenerations();
   installSignalHandlers();
   onShutdown(() => closeDatabase());
-  startDemoPurgeTimer();
-  onShutdown(() => stopDemoPurgeTimer());
   if (env.SENTRY_DSN) {
     const Sentry = await import("@sentry/node");
     Sentry.init({ dsn: env.SENTRY_DSN, tracesSampleRate: 0, environment: env.NODE_ENV });

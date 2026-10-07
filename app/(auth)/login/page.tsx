@@ -7,7 +7,7 @@ export default function LoginPage() {
         <div className="space-y-1 text-center">
           <p className="text-caption uppercase tracking-[0.2em] text-muted-foreground">Cadence</p>
           <h1 className="text-title font-semibold">Sign in</h1>
-          <p className="text-small text-muted-foreground">Accounts are by invitation. Try the demo if you were not invited.</p>
+          <p className="text-small text-muted-foreground">Accounts are by invitation.</p>
         </div>
         <LoginForm />
       </div>

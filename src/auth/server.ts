@@ -2,11 +2,11 @@ import "server-only";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
-import { admin, anonymous } from "better-auth/plugins";
+import { admin } from "better-auth/plugins";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
 
-/** ADR-0004: email + password with sign-up disabled, admin plugin for roles/bans, anonymous plugin for demo visitors. */
+/** ADR-0004 (amended 2026-10-07): email + password with sign-up disabled, admin plugin for roles and bans; no anonymous path. */
 function createAuth() {
   return betterAuth({
     appName: "Cadence",
@@ -41,22 +41,7 @@ function createAuth() {
         costSpentUsd: { type: "number", required: false, input: false },
       },
     },
-    databaseHooks: {
-      user: {
-        create: {
-          // Anonymous users are demo visitors whatever path created them: replay only, purged after 24 h.
-          before: async (user) => {
-            const anon = (user as { isAnonymous?: boolean }).isAnonymous === true;
-            return anon ? { data: { ...user, role: "demo", name: "Demo visitor" } } : { data: user };
-          },
-        },
-      },
-    },
-    plugins: [
-      admin({ defaultRole: "user", adminRoles: ["admin"] }),
-      anonymous({ emailDomainName: "demo.cadence.invalid" }),
-      nextCookies(),
-    ],
+    plugins: [admin({ defaultRole: "user", adminRoles: ["admin"] }), nextCookies()],
   });
 }
 

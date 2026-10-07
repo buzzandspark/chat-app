@@ -31,8 +31,6 @@ export const users = sqliteTable(
     banned: integer("banned", { mode: "boolean" }).notNull().default(false),
     banReason: text("ban_reason"),
     banExpires: timestamp("ban_expires"),
-    // better-auth anonymous plugin (demo visitors)
-    isAnonymous: integer("is_anonymous", { mode: "boolean" }).notNull().default(false),
     // D22 per-user all-time cost cap
     costCapUsd: real("cost_cap_usd"),
     costSpentUsd: real("cost_spent_usd").notNull().default(0),

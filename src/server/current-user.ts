@@ -26,7 +26,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (session?.user) {
     const u = session.user as { id: string; email: string; name: string; role?: string | null; banned?: boolean | null };
     if (u.banned) return null;
-    const role: UserRole = u.role === "admin" || u.role === "demo" ? u.role : "user";
+    const role: UserRole = u.role === "admin" ? "admin" : "user";
     touchLastActive(u.id);
     return { id: u.id, role, email: u.email, name: u.name };
   }

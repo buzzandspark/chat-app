@@ -140,51 +140,49 @@ export function AdminConsole({ initialUsers, selfId }: { initialUsers: AdminUser
                 <dt className="text-muted-foreground">Invite</dt>
                 <dd>{inviteState ?? "–"}</dd>
               </dl>
-              {u.role !== "demo" ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void act("Invite", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "POST" }))}>
-                    {inviteState === "open" ? "Regenerate invite" : "Issue invite"}
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void act("Invite", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "POST" }))}>
+                  {inviteState === "open" ? "Regenerate invite" : "Issue invite"}
+                </Button>
+                {inviteState === "open" ? (
+                  <Button size="sm" variant="ghost" className="touch-target" disabled={busy} onClick={() => void act("Revoke", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "DELETE" }))}>
+                    Revoke
                   </Button>
-                  {inviteState === "open" ? (
-                    <Button size="sm" variant="ghost" className="touch-target" disabled={busy} onClick={() => void act("Revoke", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "DELETE" }))}>
-                      Revoke
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="touch-target"
+                  disabled={busy}
+                  onClick={() => {
+                    const next = window.prompt("Cost cap in USD (empty for no cap)", u.costCapUsd === null ? "" : String(u.costCapUsd));
+                    if (next === null) return;
+                    void patch(u.id, { costCapUsd: next.trim() === "" ? null : Number(next) }, "Cap");
+                  }}
+                >
+                  Edit cap
+                </Button>
+                {!self ? (
+                  <>
+                    <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void patch(u.id, { banned: !u.banned }, u.banned ? "Enable" : "Disable")}>
+                      {u.banned ? "Enable" : "Disable"}
                     </Button>
-                  ) : null}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="touch-target"
-                    disabled={busy}
-                    onClick={() => {
-                      const next = window.prompt("Cost cap in USD (empty for no cap)", u.costCapUsd === null ? "" : String(u.costCapUsd));
-                      if (next === null) return;
-                      void patch(u.id, { costCapUsd: next.trim() === "" ? null : Number(next) }, "Cap");
-                    }}
-                  >
-                    Edit cap
-                  </Button>
-                  {!self ? (
-                    <>
-                      <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void patch(u.id, { banned: !u.banned }, u.banned ? "Enable" : "Disable")}>
-                        {u.banned ? "Enable" : "Disable"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="touch-target"
-                        disabled={busy}
-                        onClick={() => {
-                          if (window.confirm(`Delete ${u.email} and all their chats?`)) {
-                            void act("Delete", () => fetch(`/api/admin/users/${u.id}`, { method: "DELETE" }));
-                          }
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="touch-target"
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm(`Delete ${u.email} and all their chats?`)) {
+                          void act("Delete", () => fetch(`/api/admin/users/${u.id}`, { method: "DELETE" }));
+                        }
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </>
+                ) : null}
+              </div>
             </li>
           );
         })}

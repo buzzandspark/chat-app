@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { CHAT_URL, lastAssistant, sendText, waitForComposer } from "./helpers";
+import { CHAT_URL } from "./helpers";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "admin-password-123";
@@ -78,20 +78,6 @@ test.describe("accounts", () => {
   });
 });
 
-test.describe("demo", () => {
-  test("Try the demo opens a private chat that streams from replay", async ({ page }) => {
-    await page.setExtraHTTPHeaders({ "x-forwarded-for": `10.7.${(Date.now() / 1000) & 255}.${Date.now() & 255}` });
-    await page.goto("/");
-    await page.getByTestId("try-demo").click();
-    await expect(page).toHaveURL(CHAT_URL);
-    await waitForComposer(page);
-    await expect(page.getByTestId("scenario-panel-trigger").locator("visible=true").first()).toBeVisible();
-    await sendText(page, "hello demo");
-    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 60_000 });
-    await expect(page.getByText(/demo\.cadence\.invalid|Demo visitor/).first()).toBeVisible();
-  });
-});
-
 test.describe("isolation and limits", () => {
   test("a signed-in user cannot read another user's stream, live or saved", async ({ page, browser }) => {
     await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
@@ -100,10 +86,8 @@ test.describe("isolation and limits", () => {
     const row = page.locator('[data-role="assistant"]:visible').last();
     await expect(row).toHaveAttribute("data-generation-id", /[0-9a-f-]{36}/);
     const generationId = (await row.getAttribute("data-generation-id"))!;
+    // A fresh context has no cookie; under E2E=1 that is the dev user, a different account.
     const other = await freshPage(browser);
-    await other.goto("/");
-    await other.getByTestId("try-demo").click();
-    await expect(other).toHaveURL(CHAT_URL);
     const live = await other.request.get(`/api/generations/${generationId}/events?after=-1`);
     expect(live.status()).toBe(403);
     await expect(row).toHaveAttribute("data-status", /done|stopped/, { timeout: 60_000 });
@@ -111,13 +95,5 @@ test.describe("isolation and limits", () => {
     expect(saved.status()).toBe(403);
     const stop = await other.request.post(`/api/generations/${generationId}/stop`);
     expect(stop.status()).toBe(403);
-  });
-
-  test("the demo endpoint is rate limited per address", async ({ request }) => {
-    const statuses: number[] = [];
-    const headers = { "x-forwarded-for": `10.8.${(Date.now() / 1000) & 255}.${Date.now() & 255}` };
-    for (let i = 0; i < 7; i++) statuses.push((await request.post("/api/demo/start", { headers })).status());
-    expect(statuses.filter((s) => s === 429).length).toBeGreaterThan(0);
-    expect(statuses[0]).toBe(200);
   });
 });

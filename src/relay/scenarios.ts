@@ -76,6 +76,7 @@ export function scenarioScript(name: ScenarioName, request: ProviderRequest): Sc
     case "table_mid_stream":
       return { model, ttftMs: 400, parts: [{ kind: "text", text: table(), chunk: 5, intervalMs: 35 }] };
     case "dropped_connection":
+    case "stalled_stream":
     case "producer_restart":
       return { model, ttftMs: 300, parts: [{ kind: "text", text: longMarkdown(), chunk: 8, intervalMs: 12 }] };
     case "rate_limited":
@@ -163,8 +164,8 @@ export function scenarioScript(name: ScenarioName, request: ProviderRequest): Sc
   }
 }
 
-/** Demo fixture per model, varied by turn so a demo chat is not repetitive (D6). */
-export function demoFixture(model: ModelId, turn: number): string {
+/** Replay fixture per model for REPLAY_MODE (the harness and local development), varied by turn (D6). */
+export function replayFixture(model: ModelId, turn: number): string {
   const pool = ["normal", "long_reply", "table_mid_stream", "thinking_long", "giant_code_block"] as const;
   return `${model}/${pool[turn % pool.length]}`;
 }

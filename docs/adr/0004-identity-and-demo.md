@@ -1,6 +1,6 @@
 # ADR-0004: Identity and the public demo path
 
-Status: accepted · Date: 2026-10-06
+Status: accepted, amended 2026-10-07 (the demo path is removed; see the amendment below) · Date: 2026-10-06
 
 ## Context
 
@@ -17,3 +17,7 @@ The app has to be openable by anyone evaluating it, without a login wall and wit
 - **OAuth sign-in.** Adds provider setup and redirect URLs per PR environment for no benefit when the admin controls who gets in.
 - **Anonymous demo without a user row.** Chats, drafts, and rate limits all key on a user id; a real row with a short life is simpler than a parallel anonymous path.
 - **A shared demo account.** Visitors would see each other's chats.
+
+## Amendment (2026-10-07): the public demo path is removed
+
+The anonymous "Try the demo" path is gone: no anonymous plugin, no `demo` role, no demo start endpoint, no 24 h purge timer, no per-address demo limiter. The landing page offers Sign in only, and every account is invited by the admin. Migration 0004 deletes the remaining demo users (their sessions, chats, messages and usage cascade) and drops `users.is_anonymous`. Replay fixtures stay for `REPLAY_MODE` (the harness and local development); the provider resolver now has two inputs, scenario and replay mode, and signed-in users otherwise get live models under their cost cap.

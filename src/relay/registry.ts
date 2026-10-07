@@ -4,7 +4,7 @@ import { RecordingProvider } from "./providers/recording";
 import { ReplayProvider } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest } from "./providers/types";
-import { demoFixture, isScenarioName, scenarioScript } from "./scenarios";
+import { isScenarioName, replayFixture, scenarioScript } from "./scenarios";
 import type { ProviderContext, ProviderResolver } from "./engine";
 
 export interface RegistryOptions {
@@ -17,7 +17,7 @@ export interface RegistryOptions {
 }
 
 // Provider choice is server-side so the panel cannot spend money or bypass caps (D24):
-// scenarios get scripted, demo users and replay mode get replay, everything else goes live.
+// scenarios get scripted, replay mode gets replay, everything else goes live.
 export function createProviderResolver(options: RegistryOptions): ProviderResolver {
   const fixturesDir = options.fixturesDir ?? path.resolve(process.cwd(), "fixtures");
   const speed = options.speed ?? 1;
@@ -27,7 +27,7 @@ export function createProviderResolver(options: RegistryOptions): ProviderResolv
   }, speed);
   const replay = new ReplayProvider({
     fixturesDir,
-    fixture: (request) => demoFixture(request.model, turnOf(request)),
+    fixture: (request) => replayFixture(request.model, turnOf(request)),
     speed,
   });
   let live: Provider | null = null;
@@ -40,7 +40,7 @@ export function createProviderResolver(options: RegistryOptions): ProviderResolv
   };
   return (ctx: ProviderContext): Provider => {
     if (ctx.scenario) return scripted;
-    if (ctx.userRole === "demo" || options.replayMode) return replay;
+    if (options.replayMode) return replay;
     return liveProvider();
   };
 }
