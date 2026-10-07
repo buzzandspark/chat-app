@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { ChatView } from "@client/components/chat/chat-view";
 import { SeedChat } from "@client/components/chat/seed-chat";
-import { ChatViewSkeleton } from "@client/components/chat/thread-skeleton";
+import { ChatViewSkeleton } from "@client/components/chat/chat-view-skeleton";
 import { getChatWithMessages } from "@server/chats";
 import { requireUser } from "@server/current-user";
 import { isUuid } from "@shared/id";

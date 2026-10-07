@@ -3,13 +3,14 @@ import { MoreHorizontal, Plus, Search, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useNewChat } from "@client/hooks/use-new-chat";
-import { setPendingChat, usePendingChat } from "@client/store/nav-store";
-import { getSidebarStore, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
+import { useChatStore } from "@client/store/context";
+import { prefetchChat } from "@client/store/prefetch";
+import { getSidebarStore, setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { useModals } from "../ui/modal-manager";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -42,6 +43,7 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
   const router = useRouter();
   const { show } = useModals();
   const newChat = useNewChat();
+  const store = useChatStore();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
   // D21: the clicked row is active at once; the router catches up when the thread arrives.
   const pendingChatId = usePendingChat();
@@ -51,11 +53,19 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
     getSidebarStore().hydrate(initialChats);
   }, [initialChats]);
 
-  // D21: prefetch the top five chats when the sidebar opens.
+  // D21: on intent (hover, focus, touchstart) and for the top five when the sidebar opens, warm the
+  // route shell and seed the chat's rows into the store, so the click renders from memory (ADR-0005).
+  const warm = useCallback(
+    (chatId: string) => {
+      router.prefetch(`/c/${chatId}`);
+      void prefetchChat(store, chatId);
+    },
+    [router, store],
+  );
   useEffect(() => {
     if (!open) return;
-    for (const chat of chats.slice(0, 5)) router.prefetch(`/c/${chat.id}`);
-  }, [open, chats, router]);
+    for (const chat of chats.slice(0, 5)) warm(chat.id);
+  }, [open, chats, warm]);
 
   return (
     <>
@@ -125,9 +135,9 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
                       prefetch={false}
                       onClick={onNavigate}
                       onNavigate={() => setPendingChat(chat.id)}
-                      onTouchStart={() => router.prefetch(href)}
-                      onPointerEnter={() => router.prefetch(href)}
-                      onFocus={() => router.prefetch(href)}
+                      onTouchStart={() => warm(chat.id)}
+                      onPointerEnter={() => warm(chat.id)}
+                      onFocus={() => warm(chat.id)}
                       aria-current={active ? "page" : undefined}
                       className={cn("flex min-h-11 min-w-0 flex-1 items-center rounded-lg pl-3 text-small", active && "font-medium")}
                     >

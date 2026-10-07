@@ -5,8 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import type { ChatSummary } from "@client/store/sidebar-store";
-import { setPendingChat, usePendingChat } from "@client/store/nav-store";
-import { useSidebarChats } from "@client/store/sidebar-store";
+import { setPendingChat, usePendingChat, useSidebarChats } from "@client/store/sidebar-store";
 import { useChat } from "@client/store/hooks";
 import { ChatStoreProvider } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";

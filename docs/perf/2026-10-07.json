@@ -1,20 +1,20 @@
 {
   "giant_code_block": {
-    "frames": 1382,
+    "frames": 1402,
     "p50": 16.7,
     "p95": 33.3,
     "p99": 33.4,
     "longFrames": 0,
-    "at": "2026-10-07T15:12:50.604Z"
+    "at": "2026-10-07T16:25:16.207Z"
   },
   "shell": {
     "cls": 0,
     "shifts": 0,
-    "ttfbMs": 3,
-    "domContentLoadedMs": 1381,
+    "ttfbMs": 2,
+    "domContentLoadedMs": 1375,
     "paints": {
-      "first-paint": 1504,
-      "first-contentful-paint": 1504
+      "first-paint": 1496,
+      "first-contentful-paint": 1496
     },
     "fonts": [
       "Inter:unloaded",
@@ -35,27 +35,70 @@
     ],
     "interLoaded": true,
     "transferredKb": 349,
-    "hydratedMs": 4062,
-    "at": "2026-10-07T15:11:51.436Z"
+    "hydratedMs": 4037,
+    "at": "2026-10-07T16:23:56.367Z"
   },
   "long_reply": {
-    "firstPaintMs": 1196,
-    "frames": 579,
+    "firstPaintMs": 1217,
+    "frames": 578,
     "p50": 16.7,
-    "p95": 16.7,
+    "p95": 16.8,
     "p99": 16.8,
     "longFrames": 0,
     "assistantRows": 1,
-    "at": "2026-10-07T15:12:05.276Z"
+    "at": "2026-10-07T16:24:10.145Z"
   },
   "long_chat": {
     "rows": 200,
-    "loadMs": 1470,
+    "loadMs": 1486,
     "frames": 561,
     "p50": 16.7,
     "p95": 16.8,
-    "p99": 33.4,
+    "p99": 33.3,
     "longFrames": 4,
-    "at": "2026-10-07T15:12:21.227Z"
+    "at": "2026-10-07T16:24:25.925Z"
+  },
+  "click_to_thread": {
+    "coldInFlight": {
+      "click": 1763,
+      "frames": 21,
+      "activeFrame": 1,
+      "skeletonFrame": 2,
+      "threadFrame": 21,
+      "threadMs": 344
+    },
+    "warmedByOpen": {
+      "click": 2415.399999976158,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 26
+    },
+    "loaded": {
+      "click": 2847,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 28
+    },
+    "loaded2": {
+      "click": 5280.200000047684,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 28
+    },
+    "prefetched": {
+      "click": 4827.5,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 31
+    },
+    "at": "2026-10-07T16:26:26.640Z"
   }
 }

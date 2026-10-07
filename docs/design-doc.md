@@ -157,6 +157,8 @@ Measured on 2026-10-07 against the production build with 100 ms of emulated netw
 
 The composer measures 115 px on a phone and 135 px on desktop throughout; before, the page-level skeleton collapsed it to 56 px while a chat loaded. In development and over a real network the "before" round trip was about 650 ms; the "after" numbers for a loaded chat do not depend on the network at all.
 
+`e2e/perf.spec.ts` ("click to thread") records the same thing in animation frames on the throttled Pixel 7 (CPU 4x, Fast 3G) and gates it: a loaded or prefetched chat highlights its row in the first frame after the click and paints its thread in the second (26 to 31 ms); a tap that beats the sidebar's own top-five prefetch shows the highlight in frame 1, the skeleton in frame 2 and the rows when the fetch lands (344 ms in that run). Prefetch on intent (hover, focus, `touchstart`, and the top five when the sidebar opens) fetches `GET /api/chats/:id` into the store next to `router.prefetch` of the shell, so the usual click is the loaded case.
+
 ### Long lists (D14): decision
 
 Rows use `content-visibility: auto` with `contain-intrinsic-size: auto 6rem`, so rows off screen skip layout and paint but remember their rendered height, and find-in-page keeps working. With 200 finished messages above the viewport, streaming a long reply held p95 at 16.8 ms and p99 at 33.4 ms on the throttled Pixel 7 (table above), under the 16 ms-per-frame threshold the plan set for adding `@tanstack/react-virtual`. The virtualiser is not added; the decision is revisited if a measured chat exceeds that threshold.
