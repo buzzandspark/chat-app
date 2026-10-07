@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { unstable_rethrow } from "next/navigation";
 import { connection } from "next/server";
-import { getAuth } from "@auth/server";
+import { getAuth, SESSION_COOKIE } from "@auth/server";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
 import type { UserRole } from "@shared/types";
@@ -31,6 +31,9 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     return { id: u.id, role, email: u.email, name: u.name };
   }
   if (env.isProd && !env.e2e) return null;
+  // A cookie that no longer matches a session is an expired or revoked sign-in, not an anonymous
+  // visit: the development and harness fallback applies only when there is no session cookie at all.
+  if (reqHeaders.get("cookie")?.includes(SESSION_COOKIE)) return null;
   const db = getDb();
   const row = db
     .select({ id: schema.users.id, role: schema.users.role, email: schema.users.email, name: schema.users.name })

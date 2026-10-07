@@ -1,11 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authClient } from "@auth/client";
 import { newChatHref } from "@client/hooks/use-new-chat";
 
 /** Only a same-origin path, resolved the way the browser would (so `/\t/evil` and friends cannot leave the origin). */
@@ -20,10 +19,13 @@ function safeNext(next: string | null): string | null {
   }
 }
 
-function LoginFormInner() {
+/**
+ * Server-rendered (no `useSearchParams`, so no Suspense gap and no heading jump, #52); `next` is read
+ * from the URL at submit. One plain POST to better-auth's sign-in endpoint instead of its React client
+ * (13 kB gzipped for one call, #81).
+ */
+export function LoginForm() {
   const router = useRouter();
-  const params = useSearchParams();
-  const next = params.get("next");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -44,13 +46,14 @@ function LoginFormInner() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const result = await authClient.signIn.email({ email, password });
+    const result = await signIn(email, password);
     setBusy(false);
-    if (result.error) {
-      setError(result.error.message ?? "Sign-in failed");
+    if (!result.ok) {
+      setError(result.message);
       return;
     }
-    router.push(safeNext(next) ?? newChatHref());
+    const next = safeNext(new URLSearchParams(window.location.search).get("next"));
+    router.push(next ?? newChatHref());
     router.refresh();
   };
 
@@ -81,10 +84,18 @@ function LoginFormInner() {
   );
 }
 
-export function LoginForm() {
-  return (
-    <Suspense fallback={null}>
-      <LoginFormInner />
-    </Suspense>
-  );
+/** better-auth's email sign-in over fetch: the cookie arrives on the response; errors carry a message. */
+export async function signIn(email: string, password: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch("/api/auth/sign-in/email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.ok) return { ok: true };
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    return { ok: false, message: body.message ?? (res.status === 429 ? "Too many attempts. Try again in a moment." : "Sign-in failed") };
+  } catch {
+    return { ok: false, message: "Sign-in failed: you seem to be offline." };
+  }
 }

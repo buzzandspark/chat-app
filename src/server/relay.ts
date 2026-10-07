@@ -21,7 +21,8 @@ const g = globalThis as unknown as { __cadenceRelay?: RelaySingleton };
 export function getRelay(): RelaySingleton {
   if (g.__cadenceRelay) return g.__cadenceRelay;
   const db = getDb();
-  const store = new EventStore();
+  // A finished buffer is kept a minute for late resumes; after that a resume gets the saved snapshot (#62).
+  const store = new EventStore({ evictAfterMs: 60_000 });
   store.startSweeper();
   const quota = new QuotaManager(db);
   const engine = new Engine({

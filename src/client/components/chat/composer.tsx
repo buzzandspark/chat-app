@@ -10,10 +10,11 @@ import { useChatContext, type ChatSettings } from "./chat-context";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { DEFAULT_MODEL, MODELS, type ModelId } from "@shared/models";
 import dynamic from "next/dynamic";
-import type { ThinkingOptions } from "@shared/types";
+import { MAX_MESSAGE_CHARS, type ThinkingOptions } from "@shared/types";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChunkBoundary } from "../ui/chunk-boundary";
+import { lazyChunk } from "../ui/lazy-chunk";
 import { IconButton } from "../ui/icon-button";
 
 // D21: the panel's chunk (a Radix dialog) loads on intent; the stand-in is the same button.
@@ -24,10 +25,12 @@ function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" |
     </IconButton>
   );
 }
-const ScenarioPanel = dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
-  ssr: false,
-  loading: () => <ScenarioButton disabled />,
-});
+const ScenarioPanel = lazyChunk(() =>
+  dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
+    ssr: false,
+    loading: () => <ScenarioButton disabled />,
+  }),
+);
 
 const warmScenarioPanel = () => import("./scenario-panel");
 
@@ -67,10 +70,12 @@ function PickerStandIn({
     </Button>
   );
 }
-const ModelPicker = dynamic(() => import("./model-picker").then((m) => m.ModelPicker), {
-  ssr: false,
-  loading: () => <PickerStandIn model={DEFAULT_MODEL} thinking={{ harder: false }} />,
-});
+const ModelPicker = lazyChunk(() =>
+  dynamic(() => import("./model-picker").then((m) => m.ModelPicker), {
+    ssr: false,
+    loading: () => <PickerStandIn model={DEFAULT_MODEL} thinking={{ harder: false }} />,
+  }),
+);
 
 const warmModelPicker = () => import("./model-picker");
 
@@ -112,17 +117,17 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   useEffect(() => {
     const el = textareaRef.current;
     const root = rootRef.current;
-    const typedEarly = el && el.value !== "" && el.value !== value ? el.value : null;
+    // The state starts empty, so anything in the element was typed before hydration.
+    const typedEarly = el && el.value !== "" ? el.value : null;
     const draft = readDraft(key);
     const frame = requestAnimationFrame(() => {
-      if (typedEarly !== null) setValue(typedEarly);
+      if (typedEarly !== null) setValue((v) => (v === "" ? typedEarly : v));
       else if (draft) setValue((v) => (v === "" ? draft : v));
       setAdopted(true);
       if (root) root.dataset.hydrated = "true";
     });
     return () => cancelAnimationFrame(frame);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
-  }, []);
+  }, [key]);
 
   // Entering edit mode loads the message text (derived state adjusted during render); leaving it,
   // by cancel or by sending the edit, brings the stashed draft back.
@@ -143,6 +148,16 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   // The id list does not change when a reply ends; the last message's status decides Stop/Send and ↑.
   const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
   const streamingId = lastMessage?.role === "assistant" && lastMessage.status === "streaming" ? lastMessage.generationId : null;
+  // Stop shows a pending state until the stream actually ends (or the request fails) (#68).
+  const [stopping, setStopping] = useState<string | null>(null);
+  const stop = (id: string) => {
+    if (stopping === id) return;
+    setStopping(id);
+    void client.stop(id).then((ok) => {
+      if (!ok) setStopping(null);
+    });
+  };
+  if (stopping !== null && stopping !== streamingId) setStopping(null);
   const lastUserId = (() => {
     for (let i = chat.messageIds.length - 1; i >= 0; i--) {
       const m = store.getMessage(chat.messageIds[i]!);
@@ -160,11 +175,14 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   useEffect(() => resize(), [value, resize]);
 
+  // The route refuses messages over the limit; count down near it and block the send over it.
+  const overLimit = value.length > MAX_MESSAGE_CHARS;
+  const nearLimit = value.length > MAX_MESSAGE_CHARS * 0.9;
   const submit = () => {
     // One generation at a time: while a reply streams, Enter and the button do nothing.
-    if (!value.trim() || streamingId) return;
+    if (!value.trim() || streamingId || overLimit) return;
     const wasEditing = editing !== null;
-    send(value, settings.scenario?.name);
+    send(value, settings.scenario?.name, editing);
     if (!wasEditing) {
       setValue("");
       clearDraft(key);
@@ -184,7 +202,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
         cancelEdit();
       } else if (streamingId) {
         e.preventDefault();
-        void client.stop(streamingId);
+        stop(streamingId);
       }
     } else if (e.key === "ArrowUp" && value === "" && lastUserId && !streamingId && !editing) {
       e.preventDefault();
@@ -233,6 +251,11 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
           />
           <div className="flex items-center justify-between gap-1 px-1.5 pb-1.5">
             <div className="flex min-w-0 items-center gap-0.5">
+              {nearLimit ? (
+                <span className={cn("px-1 text-caption tabular-nums", overLimit ? "text-destructive" : "text-muted-foreground")} role="status">
+                  {value.length.toLocaleString()} / {MAX_MESSAGE_CHARS.toLocaleString()}
+                </span>
+              ) : null}
               <ChunkBoundary label="model picker">
                 <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
               </ChunkBoundary>
@@ -244,14 +267,16 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
             </div>
             {streamingId ? (
               <IconButton
-                label="Stop generating"
+                label={stopping === streamingId ? "Stopping" : "Stop generating"}
                 tipSide="top"
                 tipAlign="end"
                 variant="secondary"
                 className="rounded-full"
-                onClick={() => void client.stop(streamingId)}
+                aria-busy={stopping === streamingId}
+                disabled={stopping === streamingId}
+                onClick={() => stop(streamingId)}
               >
-                <Square className="fill-current" />
+                <Square className={cn("fill-current", stopping === streamingId && "animate-pulse")} />
               </IconButton>
             ) : (
               <IconButton
@@ -259,8 +284,8 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
                 tipSide="top"
                 tipAlign="end"
                 variant="default"
-                className={cn("rounded-full", !value.trim() && "bg-muted text-muted-foreground disabled:opacity-100")}
-                disabled={!value.trim()}
+                className={cn("rounded-full", (!value.trim() || overLimit) && "bg-muted text-muted-foreground disabled:opacity-100")}
+                disabled={!value.trim() || overLimit}
                 onClick={submit}
               >
                 <ArrowUp />

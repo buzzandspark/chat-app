@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { getDb, schema } from "@db/client";
+import { sql } from "drizzle-orm";
+import { getDb } from "@db/client";
 import { errorResponse, requireUser } from "@server/current-user";
 
 export interface SearchHit {
@@ -10,51 +10,52 @@ export interface SearchHit {
   updatedAt: number;
 }
 
+/** The user's words as an FTS5 query: each token quoted (no operators leak in) and prefix-matched. */
+export function ftsQuery(q: string): string {
+  return q
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((t) => `"${t.replace(/"/g, '""')}"*`)
+    .join(" ");
+}
+
 /**
- * D19: one process (D1) has no search service. SQLite does the scanning (`like` over the stored JSON,
- * in C) and only matching rows are parsed; before, every message of every chat was JSON-parsed in
- * JS on each keystroke, about 30 MB for a large history.
+ * D19/#60: SQLite's FTS5 index over the messages' text (kept by triggers, migration 0006) answers in
+ * index time with a snippet built by SQLite; the query is bounded by LIMIT, so a keystroke never scans
+ * a user's whole history. Titles are matched separately with a case fold beyond ASCII.
  */
 export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireUser();
-    const q = (request.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 100).toLowerCase();
+    const q = (request.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 100);
     if (q.length < 2) return Response.json({ hits: [] }, { headers: { "cache-control": "no-store" } });
     const db = getDb();
-    const chats = db
-      .select({ id: schema.chats.id, title: schema.chats.title, updatedAt: schema.chats.updatedAt })
-      .from(schema.chats)
-      .where(eq(schema.chats.userId, user.id))
-      .orderBy(desc(schema.chats.updatedAt))
-      .limit(500)
-      .all();
-    if (chats.length === 0) return Response.json({ hits: [] }, { headers: { "cache-control": "no-store" } });
-    const needle = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
-    const rows = db
-      .select({ chatId: schema.messages.chatId, content: schema.messages.content, position: schema.messages.position })
-      .from(schema.messages)
-      .where(and(inArray(schema.messages.chatId, chats.map((c) => c.id)), sql`unicode_lower(${schema.messages.content}) like ${needle} escape '\\'`))
-      .orderBy(schema.messages.position)
-      .all();
-    const snippetByChat = new Map<string, string>();
+    const match = ftsQuery(q);
+    const rows = match
+      ? db.all<{ chatId: string; title: string; updatedAt: number; snippet: string }>(sql`
+          select c.id as chatId, c.title as title, c.updated_at as updatedAt,
+                 snippet(messages_fts, 0, '', '', '…', 20) as snippet
+          from messages_fts
+          join messages m on m.rowid = messages_fts.rowid
+          join chats c on c.id = m.chat_id
+          where messages_fts match ${match} and c.user_id = ${user.id}
+          order by c.updated_at desc, m.position asc
+          limit 200`)
+      : [];
+    const needle = `%${q.toLowerCase().replace(/[\\%_]/g, "\\$&")}%`;
+    const titleRows = db.all<{ chatId: string; title: string; updatedAt: number }>(sql`
+      select id as chatId, title as title, updated_at as updatedAt from chats
+      where user_id = ${user.id} and unicode_lower(title) like ${needle} escape '\\'
+      order by updated_at desc limit 20`);
+    const byChat = new Map<string, SearchHit>();
     for (const r of rows) {
-      if (snippetByChat.has(r.chatId)) continue;
-      for (const b of r.content) {
-        if (b.type !== "text") continue;
-        const at = b.text.toLowerCase().indexOf(q);
-        if (at === -1) continue;
-        const start = Math.max(0, at - 40);
-        snippetByChat.set(r.chatId, `${start > 0 ? "…" : ""}${b.text.slice(start, at + q.length + 80).replace(/\s+/g, " ").trim()}`);
-        break;
-      }
+      if (!byChat.has(r.chatId)) byChat.set(r.chatId, { chatId: r.chatId, title: r.title, snippet: r.snippet.replace(/\s+/g, " ").trim(), updatedAt: r.updatedAt });
     }
-    const hits: SearchHit[] = [];
-    for (const c of chats) {
-      const snippet = snippetByChat.get(c.id) ?? null;
-      if (snippet === null && !c.title.toLowerCase().includes(q)) continue;
-      hits.push({ chatId: c.id, title: c.title, snippet, updatedAt: c.updatedAt.getTime() });
-      if (hits.length >= 20) break;
+    for (const r of titleRows) {
+      if (!byChat.has(r.chatId)) byChat.set(r.chatId, { chatId: r.chatId, title: r.title, snippet: null, updatedAt: r.updatedAt });
     }
+    const hits = [...byChat.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 20);
     return Response.json({ hits }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);

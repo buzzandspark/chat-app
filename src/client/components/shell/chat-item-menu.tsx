@@ -8,15 +8,17 @@ export function ChatItemMenu({
   onRename,
   onDelete,
   defaultOpen,
+  onOpenChange,
 }: {
   title: string;
   onRename: () => void;
   onDelete: () => void;
   /** True when the user pressed the stand-in before this chunk had loaded. */
   defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <DropdownMenu defaultOpen={defaultOpen}>
+    <DropdownMenu defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <IconButton
           label={`Actions for ${title}`}

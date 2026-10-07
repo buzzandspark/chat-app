@@ -327,8 +327,38 @@ describe("ChatStore", () => {
   it("records client timings once", () => {
     const { store } = makeStore();
     seed(store);
+    // Only a reply sent from this client carries client stamps (#46); the send sets `sent` first.
+    store.updateMessage("a1", { timings: { client: { sent: 1 } } });
     store.markClientTiming("a1", "firstByte", 5);
     store.markClientTiming("a1", "firstByte", 9);
     expect(store.getMessage("a1")!.timings?.client?.firstByte).toBe(5);
+  });
+
+  it("setDefaultSettings seeds untouched empty chats and later new chats (#22)", () => {
+    const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
+    store.createChat("fresh");
+    store.createChat("touched");
+    store.setSettings("touched", { model: "claude-haiku-4-5" });
+    store.setDefaultSettings({ model: "claude-opus-5-5", thinking: { harder: true } });
+    expect(store.getChat("fresh").settings.model).toBe("claude-opus-5-5");
+    expect(store.getChat("fresh").settings.thinking.harder).toBe(true);
+    expect(store.getChat("touched").settings.model).toBe("claude-haiku-4-5");
+    store.createChat("later");
+    expect(store.getChat("later").settings.model).toBe("claude-opus-5-5");
+    // An existing chat still inherits from its own last reply.
+    store.seedChat("saved", "Saved", [
+      { id: "u", chatId: "saved", role: "user", content: [{ type: "text", text: "q", citations: null }], status: "done", requestedModel: null, servingModel: null, stopReason: null, refusal: null, error: null, timings: null, generationId: null, createdAt: 1 },
+      { id: "a", chatId: "saved", role: "assistant", content: [{ type: "text", text: "a", citations: null }], status: "done", requestedModel: "claude-sonnet-5-5", servingModel: "claude-sonnet-5-5", stopReason: "end_turn", refusal: null, error: null, timings: null, generationId: null, createdAt: 2 },
+    ]);
+    expect(store.getChat("saved").settings.model).toBe("claude-sonnet-5-5");
+  });
+
+  it("never fabricates client timings for a reply this client did not send (#46)", () => {
+    const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
+    store.seedChat("c", "C", [
+      { id: "a", chatId: "c", role: "assistant", content: [{ type: "text", text: "a", citations: null }], status: "done", requestedModel: "claude-sonnet-5-5", servingModel: "claude-sonnet-5-5", stopReason: "end_turn", refusal: null, error: null, timings: { server: { received: 1 } }, generationId: null, createdAt: 2 },
+    ]);
+    store.markClientTiming("a", "firstPaint");
+    expect(store.getMessage("a")?.timings?.client).toBeUndefined();
   });
 });

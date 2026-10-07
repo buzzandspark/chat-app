@@ -1,32 +1,30 @@
 "use client";
 import { Menu, MessageSquareText, PanelLeft } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
-import type { ChatSummary } from "@client/store/sidebar-store";
 import { setPendingChat, usePendingChat, useSidebarChats } from "@client/store/sidebar-store";
 import { useChat } from "@client/store/hooks";
-import { ChatStoreProvider } from "@client/store/context";
+import { ChatStoreProvider, useChatStore } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
+import { lazyChunk } from "../ui/lazy-chunk";
 import { markNavigationClose, useBackGesture } from "@client/hooks/use-back-gesture";
 import { useIsDesktop } from "@client/hooks/use-media-query";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useScrollAnchoringFlag } from "@client/hooks/use-scroll-anchoring";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
 import dynamic from "next/dynamic";
-import { ShellUserProvider } from "./shell-user";
 import { Sidebar } from "./sidebar";
 
-const SearchDialog = dynamic(() => import("./search-dialog").then((m) => m.SearchDialog), { ssr: false });
-const FeedbackDialog = dynamic(() => import("./feedback-dialog").then((m) => m.FeedbackDialog), { ssr: false });
-const RenameDialog = dynamic(() => import("./chat-dialogs").then((m) => m.RenameDialog), { ssr: false });
+const SearchDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.SearchDialog), { ssr: false }));
+const FeedbackDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.FeedbackDialog), { ssr: false }));
+const RenameDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.RenameDialog), { ssr: false }));
 
 interface ChatShellProps {
-  initialChats: ChatSummary[];
-  userId: string;
-  userLabel: string;
-  scenarioPanel: boolean;
+  /** The chat list and the user label are server slots: the chrome around them is static (#20). */
+  sidebarList: ReactNode;
+  userLabel: ReactNode;
   children: ReactNode;
 }
 
@@ -34,23 +32,18 @@ function isModifier(e: KeyboardEvent): boolean {
   return navigator.platform.includes("Mac") ? e.metaKey : e.ctrlKey;
 }
 
-export function ChatShell({ userId, scenarioPanel, ...props }: ChatShellProps) {
-  const user = useMemo(() => ({ userId, scenarioPanel }), [userId, scenarioPanel]);
+export function ChatShell(props: ChatShellProps) {
   return (
     <ChatStoreProvider>
-      <ShellUserProvider value={user}>
-        <ModalProvider>
-          <ChatShellInner {...props} />
-        </ModalProvider>
-      </ShellUserProvider>
+      <ModalProvider>
+        <ChatShellInner {...props} />
+      </ModalProvider>
     </ChatStoreProvider>
   );
 }
 
-function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellProps, "userId" | "scenarioPanel">) {
+function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
   const desktop = useIsDesktop();
-  const pathname = usePathname();
-  const chats = useSidebarChats(initialChats);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
   const { show } = useModals();
@@ -63,37 +56,18 @@ function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellPro
   useBackGesture(!desktop && phoneOpen, () => setPhoneOpen(false));
   const close = useCallback(() => (desktop ? setDesktopOpen(false) : setPhoneOpen(false)), [desktop]);
   const toggle = useCallback(() => (desktop ? setDesktopOpen((v) => !v) : setPhoneOpen((v) => !v)), [desktop]);
-
-  const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
-  const pendingChatId = usePendingChat();
-  // The pending chat is released once the router has committed it (or left the chat routes).
-  useEffect(() => {
-    if (pendingChatId !== null && (pendingChatId === currentChatId || currentChatId === null)) setPendingChat(null);
-  }, [pendingChatId, currentChatId]);
-  const openChat = useChat(currentChatId ?? "");
-  const currentSummary = currentChatId ? chats.find((c) => c.id === currentChatId) : undefined;
-  const pendingSummary = pendingChatId ? chats.find((c) => c.id === pendingChatId) : undefined;
-  // D21: the header switches to the clicked chat's title on click. An id the server knows nothing
-  // about is a new chat; until its rows have arrived the title stays blank.
-  const title =
-    pendingSummary?.title ??
-    (currentChatId
-      ? (currentSummary?.title ?? openChat.title ?? (openChat.seeded && openChat.messageIds.length === 0 ? "New chat" : ""))
-      : "");
+  const closePhone = useCallback(() => setPhoneOpen(false), []);
+  const onSidebarNavigate = useCallback(() => {
+    markNavigationClose();
+    setPhoneOpen(false);
+  }, []);
 
   const openSearch = useCallback(() => {
+    // Search from the phone sidebar replaces it: the picked chat must not open underneath the overlay (#33).
+    if (!desktop) setPhoneOpen(false);
     searchCloser.current?.();
     searchCloser.current = show(({ open, close }) => <SearchDialog open={open} onOpenChange={(o) => !o && close()} />);
-  }, [show]);
-  const openFeedback = useCallback(
-    () => show(({ open, close }) => <FeedbackDialog open={open} onOpenChange={(o) => !o && close()} chatId={currentChatId} />),
-    [show, currentChatId],
-  );
-  const openRename = useCallback(() => {
-    if (!currentChatId) return;
-    const chat = currentSummary ?? { id: currentChatId, title, updatedAt: 0 };
-    show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />);
-  }, [show, currentChatId, currentSummary, title]);
+  }, [show, desktop]);
 
   // D19 shortcuts: ⌘/Ctrl+Shift+O new chat, ⌘/Ctrl+K search, Esc closes the phone sidebar first.
   useEffect(() => {
@@ -121,7 +95,9 @@ function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellPro
     const onStart = (e: TouchEvent) => {
       const t = e.touches[0];
       if (!t) return;
-      tracking = t.clientX >= 24 && t.clientX <= 56 && !phoneOpen;
+      // A horizontally scrollable code block or table owns its own swipes (#75).
+      const scrollable = (e.target as Element | null)?.closest?.(".markdown-code-pre, .overflow-x-auto");
+      tracking = !scrollable && t.clientX >= 24 && t.clientX <= 56 && !phoneOpen;
       startX = t.clientX;
       startY = t.clientY;
     };
@@ -147,50 +123,119 @@ function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellPro
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background">
       <Sidebar
-        initialChats={initialChats}
+        list={sidebarList}
         phoneOpen={phoneOpen}
         desktopOpen={desktopOpen}
         open={open}
         onClose={close}
-        onNavigate={() => {
-          markNavigationClose();
-          setPhoneOpen(false);
-        }}
+        onNavigate={onSidebarNavigate}
         onSearch={openSearch}
         userLabel={userLabel}
       />
-      {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold. */}
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold.
+          While the phone sidebar is open the column is inert, so the sidebar is a real modal (#56). */}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" inert={!desktop && phoneOpen ? true : undefined}>
         <header className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
           <IconButton label={open ? "Hide sidebar" : "Show sidebar"} tipAlign="start" aria-expanded={open} onClick={toggle}>
             {desktop ? <PanelLeft /> : <Menu />}
           </IconButton>
-          {currentChatId && currentSummary ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="tip min-w-0 flex-1 justify-start truncate px-2 text-small font-medium"
-              aria-label={`Rename chat: ${title}`}
-              data-tip="Rename"
-              data-tip-side="bottom"
-              onClick={openRename}
-            >
-              <h1 className="truncate" data-testid="chat-title">
-                {title}
-              </h1>
-            </Button>
-          ) : (
-            <h1 className="min-w-0 flex-1 truncate px-2 text-small font-medium" data-testid="chat-title">
-              {title}
-            </h1>
-          )}
-          <IconButton label="Send feedback" tipAlign="end" onClick={openFeedback}>
-            <MessageSquareText />
-          </IconButton>
+          {/* #20: the chrome is in the static shell; only what depends on the URL streams in here. */}
+          <Suspense fallback={<HeaderRouteFallback />}>
+            <HeaderRoute onPathnameChange={closePhone} />
+          </Suspense>
         </header>
         {children}
       </div>
 
     </div>
+  );
+}
+
+function HeaderRouteFallback() {
+  return (
+    <>
+      <h1 className="min-w-0 flex-1 truncate px-2 text-small font-medium" data-testid="chat-title" />
+      <IconButton label="Send feedback" tipAlign="end" disabled>
+        <MessageSquareText />
+      </IconButton>
+    </>
+  );
+}
+
+/**
+ * Everything in the shell that depends on the URL: the title, rename, feedback for this chat, the
+ * release of the pending chat, the store's eviction of chats visited long ago, and putting the phone
+ * sidebar away on navigation. It suspends during prerender, so the chrome around it stays static (#20).
+ */
+function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
+  const pathname = usePathname();
+  const chats = useSidebarChats();
+  const store = useChatStore();
+  const { show } = useModals();
+  const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
+  const pendingChatId = usePendingChat();
+  // The pending chat is released once the router has committed it (or left the chat routes).
+  useEffect(() => {
+    if (pendingChatId !== null && (pendingChatId === currentChatId || currentChatId === null)) setPendingChat(null);
+  }, [pendingChatId, currentChatId]);
+  // Any navigation puts the phone sidebar away, whatever started it (#34).
+  useEffect(() => {
+    onPathnameChange();
+  }, [pathname, onPathnameChange]);
+  const openChat = useChat(currentChatId ?? "");
+  // #72: of the chats that were opened, the store keeps the current one and the eight before it; older
+  // ones give their rows back. Chats only prefetched for the sidebar are small and stay.
+  const visitedRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (!currentChatId) return;
+    const visited = visitedRef.current.filter((id) => id !== currentChatId);
+    visited.push(currentChatId);
+    visitedRef.current = visited;
+    const stale = visited.slice(0, -9).filter((id) => id !== pendingChatId);
+    if (stale.length > 0) store.evictChats(stale);
+  }, [currentChatId, pendingChatId, store]);
+  const currentSummary = currentChatId ? chats.find((c) => c.id === currentChatId) : undefined;
+  const pendingSummary = pendingChatId ? chats.find((c) => c.id === pendingChatId) : undefined;
+  // D21: the header switches to the clicked chat's title on click. An id the server knows nothing
+  // about is a new chat; until its rows have arrived the title stays blank.
+  const title =
+    pendingSummary?.title ??
+    (currentChatId
+      ? (currentSummary?.title ?? openChat.title ?? (openChat.seeded && openChat.messageIds.length === 0 ? "New chat" : ""))
+      : "");
+  const openFeedback = useCallback(
+    () => show(({ open, close }) => <FeedbackDialog open={open} onOpenChange={(o) => !o && close()} chatId={currentChatId} />),
+    [show, currentChatId],
+  );
+  const openRename = useCallback(() => {
+    if (!currentChatId) return;
+    const chat = currentSummary ?? { id: currentChatId, title, updatedAt: 0 };
+    show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />);
+  }, [show, currentChatId, currentSummary, title]);
+  return (
+    <>
+      {currentChatId && currentSummary ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="tip min-h-11 min-w-0 flex-1 justify-start truncate px-2 text-small font-medium"
+          aria-label={`Rename chat: ${title}`}
+          data-tip="Rename"
+          data-tip-side="bottom"
+          onClick={openRename}
+        >
+          <h1 className="truncate" data-testid="chat-title">
+            {title}
+          </h1>
+        </Button>
+      ) : (
+        <h1 className="min-w-0 flex-1 truncate px-2 text-small font-medium" data-testid="chat-title">
+          {title}
+        </h1>
+      )}
+      <IconButton label="Send feedback" tipAlign="end" onClick={openFeedback}>
+        <MessageSquareText />
+      </IconButton>
+    </>
   );
 }

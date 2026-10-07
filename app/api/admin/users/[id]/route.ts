@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb, schema } from "@db/client";
 import { errorResponse, jsonError, requireAdmin } from "@server/current-user";
 import { findUser } from "@server/admin";
+import { getRelay } from "@server/relay";
 
 const Patch = z.object({
   costCapUsd: z.number().min(0).max(100_000).nullable().optional(),
@@ -23,6 +24,8 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
     if (id === admin.id && (parsed.data.banned || parsed.data.role === "user")) {
       return jsonError(400, { error: "cannot_demote_self" });
     }
+    // A disabled user's running replies stop (and settle) before their sessions go (#69).
+    if (parsed.data.banned) await getRelay().engine.stopUser(id);
     const db = getDb();
     const now = new Date();
     db.update(schema.users)
@@ -46,6 +49,7 @@ export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/admi
     const admin = await requireAdmin();
     const { id } = await ctx.params;
     if (id === admin.id) return jsonError(400, { error: "cannot_delete_self" });
+    await getRelay().engine.stopUser(id);
     const result = getDb().delete(schema.users).where(eq(schema.users.id, id)).run();
     if (result.changes === 0) return jsonError(404, { error: "not_found" });
     return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });

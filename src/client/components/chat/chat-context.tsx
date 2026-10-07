@@ -10,29 +10,51 @@ export interface EditingState {
   text: string;
 }
 
-export interface ChatContextValue {
+/** Stable for the life of the view: callbacks and ids. Rows subscribe to this one (#43). */
+export interface ChatActions {
   chatId: string;
   userId: string;
   client: GenerationClient;
-  settings: ChatSettings;
   setSettings: (patch: Partial<ChatSettings>) => void;
-  /** Also used by Continue after max_tokens. */
-  send: (text: string, scenario?: string) => void;
+  /** Also used by Continue after max_tokens. Only the composer passes `edit`; anything else cancels an open edit. */
+  send: (text: string, scenario?: string, edit?: EditingState | null) => void;
   /** Regenerate from a user message, dropping that reply and everything after it. */
   retry: (userMessageId: string, fromMessageId: string) => void;
   /** D10: load a user message into the composer for editing. */
   editMessage: (userMessageId: string) => void;
-  editing: EditingState | null;
   cancelEdit: () => void;
   focusComposer: () => void;
-  autoFollow: { engaged: boolean; engage: () => void };
+  autoFollow: { engage: () => void; disengage: () => void };
   scenarioPanel: boolean;
 }
 
-export const ChatContext = createContext<ChatContextValue | null>(null);
+/** Changes while the user works: settings, the edit in progress, whether the thread follows. Few consumers. */
+export interface ChatLiveState {
+  settings: ChatSettings;
+  editing: EditingState | null;
+  followEngaged: boolean;
+}
 
-export function useChatContext(): ChatContextValue {
-  const ctx = useContext(ChatContext);
-  if (!ctx) throw new Error("useChatContext outside ChatView");
+export type ChatContextValue = ChatActions & ChatLiveState & { autoFollow: ChatActions["autoFollow"] & { engaged: boolean } };
+
+export const ChatActionsContext = createContext<ChatActions | null>(null);
+export const ChatLiveStateContext = createContext<ChatLiveState | null>(null);
+
+export function useChatActions(): ChatActions {
+  const ctx = useContext(ChatActionsContext);
+  if (!ctx) throw new Error("useChatActions outside ChatView");
   return ctx;
+}
+
+export function useChatLiveState(): ChatLiveState {
+  const ctx = useContext(ChatLiveStateContext);
+  if (!ctx) throw new Error("useChatLiveState outside ChatView");
+  return ctx;
+}
+
+/** Both at once, for the composer, which needs everything and re-renders on every keystroke anyway. */
+export function useChatContext(): ChatContextValue {
+  const actions = useChatActions();
+  const live = useChatLiveState();
+  return { ...actions, ...live, autoFollow: { ...actions.autoFollow, engaged: live.followEngaged } };
 }

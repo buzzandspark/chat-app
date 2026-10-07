@@ -9,13 +9,13 @@ import { isUuid } from "@shared/id";
 
 const Patch = z.object({ title: z.string().trim().min(1).max(120) });
 
-/** ADR-0005: the same rows the page seeds with, for prefetch on intent and the second-tab case. */
-export async function GET(_request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
+/** ADR-0005: the same rows the page seeds with, for prefetch on intent and the second-tab case; `?all=1` lifts the window (#47). */
+export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
     if (!isUuid(id)) return jsonError(400, { error: "bad_request" });
-    const data = getChatWithMessages(id, user.id);
+    const data = getChatWithMessages(id, user.id, { limit: request.nextUrl.searchParams.get("all") === "1" ? null : undefined });
     if (!data) return jsonError(404, { error: "not_found" });
     return Response.json(data, { headers: { "cache-control": "no-store" } });
   } catch (err) {

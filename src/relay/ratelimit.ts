@@ -27,13 +27,22 @@ export class RateLimiter {
     if (!dayOk) retryAfterMs = Math.max(retryAfterMs, list[0]! + 86_400_000 - now);
     const ok = minuteOk && dayOk;
     if (ok && consume) list.push(now);
-    this.hits.set(userId, list);
+    if (list.length === 0) this.hits.delete(userId);
+    else this.hits.set(userId, list);
     return {
       ok,
       retryAfterMs,
       remainingMinute: Math.max(0, this.perMinute - lastMinute.length - (ok && consume ? 1 : 0)),
       remainingDay: Math.max(0, this.perDay - list.length),
     };
+  }
+
+  /** Drops keys whose window has emptied (#62). */
+  sweep(): void {
+    const dayAgo = this.now() - 86_400_000;
+    for (const [key, list] of this.hits) {
+      if (!list.some((t) => t > dayAgo)) this.hits.delete(key);
+    }
   }
 
   reset(userId?: string): void {

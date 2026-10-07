@@ -12,10 +12,12 @@ export type ClientBlock =
 
 export function toClientBlocks(content: readonly StoredContentBlock[]): ClientBlock[] {
   const out: ClientBlock[] = [];
+  let hasText = false;
   for (const block of content) {
     switch (block.type) {
       case "text":
         out.push({ type: "text", text: block.text });
+        if (block.text.length > 0) hasText = true;
         break;
       case "thinking":
         out.push({ type: "thinking", text: block.thinking });
@@ -24,12 +26,15 @@ export function toClientBlocks(content: readonly StoredContentBlock[]): ClientBl
         out.push({ type: "thinking", text: "", redacted: true });
         break;
       case "fallback":
-        out.push({
-          type: "divider",
-          from: block.from.model,
-          to: block.to.model,
-          category: block.trigger?.category ?? null,
-        });
+        // The live stream shows a divider only after text was painted; a saved reply reads the same way (#67).
+        if (hasText) {
+          out.push({
+            type: "divider",
+            from: block.from.model,
+            to: block.to.model,
+            category: block.trigger?.category ?? null,
+          });
+        }
         break;
       default:
         break;

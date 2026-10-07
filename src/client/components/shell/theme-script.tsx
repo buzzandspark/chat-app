@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 
 // Applies the stored theme before first paint. Kept as a string so it needs no bundle and no React.
 const THEME_SCRIPT =
-  "(function(){try{var t=localStorage.getItem('cadence-theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();";
+  "(function(){try{var t=localStorage.getItem('cadence-theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);if(t){var ms=document.querySelectorAll('meta[name=\"theme-color\"]');for(var i=0;i<ms.length;i++){ms[i].removeAttribute('media');ms[i].setAttribute('content',d?'#1a1816':'#faf9f6');}}}catch(e){}})();";
 
 const subscribeNoop = () => () => {};
 

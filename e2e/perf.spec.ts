@@ -121,6 +121,8 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     await visible(page, "scenario-long_chat").click();
     await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/, { timeout: 60_000 });
     const loadStart = Date.now();
+    // The page ships the newest 100 rows (#47); the rest load on request.
+    await page.getByRole("button", { name: /earlier message/ }).click();
     await expect(page.locator('[data-role]:visible')).toHaveCount(200, { timeout: 60_000 });
     await expect(visible(page, "composer")).toHaveAttribute("data-hydrated", "true", { timeout: 60_000 });
     const rows = await page.locator('[data-role]:visible').count();
@@ -333,15 +335,24 @@ test.describe("desktop cold load", () => {
 
   test("no layout shift and the dock is in the first paint", async ({ page }) => {
     await page.addInitScript(() => {
-      const w = window as Window & { __cls?: number; __shifts?: number };
+      const w = window as Window & { __cls?: number; __shifts?: number; __shiftSources?: string[] };
       w.__cls = 0;
       w.__shifts = 0;
+      w.__shiftSources = [];
       new PerformanceObserver((list) => {
         for (const entry of list.getEntries() as PerformanceEntry[]) {
-          const e = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number };
+          const e = entry as PerformanceEntry & { hadRecentInput?: boolean; value?: number; sources?: Array<{ node?: Element | null }> };
           if (!e.hadRecentInput) {
             w.__cls = (w.__cls ?? 0) + (e.value ?? 0);
             w.__shifts = (w.__shifts ?? 0) + 1;
+            // What moved, for the log: a failure here is otherwise a number with no culprit.
+            for (const s of e.sources ?? []) {
+              const n = s.node;
+              const prev = (s as { previousRect?: DOMRectReadOnly }).previousRect;
+              const cur = (s as { currentRect?: DOMRectReadOnly }).currentRect;
+              const move = prev && cur ? ` y ${Math.round(prev.y)}→${Math.round(cur.y)} h ${Math.round(prev.height)}→${Math.round(cur.height)}` : "";
+              if (n) w.__shiftSources!.push(`${(e.value ?? 0).toFixed(4)} ${n.nodeName.toLowerCase()}${n.className ? "." + String(n.className).split(" ").slice(0, 3).join(".") : ""}${move} prev=${n.previousElementSibling?.nodeName.toLowerCase() ?? "-"}.${String(n.previousElementSibling?.className ?? "").split(" ").slice(0, 2).join(".")}`);
+            }
           }
         }
       }).observe({ type: "layout-shift", buffered: true });
@@ -353,11 +364,11 @@ test.describe("desktop cold load", () => {
     await expect(visible(page, "composer")).toHaveAttribute("data-hydrated", "true", { timeout: 60_000 });
     await page.waitForTimeout(1500);
     const metrics = await page.evaluate(() => {
-      const w = window as Window & { __cls?: number; __shifts?: number };
-      return { cls: Number((w.__cls ?? 0).toFixed(4)), shifts: w.__shifts ?? 0 };
+      const w = window as Window & { __cls?: number; __shifts?: number; __shiftSources?: string[] };
+      return { cls: Number((w.__cls ?? 0).toFixed(4)), shifts: w.__shifts ?? 0, sources: w.__shiftSources ?? [] };
     });
     const html = await (await page.request.get(page.url())).text();
-    const dockedInHtml = /<aside[^>]*aria-label="Chats"[^>]*class="[^"]*md:flex/.test(html);
+    const dockedInHtml = /<aside[^>]*aria-label="Chats"[^>]*class="[^"]*dock:flex/.test(html);
     fs.mkdirSync(path.resolve("docs/perf"), { recursive: true });
     const file = path.join(path.resolve("docs/perf"), `${new Date().toISOString().slice(0, 10)}.json`);
     const existing = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>) : {};

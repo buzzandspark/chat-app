@@ -3,14 +3,15 @@ import { MoreHorizontal, Timer } from "lucide-react";
 import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
+import { useMarkdownComponent } from "@client/markdown/ready";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
-import { Markdown } from "@client/markdown/Markdown";
 import { textOf, type MessageState } from "@client/store/chat-store";
 import { useChat, useChatStore } from "@client/store/hooks";
 import { modelDisplayName } from "@shared/models";
 import { ChunkBoundary } from "../ui/chunk-boundary";
-import { useChatContext } from "./chat-context";
+import { lazyChunk } from "../ui/lazy-chunk";
+import { useChatActions, useChatLiveState } from "./chat-context";
 import { ServedBy, StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
 
@@ -39,12 +40,19 @@ function ActionsStandIn({
     </div>
   );
 }
-const AssistantActions = dynamic(() => import("./assistant-actions").then((m) => m.AssistantActions), {
-  ssr: false,
-  loading: () => <div className="h-11" aria-hidden />,
-});
+const AssistantActions = lazyChunk(() =>
+  dynamic(() => import("./assistant-actions").then((m) => m.AssistantActions), {
+    ssr: false,
+    loading: () => <div className="h-11" aria-hidden />,
+  }),
+);
 
 const warmAssistantActions = () => import("./assistant-actions");
+
+// #83: the Markdown renderer (marked, 14 kB gzipped) is its own chunk, fetched when the route's JS
+// evaluates and warmed again by a send. Once it is in, rows render it directly (markdown/ready.ts);
+// this lazy wrapper serves only a live first reply whose tokens beat the chunk.
+const MarkdownLazy = dynamic(() => import("@client/markdown/Markdown").then((m) => m.Markdown), { ssr: true, loading: () => null });
 
 function AssistantActionsOnIntent(props: { message: MessageState; text: string; canRegenerate: boolean; onRegenerate: () => void }) {
   const intent = useIntent(warmAssistantActions);
@@ -66,18 +74,29 @@ function ModelDivider({ from, to, category }: { from: string; to: string; catego
   );
 }
 
+/** Only rows with a thinking block subscribe to the follow state, so a scroll re-renders those alone (#43). */
+function ThinkingBlockFollowing({
+  hasText,
+  ...props
+}: Omit<Parameters<typeof ThinkingBlock>[0], "collapseSignal"> & { hasText: boolean }) {
+  const { followEngaged } = useChatLiveState();
+  return <ThinkingBlock {...props} collapseSignal={hasText && followEngaged} />;
+}
+
 export function AssistantMessage({ message }: { message: MessageState }) {
-  const { chatId, client, retry, send, autoFollow } = useChatContext();
+  const { chatId, client, retry, send, autoFollow } = useChatActions();
   const store = useChatStore();
   const chat = useChat(chatId);
   const streaming = message.status === "streaming";
+  const Markdown = useMarkdownComponent() ?? MarkdownLazy;
   const text = textOf(message.blocks);
   const hasText = text.length > 0;
   const paintedRef = useRef(false);
 
-  // D20: first paint is measured in a task after the committing frame.
+  // D20: first paint is measured in a task after the committing frame, only for a reply this client sent (#46).
+  const sentHere = message.timings?.client?.sent !== undefined && message.timings.client.firstPaint === undefined;
   useEffect(() => {
-    if (!hasText || paintedRef.current) return;
+    if (!hasText || !sentHere || paintedRef.current) return;
     paintedRef.current = true;
     const id = message.id;
     const raf = requestAnimationFrame(() => {
@@ -86,7 +105,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
       channel.port2.postMessage(0);
     });
     return () => cancelAnimationFrame(raf);
-  }, [hasText, message.id, store]);
+  }, [hasText, sentHere, message.id, store]);
 
   const userMessageId = (() => {
     const index = chat.messageIds.indexOf(message.id);
@@ -111,14 +130,18 @@ export function AssistantMessage({ message }: { message: MessageState }) {
         {message.blocks.map((block, i) => {
           if (block.type === "thinking") {
             return (
-              <ThinkingBlock
+              <ThinkingBlockFollowing
                 key={i}
                 text={block.text}
                 redacted={block.redacted}
                 streaming={streaming}
                 startedAt={message.thinkingStartedAt}
                 endedAt={message.thinkingEndedAt}
-                collapseSignal={hasText && autoFollow.engaged}
+                hasText={hasText}
+                onUserToggle={(open) => {
+                  // Opening a block to read it must not be scrolled away by the follow (#27).
+                  if (open && streaming) autoFollow.disengage();
+                }}
               />
             );
           }
@@ -146,16 +169,19 @@ export function AssistantMessage({ message }: { message: MessageState }) {
         onContinue={() => send("Continue.", message.scenario ?? undefined)}
         onResume={() => client.resumeAll()}
       />
-      {!streaming ? (
-        <ChunkBoundary label="message actions">
-          <AssistantActionsOnIntent
-            message={message}
-            text={text}
-            canRegenerate={Boolean(userMessageId) && message.status !== "refused"}
-            onRegenerate={onRetry}
-          />
-        </ChunkBoundary>
-      ) : null}
+      {/* The actions row's height is reserved while streaming, so the pinned end does not jump when it mounts (#78). */}
+      <div className="min-h-11">
+        {!streaming ? (
+          <ChunkBoundary label="message actions">
+            <AssistantActionsOnIntent
+              message={message}
+              text={text}
+              canRegenerate={Boolean(userMessageId) && message.status !== "refused"}
+              onRegenerate={onRetry}
+            />
+          </ChunkBoundary>
+        ) : null}
+      </div>
     </div>
   );
 }

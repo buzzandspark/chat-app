@@ -32,5 +32,10 @@ test.describe("mobile", () => {
     await page.getByRole("button", { name: "Search chats" }).first().click();
     const search = await page.getByRole("textbox", { name: "Search chats" }).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     expect(search).toBeGreaterThanOrEqual(16);
+    await page.goto("/login");
+    for (const name of ["Email", "Password"]) {
+      const px = await page.getByLabel(name).evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      expect(px, name).toBeGreaterThanOrEqual(16);
+    }
   });
 });

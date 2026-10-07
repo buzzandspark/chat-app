@@ -62,7 +62,20 @@ export async function redeemInvite(token: string, password: string): Promise<Inv
   const hash = await hashPassword(password);
   const db = getDb();
   const now = new Date();
+  let raced = false;
   db.transaction((tx) => {
+    // Single use, atomically: the row is claimed first, and a second redeemer in the same instant loses (#63).
+    const claimed = tx
+      .update(schema.invites)
+      .set({ usedAt: now })
+      .where(and(eq(schema.invites.id, found.invite.id), isNull(schema.invites.usedAt), isNull(schema.invites.revokedAt)))
+      .run();
+    if (claimed.changes !== 1) {
+      raced = true;
+      return;
+    }
+    // This is also the password reset: every existing session of the account ends here.
+    tx.delete(schema.sessions).where(eq(schema.sessions.userId, found.user.id)).run();
     const existing = tx
       .select({ id: schema.accounts.id })
       .from(schema.accounts)
@@ -83,8 +96,8 @@ export async function redeemInvite(token: string, password: string): Promise<Inv
         })
         .run();
     }
-    tx.update(schema.invites).set({ usedAt: now }).where(eq(schema.invites.id, found.invite.id)).run();
     tx.update(schema.users).set({ emailVerified: true, updatedAt: now }).where(eq(schema.users.id, found.user.id)).run();
   });
+  if (raced) return { ok: false, reason: "used" };
   return found;
 }

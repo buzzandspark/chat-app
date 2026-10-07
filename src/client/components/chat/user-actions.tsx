@@ -6,17 +6,23 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 export function UserActions({ text, onEdit, defaultOpen }: { text: string; onEdit: () => void; defaultOpen?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const onCopy = async () => {
+  const [open, setOpen] = useState(Boolean(defaultOpen));
+  // Copy keeps the menu open long enough to show "Copied", then closes it (#68).
+  const onCopy = async (e: Event) => {
+    e.preventDefault();
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => {
+        setCopied(false);
+        setOpen(false);
+      }, 1200);
     } catch {
-      // clipboard unavailable
+      setOpen(false);
     }
   };
   return (
-    <DropdownMenu defaultOpen={defaultOpen}>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <IconButton
           label="Message actions"

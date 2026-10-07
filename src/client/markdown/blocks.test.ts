@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashString, parseFence, splitBlocks } from "./blocks";
+import { hashString, parseFence, splitBlocks, splitBlocksIncremental } from "./blocks";
 
 describe("splitBlocks", () => {
   it("splits paragraphs on blank lines and marks only the last block open", () => {
@@ -105,5 +105,45 @@ describe("parseFence", () => {
   });
   it("handles an opener with no body yet", () => {
     expect(parseFence("```json", false)).toEqual({ lang: "json", code: "" });
+  });
+
+  it("splits incrementally to the same blocks as a full split at every streamed prefix (#25)", () => {
+    const text = [
+      "## Why resume works",
+      "",
+      "A paragraph that goes on for a while and keeps going.",
+      "",
+      "- one item",
+      "- two items",
+      "  continued here",
+      "",
+      "| a | b |",
+      "|---|---|",
+      "| 1 | 2 |",
+      "| 3 | 4 |",
+      "",
+      "```ts",
+      "const seq = buffer.events.length;",
+      "buffer.events.push({ ...body, seq });",
+      "```",
+      "",
+      "That is the whole protocol.",
+    ].join("\n");
+    for (let i = 1; i <= text.length; i += 3) {
+      const prefix = text.slice(0, i);
+      const incremental = splitBlocksIncremental(prefix).map((b) => [b.source, b.kind, b.closed, b.start]);
+      const full = splitBlocks(prefix).map((b) => [b.source, b.kind, b.closed, b.start]);
+      expect(incremental, `prefix of ${i}`).toEqual(full);
+    }
+    const blocks = splitBlocks(text);
+    for (const b of blocks) expect(text.slice(b.start, b.start + b.source.length)).toBe(b.source);
+  });
+
+  it("keeps an indented fence inside its list item (#24)", () => {
+    const text = ["- step one:", "", "  ```ts", "  const a = 1;", "  ```", "", "- step two"].join("\n");
+    const blocks = splitBlocks(text);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.kind).toBe("other");
+    expect(blocks[0]!.source).toBe(text);
   });
 });

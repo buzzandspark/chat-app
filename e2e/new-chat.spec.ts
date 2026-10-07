@@ -44,6 +44,21 @@ test.describe("new chat", () => {
     await aside.getByRole("link", { name: first }).click();
     await expect(page).toHaveURL(firstUrl);
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText(first);
+
+    // A third round, from an old chat this time: still its own thread and URL.
+    const third = `third chat ${info.project.name}`;
+    await ensureSidebarOpen(page);
+    await page.getByRole("link", { name: "New chat" }).click();
+    await expect(page).not.toHaveURL(firstUrl);
+    await expect(page).not.toHaveURL(secondUrl);
+    await waitForComposer(page);
+    await expect(page.locator("[data-role]:visible")).toHaveCount(0);
+    await sendText(page, third);
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(1);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await expect(page.getByTestId("chat-title").locator("visible=true").first()).toHaveText(third);
+    await ensureSidebarOpen(page);
+    await expect(aside.getByRole("link", { name: third })).toBeVisible();
   });
 
   test("/c/new redirects to a fresh chat id that renders an empty, usable view", async ({ page }) => {

@@ -12,10 +12,37 @@ export const SSE_HEADERS: Record<string, string> = {
 
 export const SSE_KEEPALIVE = ": keepalive\n\n";
 
+/**
+ * One `data:` line per event (#49): the client reads the type and seq from the JSON, so the `event:`
+ * and `id:` lines were pure overhead; a text or thinking delta also drops `generationId` and `t`,
+ * which the client restores from the stream it is reading. JSON never contains a raw newline.
+ */
 export function encodeSse(event: RelayEvent): string {
-  const id = event.seq === null ? "" : `id: ${event.seq}\n`;
-  // JSON never contains a raw newline, so one data line is enough.
-  return `event: ${event.type}\n${id}data: ${JSON.stringify(event)}\n\n`;
+  if (event.type === "text_delta" || event.type === "thinking_delta") {
+    return `data: ${JSON.stringify({ type: event.type, seq: event.seq, index: event.index, text: event.text })}\n\n`;
+  }
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+/** Adjacent deltas of the same kind and block collapse into one event carrying the last seq. */
+export function coalesceEvents(events: readonly RelayEvent[]): RelayEvent[] {
+  const out: RelayEvent[] = [];
+  for (const event of events) {
+    const prev = out[out.length - 1];
+    if (
+      prev &&
+      (event.type === "text_delta" || event.type === "thinking_delta") &&
+      prev.type === event.type &&
+      prev.index === event.index &&
+      event.seq !== null &&
+      prev.seq !== null
+    ) {
+      out[out.length - 1] = { ...prev, seq: event.seq, t: event.t, text: prev.text + event.text };
+      continue;
+    }
+    out.push(event);
+  }
+  return out;
 }
 
 export interface SseMessage {
@@ -108,17 +135,18 @@ export function createSseParser(onMessage: (message: SseMessage) => void): SsePa
   };
 }
 
-export function parseRelayEvent(data: string): RelayEvent | null {
+/** `generationId` fills in what a compact delta left out (the caller knows which stream it reads). */
+export function parseRelayEvent(data: string, generationId?: string): RelayEvent | null {
   try {
     const parsed: unknown = JSON.parse(data);
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "type" in parsed &&
-      "generationId" in parsed &&
-      "seq" in parsed
-    ) {
-      return parsed as RelayEvent;
+    if (typeof parsed === "object" && parsed !== null && "type" in parsed && "seq" in parsed) {
+      const event = parsed as RelayEvent & { generationId?: string; t?: number };
+      if (event.generationId === undefined) {
+        if (generationId === undefined) return null;
+        event.generationId = generationId;
+      }
+      if (event.t === undefined) event.t = 0;
+      return event as RelayEvent;
     }
     return null;
   } catch {

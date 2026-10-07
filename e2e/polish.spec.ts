@@ -36,15 +36,14 @@ test.describe("edit, regenerate, drafts", () => {
     await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
   });
 
-  test("a draft survives a reload", async ({ page }) => {
+  test("a draft typed in a brand-new chat survives a reload", async ({ page }) => {
+    // The URL is the chat's own id from the start (ADR-0005), so the draft has a key before any send.
     await openNewChat(page);
-    await sendText(page, "anchor");
-    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    await waitForChatUrl(page);
     await page.getByRole("textbox", { name: "Message" }).fill("unsent draft text");
     await page.waitForTimeout(400);
     await page.reload();
     await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("unsent draft text");
+    await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
   });
 
   test("the latency popover shows all six stages", async ({ page }) => {

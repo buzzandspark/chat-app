@@ -5,6 +5,20 @@ import type { ChatStore, SeedRow } from "./chat-store";
 interface ChatJson {
   chat: { id: string; title: string; updatedAt: number };
   messages: SeedRow[];
+  older?: number;
+}
+
+/** #47: the rest of a long chat, on request; the store's id list becomes the full one. */
+export async function loadEarlierMessages(store: ChatStore, chatId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/chats/${chatId}?all=1`);
+    if (!res.ok) return false;
+    const data = (await res.json()) as ChatJson;
+    store.seedChat(chatId, data.chat.title, data.messages, { older: 0 });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const inflight = new Map<string, Promise<void>>();
@@ -26,7 +40,7 @@ export function prefetchChat(store: ChatStore, chatId: string): Promise<void> {
       }
       if (!res.ok) return;
       const data = (await res.json()) as ChatJson;
-      store.seedChat(chatId, data.chat.title, data.messages);
+      store.seedChat(chatId, data.chat.title, data.messages, { older: data.older ?? 0 });
       // A reply still streaming on the server reattaches now, so the chat is current when opened.
       const client = getGenerationClient(store);
       for (const row of data.messages) {

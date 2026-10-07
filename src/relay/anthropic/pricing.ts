@@ -23,6 +23,21 @@ const RATES: Record<string, Rates> = {
 
 const FALLBACK_RATES: Rates = RATES["claude-opus-5-5"]!;
 
+/** Models the API's server-side fallback may serve a request on (D11); a reservation prices for the dearest. */
+const FALLBACK_TARGETS = ["claude-opus-5", "claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6"];
+
+/** The highest output rate and cache-write input rate among the requested model and its possible fallbacks. */
+export function worstCaseRates(model: string): { input: number; output: number } {
+  let input = 0;
+  let output = 0;
+  for (const id of [model, ...FALLBACK_TARGETS]) {
+    const r = ratesFor(id);
+    input = Math.max(input, r.cacheWrite);
+    output = Math.max(output, r.output);
+  }
+  return { input, output };
+}
+
 /** Exact id first, then the longest known prefix (dated snapshots), else Opus rates. */
 export function ratesFor(model: string): Rates {
   const exact = RATES[model];

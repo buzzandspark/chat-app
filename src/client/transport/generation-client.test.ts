@@ -249,4 +249,101 @@ describe("GenerationClient", () => {
     expect(store.getMessage(assistantMessageId)!.connection).toBe("offline");
     expect(posts).toBe(1);
   });
+
+  // Events are built from the ids the client chose, captured from the POST body.
+  function eventsFromPost(init: RequestInit | undefined, text: string): RelayEvent[] {
+    const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };
+    return makeEvents(body.generationId, body.assistantMessageId, text);
+  }
+
+  it("keeps trying through a 5xx on the resume GET instead of abandoning the reply", async () => {
+    let events: RelayEvent[] = [];
+    let gets = 0;
+    const client = makeClient((url, init) => {
+      if (url === "/api/chat") {
+        events = eventsFromPost(init, "hello");
+        return sseResponse(events, { cutAfter: 4 });
+      }
+      gets++;
+      if (gets === 1) return new Response(JSON.stringify({ error: "draining" }), { status: 503 });
+      return sseResponse(events.slice(4));
+    });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const m = await settle(assistantMessageId);
+    expect(m.status).toBe("done");
+    expect(textOf(m.blocks)).toBe("hello");
+    expect(gets).toBe(2);
+  });
+
+  it("a 404 after the server accepted the generation means the chat is gone, not a lost POST", async () => {
+    const client = makeClient((url, init) => {
+      if (url === "/api/chat") return sseResponse(eventsFromPost(init, "hello"), { cutAfter: 4 });
+      return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
+    });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const m = await settle(assistantMessageId);
+    expect(m.status).toBe("error");
+    expect(m.error?.kind).toBe("gone");
+    expect(calls.filter((c) => c.url === "/api/chat")).toHaveLength(1);
+  });
+
+  it("attach does nothing for a reply that already finished here", async () => {
+    const client = makeClient((_url, init) => sseResponse(eventsFromPost(init, "ok")));
+    const { assistantMessageId, generationId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    await settle(assistantMessageId);
+    const before = calls.length;
+    client.attach(generationId, assistantMessageId);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls.length).toBe(before);
+    expect(store.getMessage(assistantMessageId)?.connection).toBe("idle");
+  });
+
+  it("the server accepting the POST fires onAccepted; a refused POST never does", async () => {
+    let accepted = 0;
+    const client = makeClient((_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { text?: string };
+      if (body.text === "no") return new Response(JSON.stringify({ error: "rate_limited", retryAfterMs: 1 }), { status: 429 });
+      return sseResponse(eventsFromPost(init, "ok"));
+    });
+    const refused = client.send({ chatId: "c1", text: "no", model: "claude-sonnet-5-5", thinking: { harder: false } }, { onAccepted: () => accepted++ });
+    await settle(refused.assistantMessageId);
+    expect(accepted).toBe(0);
+    const ok = client.send({ chatId: "c1", text: "yes", model: "claude-sonnet-5-5", thinking: { harder: false } }, { onAccepted: () => accepted++ });
+    await settle(ok.assistantMessageId);
+    expect(accepted).toBe(1);
+  });
+
+  it("resumeAll cuts a backoff sleep short and retries at once", async () => {
+    let events: RelayEvent[] = [];
+    let gets = 0;
+    let release: (() => void) | null = null;
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      calls.push({ url, method: init?.method ?? "GET" });
+      if (url === "/api/chat") {
+        events = eventsFromPost(init, "hello");
+        return sseResponse(events, { cutAfter: 4 });
+      }
+      gets++;
+      if (gets === 1) throw new Error("network");
+      return sseResponse(events.slice(4));
+    };
+    // The backoff sleep only ends when its signal aborts (a real timer would be 60 s here).
+    const client = new GenerationClient(store, {
+      fetch: fetchImpl,
+      backoff: { baseMs: 60_000, maxMs: 60_000, maxAttempts: 5 },
+      sleep: (_ms, signal) =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+          signal?.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    for (let i = 0; i < 100 && release === null; i++) await new Promise((r) => setTimeout(r, 2));
+    expect(release).not.toBeNull();
+    client.resumeAll();
+    const m = await settle(assistantMessageId);
+    expect(m.status).toBe("done");
+    expect(textOf(m.blocks)).toBe("hello");
+  });
 });

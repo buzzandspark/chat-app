@@ -19,20 +19,26 @@ interface AssistantActionsProps {
 /** Loaded after first paint (D21): the menu and popover pull in Radix, which the first frame does not need. */
 export function AssistantActions({ message, text, canRegenerate, onRegenerate, defaultOpen = null }: AssistantActionsProps) {
   const [copied, setCopied] = useState(false);
-  const onCopy = async () => {
+  const [open, setOpen] = useState(defaultOpen === "menu");
+  // Copy keeps the menu open long enough to show "Copied", then closes it (#68).
+  const onCopy = async (e: Event) => {
+    e.preventDefault();
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => {
+        setCopied(false);
+        setOpen(false);
+      }, 1200);
     } catch {
-      // clipboard unavailable
+      setOpen(false);
     }
   };
   return (
     <div className="flex items-center gap-1">
       <ServedBy message={message} />
       <LatencyPopover timings={message.timings} usage={message.usage} defaultOpen={defaultOpen === "latency"} />
-      <DropdownMenu defaultOpen={defaultOpen === "menu"}>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Message actions"

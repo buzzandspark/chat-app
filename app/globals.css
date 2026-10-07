@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* #31: the docked layout needs height as well as width; a landscape phone keeps the overlay sidebar. */
+@custom-variant dock (@media (min-width: 48rem) and (min-height: 30rem));
 
 /* D28 tokens: phone first, extended at md; a warm paper neutral with a sea-teal accent. */
 @theme inline {
@@ -237,7 +239,12 @@
 }
 
 /* Streaming caret (D10): drawn by CSS after the last block so it is inline with the text. */
-.streaming-caret > :last-child::after {
+/* The caret follows prose: a trailing list, code block, table or quote would otherwise get an empty
+   line under it (#53). Lists carry it on their last item, quotes on their last paragraph. */
+.streaming-caret > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
+.streaming-caret > :is(ul, ol):last-child > li:last-child:not(:has(> p))::after,
+.streaming-caret > :is(ul, ol):last-child > li:last-child > p:last-child::after,
+.streaming-caret > blockquote:last-child > div > p:last-child::after {
   content: "";
   display: inline-block;
   width: 2px;

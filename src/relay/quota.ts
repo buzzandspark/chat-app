@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { users } from "@db/schema";
-import { costOf, ratesFor } from "./anthropic/pricing";
+import { ratesFor, worstCaseRates } from "./anthropic/pricing";
 import { MAX_TOKENS } from "./anthropic/thinking-config";
 
 export class QuotaExceededError extends Error {
@@ -27,12 +27,10 @@ export class QuotaManager {
       .where(eq(users.id, userId))
       .get();
     if (!user || user.cap === null) return;
-    const estimate = costOf(model, {
-      inputTokens: estimatedInputTokens,
-      outputTokens: MAX_TOKENS,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    });
+    // Priced for the dearest model the request may be served on and for input written to the cache,
+    // so a server-side fallback cannot carry a user past the cap (cap review, finding 2).
+    const worst = worstCaseRates(model);
+    const estimate = (estimatedInputTokens * worst.input + MAX_TOKENS * worst.output) / 1_000_000;
     // Atomic in a single-threaded process: the sum and the insert happen in one tick.
     let outstanding = 0;
     for (const [key, value] of this.reserved) if (key.startsWith(`${userId}:`)) outstanding += value;
@@ -49,8 +47,13 @@ export class QuotaManager {
   settle(userId: string, generationId: string, costUsd: number): void {
     this.release(userId, generationId);
     if (costUsd <= 0) return;
-    this.db
-      .update(users)
+    QuotaManager.addSpend(this.db, userId, costUsd);
+  }
+
+  /** The spend increment on its own, so the engine can run it inside its final transaction (finding 6). */
+  static addSpend(db: Pick<Db, "update">, userId: string, costUsd: number): void {
+    if (costUsd <= 0) return;
+    db.update(users)
       .set({ costSpentUsd: sql`${users.costSpentUsd} + ${costUsd}` })
       .where(eq(users.id, userId))
       .run();

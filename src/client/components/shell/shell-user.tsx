@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
 export interface ShellUser {
   userId: string;
@@ -8,7 +8,11 @@ export interface ShellUser {
 }
 
 const ShellUserContext = createContext<ShellUser | null>(null);
-export const ShellUserProvider = ShellUserContext.Provider;
+
+/** Rendered by the layout once the session is known; everything that needs the user sits inside (#20). */
+export function ShellUserProvider({ userId, scenarioPanel, children }: ShellUser & { children: ReactNode }) {
+  return <ShellUserContext.Provider value={{ userId, scenarioPanel }}>{children}</ShellUserContext.Provider>;
+}
 
 export function useShellUser(): ShellUser {
   const value = useContext(ShellUserContext);

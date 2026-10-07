@@ -5,7 +5,8 @@ import type { HighlighterCore } from "shiki/core";
  * and the in-thread fallback. Loaded lazily (see highlight-runtime), never with the route.
  */
 
-export type HighlightToken = { c: string; l?: string; d?: string };
+/** `c` is the text; `l` its colour, a `var(--shiki-token-…)` reference the stylesheet resolves per theme (#12). */
+export type HighlightToken = { c: string; l?: string };
 export type HighlightLine = HighlightToken[];
 
 // Static import map so the bundler can split one chunk per language.
@@ -46,15 +47,18 @@ const langPromises = new Map<string, Promise<void>>();
 function getHighlighter(): Promise<HighlighterCore> {
   if (!highlighterPromise) {
     highlighterPromise = (async () => {
-      const [{ createHighlighterCore }, { createJavaScriptRegexEngine }, light, dark] = await Promise.all([
+      // `createCssVariablesTheme` lives in @shikijs/core, which `shiki/core` does not re-export.
+      const [{ createHighlighterCore }, { createCssVariablesTheme }, { createJavaScriptRegexEngine }] = await Promise.all([
         import("shiki/core"),
+        import("@shikijs/core"),
         import("shiki/engine/javascript"),
-        import("shiki/themes/github-light.mjs"),
-        import("shiki/themes/github-dark.mjs"),
       ]);
+      // One theme whose colours are CSS variables: tokenising happens once, and code.css picks the
+      // light or dark palette, so a theme switch is a repaint and never a re-tokenise (#12).
+      const theme = createCssVariablesTheme({ name: "css-variables", variablePrefix: "--shiki-", variableDefaults: {}, fontStyle: false });
       return createHighlighterCore({
         engine: createJavaScriptRegexEngine({ forgiving: true }),
-        themes: [light.default, dark.default],
+        themes: [theme],
         langs: [],
       });
     })();
@@ -82,12 +86,11 @@ export async function tokenize(code: string, lang: string): Promise<HighlightLin
   const highlighter = await getHighlighter();
   await ensureLanguage(highlighter, lang);
   if (!loadedLangs.has(lang)) throw new Error(`language not loaded: ${lang}`);
-  const lines = highlighter.codeToTokensWithThemes(code, { lang, themes: { light: "github-light", dark: "github-dark" } });
+  const lines = highlighter.codeToTokensBase(code, { lang, theme: "css-variables" });
   return lines.map((line) =>
     line.map((token) => {
       const t: HighlightToken = { c: token.content };
-      if (token.variants.light?.color) t.l = token.variants.light.color;
-      if (token.variants.dark?.color) t.d = token.variants.dark.color;
+      if (token.color) t.l = token.color;
       return t;
     }),
   );

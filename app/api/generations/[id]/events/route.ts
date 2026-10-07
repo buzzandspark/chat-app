@@ -23,9 +23,9 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/generati
     }
     switch (outcome.kind) {
       case "live":
-        return streamGeneration(store, id, after, { signal: request.signal });
+        return streamGeneration(store, id, after, { signal: request.signal, acceptEncoding: request.headers.get("accept-encoding") });
       case "snapshot":
-        return singleEventResponse(outcome.event);
+        return singleEventResponse(outcome.event, request.headers.get("accept-encoding"));
       case "not_found":
         return jsonError(404, { error: "not_found" });
     }

@@ -1,25 +1,25 @@
 {
   "giant_code_block": {
-    "frames": 1977,
+    "frames": 2072,
     "p50": 16.7,
-    "p95": 33.3,
-    "p99": 33.4,
-    "longFrames": 6,
-    "maxFrame": 316.7,
-    "reopenMaxFrame": 233.3,
-    "reopenLongFrames": 8,
+    "p95": 16.7,
+    "p99": 16.8,
+    "longFrames": 5,
+    "maxFrame": 266.6,
+    "reopenMaxFrame": 183.3,
+    "reopenLongFrames": 4,
     "source": "worker",
     "reopenSource": "kept",
-    "at": "2026-10-07T20:44:16.775Z"
+    "at": "2026-10-07T23:06:26.676Z"
   },
   "shell": {
     "cls": 0,
     "shifts": 0,
-    "ttfbMs": 4,
-    "domContentLoadedMs": 1376,
+    "ttfbMs": 2,
+    "domContentLoadedMs": 1298,
     "paints": {
-      "first-paint": 1500,
-      "first-contentful-paint": 1500
+      "first-paint": 1420,
+      "first-contentful-paint": 1420
     },
     "fonts": [
       "Inter:unloaded",
@@ -35,46 +35,45 @@
       "JetBrains Mono:unloaded",
       "JetBrains Mono:unloaded",
       "JetBrains Mono:unloaded",
-      "JetBrains Mono:unloaded",
-      "JetBrains Mono Fallback:unloaded"
+      "JetBrains Mono:unloaded"
     ],
     "interLoaded": true,
-    "transferredKb": 308,
-    "hydratedMs": 3708,
-    "chunksAfterHydration": 0,
-    "at": "2026-10-07T20:42:43.472Z"
+    "transferredKb": 275,
+    "hydratedMs": 4001,
+    "chunksAfterHydration": 2,
+    "at": "2026-10-07T23:04:51.807Z"
   },
   "long_reply": {
-    "firstPaintMs": 1991,
-    "frames": 624,
+    "firstPaintMs": 1995,
+    "frames": 626,
     "p50": 16.7,
     "p95": 16.7,
     "p99": 16.8,
     "longFrames": 0,
     "assistantRows": 1,
-    "at": "2026-10-07T20:42:57.648Z"
+    "at": "2026-10-07T23:05:06.345Z"
   },
   "long_chat": {
     "rows": 200,
-    "loadMs": 1561,
-    "frames": 573,
+    "loadMs": 2920,
+    "frames": 577,
     "p50": 16.7,
     "p95": 16.8,
     "p99": 16.8,
-    "longFrames": 3,
-    "at": "2026-10-07T20:43:13.909Z"
+    "longFrames": 2,
+    "at": "2026-10-07T23:05:24.289Z"
   },
   "click_to_thread": {
     "coldInFlight": {
-      "click": 1284.3000000715256,
+      "click": 1354.2000000476837,
       "frames": 21,
       "activeFrame": 1,
       "skeletonFrame": 2,
       "threadFrame": 21,
-      "threadMs": 342
+      "threadMs": 341
     },
     "warmedByOpen": {
-      "click": 1949.8000000715256,
+      "click": 2035.7000000476837,
       "frames": 2,
       "activeFrame": 1,
       "skeletonFrame": null,
@@ -82,35 +81,36 @@
       "threadMs": 28
     },
     "loaded": {
-      "click": 2415,
+      "click": 2500.7000000476837,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 29
+    },
+    "loaded2": {
+      "click": 4985,
       "frames": 2,
       "activeFrame": 1,
       "skeletonFrame": null,
       "threadFrame": 2,
       "threadMs": 28
     },
-    "loaded2": {
-      "click": 4832.600000023842,
-      "frames": 2,
-      "activeFrame": 1,
-      "skeletonFrame": null,
-      "threadFrame": 2,
-      "threadMs": 27
-    },
     "prefetched": {
-      "click": 4398.700000047684,
+      "click": 4534.5,
       "frames": 2,
       "activeFrame": 1,
       "skeletonFrame": null,
       "threadFrame": 2,
-      "threadMs": 27
+      "threadMs": 28
     },
-    "at": "2026-10-07T20:43:32.668Z"
+    "at": "2026-10-07T23:05:43.430Z"
   },
   "desktop_shell": {
     "cls": 0,
     "shifts": 0,
+    "sources": [],
     "dockedInHtml": true,
-    "at": "2026-10-07T20:37:37.798Z"
+    "at": "2026-10-07T23:14:01.654Z"
   }
 }

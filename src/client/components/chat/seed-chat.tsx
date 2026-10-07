@@ -10,18 +10,21 @@ interface SeedChatProps {
   title: string | null;
   updatedAt: number | null;
   rows: SeedRow[];
+  /** Messages before the window the server sent (#47); the list offers to load them. */
+  older?: number;
 }
 
 /**
  * ADR-0005: the server's rows reconcile into the store during render (so a hard load paints them in
  * its first frame) and render nothing. Notifications are deferred so no ancestor updates mid-render.
  */
-export function SeedChat({ chatId, title, updatedAt, rows }: SeedChatProps) {
+export function SeedChat({ chatId, title, updatedAt, rows, older = 0 }: SeedChatProps) {
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
   const [applied, setApplied] = useState<SeedRow[] | null>(null);
-  if (applied !== rows) {
-    store.seedChat(chatId, title, rows, { deferNotify: true });
+  // Re-applied when the rows change and when the store has since evicted this chat (#72).
+  if (applied !== rows || !store.getChat(chatId).seeded) {
+    store.seedChat(chatId, title, rows, { deferNotify: true, older });
     setApplied(rows);
   }
   useEffect(() => {

@@ -6,18 +6,21 @@ import { IconButton } from "../ui/icon-button";
 import type { MessageState } from "@client/store/chat-store";
 import { textOf } from "@client/store/chat-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
-import { useChatContext } from "./chat-context";
+import { lazyChunk } from "../ui/lazy-chunk";
+import { useChatActions } from "./chat-context";
 
 const USER_ACTION_BUTTON =
   "shrink-0 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/user:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
-const UserActions = dynamic(() => import("./user-actions").then((m) => m.UserActions), {
-  ssr: false,
-  loading: () => (
-    <IconButton label="Message actions" className={USER_ACTION_BUTTON} disabled>
-      <MoreHorizontal />
-    </IconButton>
-  ),
-});
+const UserActions = lazyChunk(() =>
+  dynamic(() => import("./user-actions").then((m) => m.UserActions), {
+    ssr: false,
+    loading: () => (
+      <IconButton label="Message actions" className={USER_ACTION_BUTTON} disabled>
+        <MoreHorizontal />
+      </IconButton>
+    ),
+  }),
+);
 
 /** D21: the menu's chunk loads on intent; the stand-in is the same button. */
 const warmUserActions = () => import("./user-actions");
@@ -33,7 +36,7 @@ function UserActionsOnIntent(props: { text: string; onEdit: () => void }) {
 }
 
 export function UserMessage({ message }: { message: MessageState }) {
-  const { editMessage } = useChatContext();
+  const { editMessage } = useChatActions();
   const text = textOf(message.blocks);
   return (
     <div className="group/user flex items-end justify-end gap-1">

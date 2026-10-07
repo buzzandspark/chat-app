@@ -103,11 +103,11 @@ function CodeBlockImpl({ code, lang, closed, className }: CodeBlockProps) {
       });
   };
 
-  // While the fence streams the block is one text node; once closed it is split into groups, so the
-  // commits that follow each touch a single contained block. Shiki splits lines as we do; if ever
+  // The block is always groups of lines, streaming or closed (#26): a delta changes one group's text
+  // node and lays out one contained block, not the whole <pre>. Shiki splits lines as we do; if ever
   // not, the tokens are dropped rather than risk the text.
-  const usable = lines && lines.length === plainLines.length ? lines : null;
-  const body: ReactNode = closed ? renderGroups(usable, plainLines, usable ? committed : 0) : code;
+  const usable = closed && lines && lines.length === plainLines.length ? lines : null;
+  const body: ReactNode = renderGroups(usable, plainLines, usable ? committed : 0);
 
   return (
     <div
@@ -147,14 +147,15 @@ const CH_PX = 13 * 0.6; // monospace advance at 0.8125rem
  */
 const LineGroup = memo(function LineGroup({
   lines,
-  plain,
+  text,
   start,
   end,
   last,
   widthPx,
 }: {
   lines: HighlightLine[] | null;
-  plain: string[];
+  /** The group's own lines, joined: a streaming delta changes only the last group's string, so earlier groups skip. */
+  text: string;
   start: number;
   end: number;
   last: boolean;
@@ -167,9 +168,8 @@ const LineGroup = memo(function LineGroup({
     const out: ReactNode[] = [];
     for (let li = start; li < end; li++) {
       lines[li]!.forEach((token, ti) => {
-        const tokenStyle = { "--shiki-light": token.l, "--shiki-dark": token.d } as CSSProperties;
         out.push(
-          <span key={`${li}-${ti}`} data-shiki="" style={tokenStyle}>
+          <span key={`${li}-${ti}`} data-shiki="" style={token.l ? { color: token.l } : undefined}>
             {token.c}
           </span>,
         );
@@ -178,7 +178,7 @@ const LineGroup = memo(function LineGroup({
     }
     kids = out;
   } else {
-    kids = plain.slice(start, end).join("\n") + (last ? "" : "\n");
+    kids = text + (last ? "" : "\n");
   }
   return (
     <span className="code-group block" data-lines={`${start}-${end}`} style={style}>
@@ -197,7 +197,17 @@ function renderGroups(lines: HighlightLine[] | null, plain: string[], committedG
   for (let g = 0; g * GROUP_LINES < total; g++) {
     const start = g * GROUP_LINES;
     const end = Math.min(total, start + GROUP_LINES);
-    out.push(<LineGroup key={g} lines={g < committedGroups ? lines : null} plain={plain} start={start} end={end} last={end === total} widthPx={widthPx} />);
+    out.push(
+      <LineGroup
+        key={g}
+        lines={g < committedGroups ? lines : null}
+        text={plain.slice(start, end).join("\n")}
+        start={start}
+        end={end}
+        last={end === total}
+        widthPx={widthPx}
+      />,
+    );
   }
   return out;
 }

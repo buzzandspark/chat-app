@@ -1,4 +1,4 @@
-import { asc, desc, eq, max } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, max } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages, usageEvents } from "@db/schema";
 import { uuidv7 } from "@shared/id";
@@ -30,6 +30,7 @@ import type { Provider } from "./providers/types";
 import { QuotaManager } from "./quota";
 import type { EventStore } from "./store";
 import { TpsStats } from "./tps";
+import { settleOrphan } from "./orphans";
 
 export class DrainingError extends Error {
   constructor() {
@@ -82,6 +83,8 @@ export interface StartInput {
   userId: string;
   userRole: UserRole;
   userMessageId: string;
+  /** D10/#21: drop this message and everything after it in the same transaction that starts the new generation. */
+  replaceFromMessageId?: string;
   assistantMessageId: string;
   /** Omitted when retrying: the user message already exists. */
   text?: string;
@@ -110,6 +113,8 @@ interface FinalState {
   timings: ServerTimings;
   rows: UsageRow[];
   error?: RelayError;
+  /** Override for the usage rows' `estimated` flag (a stop after the final usage frame is exact). */
+  estimated?: boolean;
 }
 
 interface Active {
@@ -226,6 +231,27 @@ export class Engine {
             .where(eq(chats.id, input.chatId))
             .run();
         }
+        if (input.replaceFromMessageId) {
+          // Edit and Regenerate replace in one request: no separate truncate round trip, and a failed
+          // start leaves the server's turns exactly as they were (the caller stopped the victims first).
+          const from = tx
+            .select({ position: messages.position })
+            .from(messages)
+            .where(and(eq(messages.id, input.replaceFromMessageId), eq(messages.chatId, input.chatId)))
+            .get();
+          if (from) {
+            const victims = tx
+              .select({ id: messages.id })
+              .from(messages)
+              .where(and(eq(messages.chatId, input.chatId), gte(messages.position, from.position)))
+              .all()
+              .map((v) => v.id);
+            if (victims.length > 0) {
+              tx.delete(generations).where(inArray(generations.messageId, victims)).run();
+              tx.delete(messages).where(inArray(messages.id, victims)).run();
+            }
+          }
+        }
         const last = tx
           .select({ position: max(messages.position) })
           .from(messages)
@@ -321,6 +347,19 @@ export class Engine {
     return { created: true };
   }
 
+  /** Generations running here for one user (the per-user concurrency cap, #62). */
+  runningFor(userId: string): number {
+    let n = 0;
+    for (const a of this.active.values()) if (a.userId === userId && !a.abortReason) n++;
+    return n;
+  }
+
+  /** Stops and settles every running generation of a user (admin delete or ban, #69). */
+  async stopUser(userId: string): Promise<void> {
+    const ids = [...this.active.values()].filter((a) => a.userId === userId).map((a) => a.id);
+    await Promise.all(ids.map((id) => this.stopAndWait(id)));
+  }
+
   /** D5: aborts upstream and appends `stopped`. Returns false if not running here. */
   stop(generationId: string): boolean {
     const active = this.active.get(generationId);
@@ -353,8 +392,12 @@ export class Engine {
     const row = this.db.select().from(generations).where(eq(generations.id, generationId)).get();
     if (!row) return { kind: "not_found" };
     if (row.status === "running") {
-      // The process restarted while this was running: nothing can finish it.
-      this.markInterrupted(row.id, row.messageId, "crash");
+      // The process restarted while this was running: nothing can finish it. Settle its estimated
+      // cost as the boot backstop does (cap review, finding 3).
+      const now = new Date(this.now());
+      this.db.transaction((tx) => {
+        settleOrphan(tx as unknown as Db, { id: row.id, messageId: row.messageId, chatId: row.chatId, userId: row.userId, requestedModel: row.requestedModel }, now);
+      });
     }
     const message = this.db.select().from(messages).where(eq(messages.id, row.messageId)).get();
     if (!message) return { kind: "not_found" };
@@ -563,11 +606,13 @@ export class Engine {
     if (reason === "stop") {
       const servingModel = resolveServingModel(active.acc);
       timings.done = this.now();
-      const rows = this.estimateRows(active, servingModel ?? active.requestedModel);
-      const usage = rows.length ? summarize(rows, true) : null;
+      // A stop that lands after the final usage frame has exact numbers; only an earlier one estimates (finding 4).
+      const exact = active.acc.stopReason !== null;
+      const rows = exact ? this.free(active, this.priceFinal(active, servingModel ?? active.requestedModel)) : this.estimateRows(active, servingModel ?? active.requestedModel);
+      const usage = rows.length ? summarize(rows, !exact) : null;
       this.settle(
         active,
-        { content: toContentBlocks(active.acc), status: "stopped", generationStatus: "stopped", servingModel, stopReason: null, timings, rows },
+        { content: toContentBlocks(active.acc), status: "stopped", generationStatus: "stopped", servingModel, stopReason: null, timings, rows, estimated: !exact },
         { type: "stopped", servingModel, usage },
       );
       return;
@@ -608,13 +653,18 @@ export class Engine {
    */
   private settle(active: Active, final: FinalState, terminal: RelayEventBody): void {
     const cost = final.rows.reduce((s, r) => s + r.costUsd, 0);
+    // The spend increment rides in the final transaction with the usage rows (finding 6); only when
+    // that transaction fails is it attempted on its own, so spend and rows never disagree.
+    let finalized = false;
     try {
-      this.finalize(active, final);
+      this.finalize(active, final, cost);
+      finalized = true;
     } catch (err) {
       console.error(`[engine] finalize failed for ${active.id} (rows gone?)`, err);
     }
     try {
-      this.quota.settle(active.userId, active.id, cost);
+      if (finalized) this.quota.release(active.userId, active.id);
+      else this.quota.settle(active.userId, active.id, cost);
     } catch (err) {
       console.error(`[engine] settle failed for ${active.id}`, err);
       this.quota.release(active.userId, active.id);
@@ -674,10 +724,11 @@ export class Engine {
     ));
   }
 
-  private finalize(active: Active, final: FinalState): void {
+  private finalize(active: Active, final: FinalState, costUsd: number): void {
     const now = new Date(this.now());
-    const estimated = final.generationStatus !== "done";
+    const estimated = final.estimated ?? final.generationStatus !== "done";
     this.db.transaction((tx) => {
+      if (active.billable) QuotaManager.addSpend(tx as unknown as Db, active.userId, costUsd);
       tx.update(messages)
         .set({
           content: final.content,
@@ -727,19 +778,6 @@ export class Engine {
     });
   }
 
-  private markInterrupted(generationId: string, messageId: string, reason: InterruptedReason): void {
-    const now = new Date(this.now());
-    this.db.transaction((tx) => {
-      tx.update(generations)
-        .set({ status: "interrupted", interruptedReason: reason, endedAt: now })
-        .where(eq(generations.id, generationId))
-        .run();
-      tx.update(messages)
-        .set({ status: "interrupted", updatedAt: now })
-        .where(eq(messages.id, messageId))
-        .run();
-    });
-  }
 
   private loadHistory(chatId: string, assistantMessageId: string): HistoryMessage[] {
     const target = this.db

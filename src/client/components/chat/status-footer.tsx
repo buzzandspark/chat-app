@@ -108,6 +108,18 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
         text = "This chat belongs to another account.";
         offer = action("New chat", newChat);
         break;
+      case "unavailable":
+        text = (
+          <>
+            The server is restarting. Try again in <Countdown until={message.createdAt + (e.retryAfterMs ?? 5_000)} />.
+          </>
+        );
+        offer = retry;
+        break;
+      case "gone":
+        text = "This chat was deleted.";
+        offer = action("New chat", newChat);
+        break;
       case "quota_exceeded":
         text = "You have used the whole budget on this instance.";
         offer = link("https://github.com/bzahory/cadence/blob/main/docs/self-host.md", "Run your own");

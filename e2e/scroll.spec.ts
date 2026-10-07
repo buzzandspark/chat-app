@@ -14,6 +14,24 @@ test.describe("scroll", () => {
     expect(distance).toBeLessThanOrEqual(2);
   });
 
+  test("an upward wheel disengages auto-follow at once and Jump to latest re-engages it", async ({ page, isMobile }) => {
+    test.skip(isMobile, "a wheel is a desktop input");
+    await openNewChat(page);
+    await runScenario(page, "long_reply");
+    const row = lastAssistant(page);
+    await expect(row.locator(".markdown")).not.toHaveText("", { timeout: 60_000 });
+    const list = visible(page, "message-list");
+    await list.hover();
+    await page.mouse.wheel(0, -10);
+    await expect(page.getByRole("button", { name: "Jump to latest" })).toBeVisible();
+    await page.getByRole("button", { name: "Jump to latest" }).click();
+    await expect(page.getByRole("button", { name: "Jump to latest" })).toHaveCount(0);
+    await expect(row).toHaveAttribute("data-status", "done", { timeout: 60_000 });
+    await page.waitForTimeout(200);
+    const distance = await list.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+    expect(distance).toBeLessThanOrEqual(2);
+  });
+
   test("the thread stays pinned to its end when the viewport shrinks (keyboard)", async ({ page, isMobile }) => {
     test.skip(!isMobile, "the keyboard inset only matters on phones");
     await openNewChat(page);
@@ -48,7 +66,9 @@ test.describe("scroll", () => {
     await visible(page, "scenario-panel-trigger").click();
     await visible(page, "scenario-long_chat").click();
     await expect(page).not.toHaveURL(before, { timeout: 30_000 });
-    await expect(page.locator("[data-role]:visible")).toHaveCount(200, { timeout: 60_000 });
+    // The page ships the newest 100 of the 200 rows (#47); the rest sit behind "Show earlier messages".
+    await expect(page.locator("[data-role]:visible")).toHaveCount(100, { timeout: 60_000 });
+    await expect(page.getByRole("button", { name: /100 earlier messages/ })).toBeVisible();
     await page.waitForTimeout(500);
     const firstTops = await page.evaluate(() => (window as Window & { __firstTops?: number[] }).__firstTops ?? []);
     // Never painted at the top first: every observed frame with rows was already scrolled down.

@@ -46,6 +46,20 @@ test.describe("reliability", () => {
     expect(text.split("Section 1\n").length - 1).toBe(1);
   });
 
+  test("a stream that goes silent without closing is resumed by the watchdog and finishes intact", async ({ page }) => {
+    test.setTimeout(120_000);
+    await openNewChat(page);
+    const resumed = page.waitForRequest((r) => r.url().includes("/events?after="), { timeout: 60_000 });
+    await runScenario(page, "stalled_stream");
+    const req = await resumed;
+    expect(req.url()).toMatch(/after=\d+$/);
+    const row = lastAssistant(page);
+    await expect(row).toHaveAttribute("data-status", "done", { timeout: 90_000 });
+    const text = await assistantText(row);
+    expect(text.split("That is the whole protocol.").length - 1).toBe(1);
+    expect(text.split("Section 12").length - 1).toBe(1);
+  });
+
   // The slow_tokens scenario streams exactly this sentence; a resume that replayed from the saved
   // partial's start would show it twice (the review measured 6,414 characters against 5,444).
   const SLOW_TOKENS_TEXT =

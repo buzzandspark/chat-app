@@ -28,7 +28,12 @@ export function useIntent(warm: () => Promise<unknown>) {
     },
     [warmUp],
   );
-  return { armed, wanted, warmUp, press };
+  /** Back to the stand-in once the control has closed, so an armed row stops carrying its Radix tree (#44). */
+  const disarm = useCallback(() => {
+    setArmed(false);
+    setWanted(null);
+  }, []);
+  return { armed, wanted, warmUp, press, disarm };
 }
 
 /** Event props for a stand-in button: warm the chunk on hover, touch and focus; never swap before a click. */

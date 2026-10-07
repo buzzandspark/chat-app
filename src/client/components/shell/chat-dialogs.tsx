@@ -17,6 +17,7 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
   const store = useChatStore();
   const [value, setValue] = useState(chat.title);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.select(), 50);
@@ -36,7 +37,9 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
         getSidebarStore().patch(chat.id, { title: value.trim() });
         store.setChatTitle(chat.id, value.trim());
         onOpenChange(false);
-      }
+      } else setError(res.status === 404 ? "This chat no longer exists." : `Rename failed (${res.status}). Try again.`);
+    } catch {
+      setError("Rename failed: you seem to be offline.");
     } finally {
       setBusy(false);
     }
@@ -52,6 +55,11 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
         }}
       >
         <Input ref={inputRef} value={value} onChange={(e) => setValue(e.target.value)} aria-label="Chat title" maxLength={120} className="h-11 text-body" />
+        {error ? (
+          <p role="alert" className="text-small text-destructive">
+            {error}
+          </p>
+        ) : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
             Cancel
@@ -67,18 +75,26 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
 
 export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const newChat = useNewChat();
+  const store = useChatStore();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const confirm = async () => {
     if (busy) return;
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
-      if (res.ok) {
+      if (!res.ok && res.status !== 404) setError(`Delete failed (${res.status}). Try again.`);
+      if (res.ok || res.status === 404) {
         getSidebarStore().remove(chat.id);
+        // The hidden view (and a Back to its URL) shows an empty chat, not the deleted rows.
+        store.removeChat(chat.id);
         if (currentChatId === chat.id) markNavigationClose();
         onOpenChange(false);
         if (currentChatId === chat.id) newChat();
       }
+    } catch {
+      setError("Delete failed: you seem to be offline.");
     } finally {
       setBusy(false);
     }
@@ -90,6 +106,11 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       title="Delete chat?"
       description={`"${chat.title}" and its messages will be removed. This cannot be undone.`}
     >
+      {error ? (
+        <p role="alert" className="text-small text-destructive">
+          {error}
+        </p>
+      ) : null}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
           Cancel

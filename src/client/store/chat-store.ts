@@ -64,6 +64,8 @@ export interface ChatState {
   settings: ChatSettings;
   /** True once the user changed a setting here; a seed then leaves the model alone. */
   settingsTouched: boolean;
+  /** Messages before the window the server sent (#47); 0 once everything is loaded. */
+  older: number;
 }
 
 /** A message row as the page and `GET /api/chats/:id` deliver it. */
@@ -92,10 +94,10 @@ interface Internal {
 
 type Listener = () => void;
 
-export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false };
+export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false, older: 0 };
 
-function emptyChat(id: string): ChatState {
-  return { id, messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false };
+function emptyChat(id: string, settings: ChatSettings = DEFAULT_SETTINGS): ChatState {
+  return { id, messageIds: [], title: null, seeded: false, settings, settingsTouched: false, older: 0 };
 }
 
 const TERMINAL: ReadonlySet<MessageStatus> = new Set(["done", "stopped", "interrupted", "error", "refused"]);
@@ -148,6 +150,23 @@ export function textOf(blocks: readonly ClientBlock[]): string {
 
 /** D10: per-message subscribers; producer events batch per frame, dedupe by seq; control events always apply. */
 export class ChatStore {
+  /** Model and effort for chats that have no reply to inherit from (#22): the user's last choice, set by the shell. */
+  private defaults: ChatSettings = DEFAULT_SETTINGS;
+
+  setDefaultSettings(patch: Partial<Pick<ChatSettings, "model" | "thinking">>): void {
+    this.defaults = { ...this.defaults, ...patch };
+    // Empty chats the user has not touched follow the new default.
+    for (const [id, chat] of this.chats) {
+      if (chat.settingsTouched || chat.messageIds.length > 0) continue;
+      this.chats.set(id, { ...chat, settings: { ...chat.settings, ...patch } });
+      this.notifyChat(id);
+    }
+  }
+
+  private emptyChat(id: string): ChatState {
+    return emptyChat(id, this.defaults);
+  }
+
   private messages = new Map<string, MessageState>();
   private internals = new Map<string, Internal>();
   private chats = new Map<string, ChatState>();
@@ -230,12 +249,12 @@ export class ChatStore {
   createChat(chatId: string): void {
     const previous = this.chats.get(chatId);
     if (previous?.seeded) return;
-    this.chats.set(chatId, { ...(previous ?? emptyChat(chatId)), seeded: true });
+    this.chats.set(chatId, { ...(previous ?? this.emptyChat(chatId)), seeded: true });
     this.notifyChat(chatId);
   }
 
   setSettings(chatId: string, patch: Partial<ChatSettings>): void {
-    const chat = this.chats.get(chatId) ?? emptyChat(chatId);
+    const chat = this.chats.get(chatId) ?? this.emptyChat(chatId);
     this.chats.set(chatId, { ...chat, settings: { ...chat.settings, ...patch }, settingsTouched: true });
     this.notifyChat(chatId);
   }
@@ -246,7 +265,7 @@ export class ChatStore {
    * not listed yet stay, after the server's rows. deferNotify: the caller seeds during its own
    * render, so subscribers are notified in a microtask.
    */
-  seedChat(chatId: string, title: string | null, rows: readonly SeedRow[], options: { deferNotify?: boolean } = {}): void {
+  seedChat(chatId: string, title: string | null, rows: readonly SeedRow[], options: { deferNotify?: boolean; older?: number } = {}): void {
     const previous = this.chats.get(chatId);
     const ids: string[] = [];
     const touched: string[] = [];
@@ -273,7 +292,7 @@ export class ChatStore {
     }
     const nextTitle = title ?? previous?.title ?? null;
     // An existing chat opens on the model its last reply was asked of, unless the user already chose one here.
-    let settings = previous?.settings ?? DEFAULT_SETTINGS;
+    let settings = previous?.settings ?? this.defaults;
     if (!previous?.settingsTouched) {
       for (let i = rows.length - 1; i >= 0; i--) {
         const row = rows[i]!;
@@ -283,14 +302,16 @@ export class ChatStore {
         }
       }
     }
+    const older = options.older ?? 0;
     const same =
       previous !== undefined &&
       previous.seeded &&
       previous.title === nextTitle &&
       previous.settings === settings &&
+      previous.older === older &&
       previous.messageIds.length === ids.length &&
       previous.messageIds.every((id, i) => id === ids[i]);
-    if (!same) this.chats.set(chatId, { ...(previous ?? emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true, settings });
+    if (!same) this.chats.set(chatId, { ...(previous ?? this.emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true, settings, older });
     const notify = () => {
       for (const id of touched) this.notifyMessage(id);
       if (!same) this.notifyChat(chatId);
@@ -304,7 +325,7 @@ export class ChatStore {
     this.messages.set(message.id, { ...message, local: true });
     this.internals.set(message.id, { blockIndex: new Map() });
     if (message.generationId) this.byGeneration.set(message.generationId, message.id);
-    const chat = this.chats.get(message.chatId) ?? emptyChat(message.chatId);
+    const chat = this.chats.get(message.chatId) ?? this.emptyChat(message.chatId);
     if (!chat.messageIds.includes(message.id)) {
       this.chats.set(message.chatId, { ...chat, messageIds: [...chat.messageIds, message.id] });
       this.notifyChat(message.chatId);
@@ -331,8 +352,40 @@ export class ChatStore {
     this.notifyChat(m.chatId);
   }
 
+  /** Drops the rows of the given chats (#72: opened long ago); a view that still shows one re-seeds from its own rows. */
+  evictChats(ids: Iterable<string>): void {
+    for (const id of ids) {
+      const chat = this.chats.get(id);
+      if (!chat || !chat.seeded || chat.messageIds.length === 0) continue;
+      if (chat.messageIds.some((mid) => this.messages.get(mid)?.status === "streaming")) continue;
+      for (const mid of chat.messageIds) {
+        const m = this.messages.get(mid);
+        this.messages.delete(mid);
+        this.internals.delete(mid);
+        if (m?.generationId) this.byGeneration.delete(m.generationId);
+      }
+      this.chats.set(id, { ...chat, messageIds: [], seeded: false });
+      this.notifyChat(id);
+    }
+  }
+
+  /** The chat was deleted: drop its messages and leave a seeded, empty chat so the view shows the empty state. */
+  removeChat(chatId: string): void {
+    const chat = this.chats.get(chatId);
+    if (!chat) return;
+    for (const id of chat.messageIds) {
+      const m = this.messages.get(id);
+      this.messages.delete(id);
+      this.internals.delete(id);
+      if (m?.generationId) this.byGeneration.delete(m.generationId);
+      this.notifyMessage(id);
+    }
+    this.chats.set(chatId, { ...this.emptyChat(chatId), seeded: true });
+    this.notifyChat(chatId);
+  }
+
   setChatTitle(chatId: string, title: string | null): void {
-    const chat = this.chats.get(chatId) ?? emptyChat(chatId);
+    const chat = this.chats.get(chatId) ?? this.emptyChat(chatId);
     if (chat.title === title) return;
     this.chats.set(chatId, { ...chat, title });
     this.notifyChat(chatId);
@@ -356,7 +409,9 @@ export class ChatStore {
   markClientTiming(id: string, key: keyof NonNullable<Timings["client"]>, at: number = this.now()): void {
     const m = this.messages.get(id);
     if (!m) return;
-    const client = { ...(m.timings?.client ?? { sent: at }) };
+    // Only a reply sent from this client has client stamps; a saved or resumed reply gets none (#46).
+    if (!m.timings?.client) return;
+    const client = { ...m.timings.client };
     if (client[key] !== undefined) return;
     client[key] = at;
     this.updateMessage(id, { timings: { ...(m.timings ?? {}), client } });
@@ -495,14 +550,17 @@ export class ChatStore {
         d.servingModel = event.servingModel ?? d.servingModel;
         d.usage = event.usage;
         d.connection = "idle";
+        if (d.thinkingStartedAt !== null && d.thinkingEndedAt === null) d.thinkingEndedAt = this.now();
         break;
       case "interrupted":
         d.status = "interrupted";
         d.interruptedReason = event.reason;
         d.connection = "idle";
+        if (d.thinkingStartedAt !== null && d.thinkingEndedAt === null) d.thinkingEndedAt = this.now();
         break;
       case "error":
         d.status = "error";
+        if (d.thinkingStartedAt !== null && d.thinkingEndedAt === null) d.thinkingEndedAt = this.now();
         d.error = event.error;
         d.connection = "idle";
         break;

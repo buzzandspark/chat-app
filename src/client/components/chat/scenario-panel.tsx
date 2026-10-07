@@ -7,7 +7,7 @@ import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { IconButton } from "../ui/icon-button";
 import { useModals } from "../ui/modal-manager";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
-import { useChatContext } from "./chat-context";
+import { useChatActions } from "./chat-context";
 
 interface ScenarioDialogProps {
   open: boolean;
@@ -70,7 +70,7 @@ export function ScenarioDialog({ open, onOpenChange, onPick, onSeedLongChat }: S
 }
 
 export function ScenarioPanel({ autoOpen = false }: { autoOpen?: boolean }) {
-  const { send } = useChatContext();
+  const { send } = useChatActions();
   const { show } = useModals();
   const router = useRouter();
   const seedLongChat = async () => {

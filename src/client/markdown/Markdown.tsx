@@ -3,7 +3,7 @@
 import { memo, useMemo, type ReactNode } from "react";
 import { Lexer, type Token, type Tokens } from "marked";
 import { cn } from "@/lib/utils";
-import { parseFence, splitBlocks, type MarkdownBlock } from "./blocks";
+import { parseFence, splitBlocksIncremental, type MarkdownBlock } from "./blocks";
 import { CodeBlock } from "./CodeBlock";
 
 /** D9: finished blocks memoise by hash; marked's lexer tokens render to React text nodes, never innerHTML. */
@@ -17,7 +17,7 @@ interface MarkdownProps {
 }
 
 export function Markdown({ text, streaming, className, onBlockRender }: MarkdownProps) {
-  const blocks = useMemo(() => splitBlocks(text), [text]);
+  const blocks = useMemo(() => splitBlocksIncremental(text), [text]);
   return (
     <div className={cn("markdown min-w-0 max-w-full space-y-3 break-words text-body", className)}>
       {blocks.map((block) => (
@@ -44,13 +44,15 @@ function BlockImpl({ block, closed, onRender }: BlockProps) {
     const { lang, code } = parseFence(block.source, block.closed);
     return <CodeBlock code={code} lang={lang} closed={closed && block.closed} />;
   }
-  // A trailing table row without its closing pipe is still being typed; leave it out.
-  const source = block.kind === "table" && !closed ? dropIncompleteRow(block.source) : block.source;
+  // While a table streams its last row is still being typed: leave it out, so the rows that show are
+  // complete and the lexer sees the same shape on every chunk (#23).
+  const streamingTable = block.kind === "table" && !closed;
+  const source = streamingTable ? dropIncompleteRow(block.source) : block.source;
   const tokens = Lexer.lex(source, { gfm: true });
   if (block.kind === "table" && !tokens.some((t) => t.type === "table")) {
-    return <PartialTable source={source} />;
+    return <PartialTable source={source} streaming={streamingTable} />;
   }
-  return <>{renderTokens(tokens)}</>;
+  return <>{renderTokens(tokens, streamingTable)}</>;
 }
 
 const Block = memo(
@@ -64,17 +66,17 @@ const Block = memo(
 
 function dropIncompleteRow(source: string): string {
   const lines = source.split("\n");
-  const last = lines[lines.length - 1]!;
-  if (lines.length > 2 && !last.trimEnd().endsWith("|")) return lines.slice(0, -1).join("\n");
+  // The header and delimiter stay; any later last line may still grow, whether or not it ends in a pipe.
+  if (lines.length > 2) return lines.slice(0, -1).join("\n");
   return source;
 }
 
-function PartialTable({ source }: { source: string }) {
+function PartialTable({ source, streaming }: { source: string; streaming: boolean }) {
   const lines = source.split("\n").filter((l) => l.trim() !== "");
   const header = lines[0] ? splitRow(lines[0]) : [];
   const rows = lines.slice(2).map(splitRow);
   return (
-    <TableShell>
+    <TableShell streaming={streaming}>
       <thead>
         <tr>
           {header.map((cell, i) => (
@@ -109,10 +111,11 @@ function splitRow(line: string): string[] {
 const TH_CLASS = "px-3 py-2 text-left text-small font-semibold";
 const TD_CLASS = "px-3 py-2 align-top text-small";
 
-function TableShell({ children }: { children: ReactNode }) {
+/** Fixed column widths while rows stream in, so columns do not re-flow on every chunk; auto once closed. */
+function TableShell({ children, streaming = false }: { children: ReactNode; streaming?: boolean }) {
   return (
     <div className="max-w-full overflow-x-auto rounded-lg border border-border">
-      <table className="w-max min-w-full border-collapse">{children}</table>
+      <table className={streaming ? "w-full table-fixed border-collapse" : "w-max min-w-full border-collapse"}>{children}</table>
     </div>
   );
 }
@@ -123,8 +126,8 @@ function alignClass(align: "center" | "left" | "right" | null): string | undefin
   return undefined;
 }
 
-export function renderTokens(tokens: Token[]): ReactNode[] {
-  return tokens.map((token, i) => renderToken(token, i));
+export function renderTokens(tokens: Token[], streamingTable = false): ReactNode[] {
+  return tokens.map((token, i) => renderToken(token, i, streamingTable));
 }
 
 function children(token: { tokens?: Token[]; text?: string }): ReactNode {
@@ -132,7 +135,7 @@ function children(token: { tokens?: Token[]; text?: string }): ReactNode {
   return token.text ?? "";
 }
 
-function renderToken(token: Token, key: number): ReactNode {
+function renderToken(token: Token, key: number, streamingTable = false): ReactNode {
   switch (token.type) {
     case "space":
       return null;
@@ -267,7 +270,7 @@ function renderToken(token: Token, key: number): ReactNode {
     case "table": {
       const t = token as Tokens.Table;
       return (
-        <TableShell key={key}>
+        <TableShell key={key} streaming={streamingTable}>
           <thead>
             <tr>
               {t.header.map((cell, ci) => (

@@ -12,10 +12,15 @@ const inter = Inter({
   display: "optional",
 });
 
+// Code is rare on a first paint, so the mono face is not preloaded; next/font's automatic fallback is
+// Arial-based, which is not monospace, so the real monospace stack stands in instead (#51).
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
   display: "optional",
+  preload: false,
+  adjustFontFallback: false,
+  fallback: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
 });
 
 export const metadata: Metadata = {

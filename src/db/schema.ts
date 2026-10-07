@@ -148,6 +148,8 @@ export const messages = sqliteTable(
     timings: text("timings", { mode: "json" }).$type<Timings>(),
     /** The last producer seq folded into `content` by the write that saved it (D2 resume); null for user messages and old rows. */
     lastSeq: integer("last_seq"),
+    /** The text blocks of `content`, kept by a trigger for the FTS5 index (#60). */
+    searchText: text("search_text"),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at").notNull().$defaultFn(now),
   },
@@ -195,9 +197,8 @@ export const usageEvents = sqliteTable(
   "usage_events",
   {
     id: text("id").primaryKey(),
-    generationId: text("generation_id")
-      .notNull()
-      .references(() => generations.id, { onDelete: "cascade" }),
+    // Spend outlives the reply it paid for: a replaced or truncated generation leaves its usage rows behind (#73).
+    generationId: text("generation_id").references(() => generations.id, { onDelete: "set null" }),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

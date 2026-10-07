@@ -14,8 +14,9 @@ export function useMediaQuery(query: string): boolean {
   );
 }
 
+/** Matches the `dock` CSS variant: wide and tall enough to dock the sidebar (a landscape phone is not, #31). */
 export function useIsDesktop(): boolean {
-  return useMediaQuery("(min-width: 768px)");
+  return useMediaQuery("(min-width: 768px) and (min-height: 480px)");
 }
 
 export function useHasHover(): boolean {

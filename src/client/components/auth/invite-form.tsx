@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authClient } from "@auth/client";
+import { signIn } from "./login-form";
 import { newChatHref } from "@client/hooks/use-new-chat";
 
 /** D23: set a password through the invite, then sign in with it. */
@@ -39,10 +39,10 @@ export function InviteForm({ token, email }: { token: string; email: string }) {
       setBusy(false);
       return;
     }
-    const result = await authClient.signIn.email({ email, password });
+    const result = await signIn(email, password);
     setBusy(false);
-    if (result.error) {
-      setError(result.error.message ?? "Sign-in failed");
+    if (!result.ok) {
+      setError(result.message);
       return;
     }
     router.push(newChatHref());

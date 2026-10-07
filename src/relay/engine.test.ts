@@ -365,4 +365,37 @@ describe("Engine", () => {
     await engine.stopAndWait(inp.generationId);
     expect(() => engine.resume(inp.generationId, "u2")).toThrow(ForbiddenError);
   });
+
+  it("replaceFromMessageId drops the replaced turns in the same transaction and keeps their usage rows (#21, #73)", async () => {
+    const first = input();
+    engine.start(first);
+    await collectUntilTerminal(store, first.generationId);
+    const usageBefore = db.select().from(usageEvents).where(eq(usageEvents.userId, USER)).all();
+    expect(usageBefore.length).toBeGreaterThan(0);
+    // Regenerate: same user message, a new reply, replacing the old one.
+    const again = input({ chatId: first.chatId, userMessageId: first.userMessageId, text: undefined, replaceFromMessageId: first.assistantMessageId });
+    expect(engine.start(again)).toEqual({ created: true });
+    await collectUntilTerminal(store, again.generationId);
+    const rows = db.select({ id: messages.id, role: messages.role }).from(messages).where(eq(messages.chatId, first.chatId)).all();
+    expect(rows.map((r) => r.id)).toEqual([first.userMessageId, again.assistantMessageId]);
+    expect(db.select().from(generations).where(eq(generations.id, first.generationId)).get()).toBeUndefined();
+    const usageAfter = db.select().from(usageEvents).where(eq(usageEvents.userId, USER)).all();
+    expect(usageAfter.length).toBe(usageBefore.length * 2);
+    expect(usageAfter.filter((u) => u.generationId === null).length).toBe(usageBefore.length);
+  });
+
+  it("a replaced edit removes the old user message too and a failed start removes nothing", async () => {
+    const first = input();
+    engine.start(first);
+    await collectUntilTerminal(store, first.generationId);
+    // The engine is draining: the start throws before its transaction, so the old turns must survive.
+    const draining = makeEngine(0, { isDraining: () => true });
+    expect(() => draining.start(input({ chatId: first.chatId, text: "edited", replaceFromMessageId: first.userMessageId }))).toThrow();
+    expect(db.select({ id: messages.id }).from(messages).where(eq(messages.chatId, first.chatId)).all()).toHaveLength(2);
+    const edited = input({ chatId: first.chatId, text: "edited", replaceFromMessageId: first.userMessageId });
+    expect(engine.start(edited)).toEqual({ created: true });
+    await collectUntilTerminal(store, edited.generationId);
+    const rows = db.select({ id: messages.id, content: messages.content }).from(messages).where(eq(messages.chatId, first.chatId)).all();
+    expect(rows.map((r) => r.id)).toEqual([edited.userMessageId, edited.assistantMessageId]);
+  });
 });

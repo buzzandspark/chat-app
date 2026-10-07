@@ -157,7 +157,14 @@ export function AdminConsole({ initialUsers, selfId }: { initialUsers: AdminUser
                   onClick={() => {
                     const next = window.prompt("Cost cap in USD (empty for no cap)", u.costCapUsd === null ? "" : String(u.costCapUsd));
                     if (next === null) return;
-                    void patch(u.id, { costCapUsd: next.trim() === "" ? null : Number(next) }, "Cap");
+                    const trimmed = next.trim();
+                    const cap = trimmed === "" ? null : Number(trimmed);
+                    // A typo must not become "no cap": only an empty answer removes the cap (#64).
+                    if (cap !== null && (!Number.isFinite(cap) || cap < 0)) {
+                      setNotice(`"${trimmed}" is not a cap. Enter a number of dollars, or leave it empty for no cap.`);
+                      return;
+                    }
+                    void patch(u.id, { costCapUsd: cap }, "Cap");
                   }}
                 >
                   Edit cap

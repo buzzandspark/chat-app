@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHAT_URL, ensureSidebarOpen, lastAssistant, openNewChat, sendText, waitForChatUrl, waitForComposer } from "./helpers";
+import { CHAT_URL, ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, waitForChatUrl, waitForComposer } from "./helpers";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "admin-password-123";
@@ -35,8 +35,23 @@ test.describe("sessions and errors", () => {
     await expect(page.getByText("Something went wrong")).toHaveCount(0);
     await page.unroute("**/_next/static/chunks/*.js");
     // Once the network is back, the next open loads the chunk instead of replaying the cached failure.
+    // (Opening search put the phone sidebar away, so bring it back before pressing its button again.)
+    await ensureSidebarOpen(page);
     await page.getByRole("button", { name: "Search chats" }).first().click();
     await expect(page.getByRole("textbox", { name: /search/i })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("an expired or revoked session is sent to sign in and comes back to the same chat", async ({ page, context }) => {
+    await context.addCookies([{ name: "better-auth.session_token", value: "stale-token-that-matches-no-session", domain: "127.0.0.1", path: "/" }]);
+    const path = newChatPath();
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/login\?next=/);
+    expect(new URL(page.url()).searchParams.get("next")).toBe(path);
+    await page.getByLabel("Email").fill(ADMIN_EMAIL);
+    await page.getByLabel("Password").fill(ADMIN_PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await waitForComposer(page);
   });
 
   test("sign out leaves the session behind and lands on the login page", async ({ page, context }) => {

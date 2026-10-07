@@ -1,22 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 
-const codeToTokensWithThemes = vi.fn((code: string) =>
+const codeToTokensBase = vi.fn((code: string) =>
   code.split("\n").map((line) =>
     line.split(" ").flatMap((word, i, arr) => {
       const content = i < arr.length - 1 ? `${word} ` : word;
-      return [{ content, offset: 0, variants: { light: { color: "#111" }, dark: { color: "#eee" } } }];
+      return [{ content, offset: 0, color: "var(--shiki-token-keyword)" }];
     }),
   ),
 );
 const loadLanguage = vi.fn(async () => undefined);
 
 vi.mock("shiki/core", () => ({
-  createHighlighterCore: vi.fn(async () => ({ codeToTokensWithThemes, loadLanguage })),
+  createHighlighterCore: vi.fn(async () => ({ codeToTokensBase, loadLanguage })),
+}));
+vi.mock("@shikijs/core", () => ({
+  createCssVariablesTheme: vi.fn(() => ({ name: "css-variables" })),
 }));
 vi.mock("shiki/engine/javascript", () => ({ createJavaScriptRegexEngine: vi.fn(() => ({})) }));
-vi.mock("shiki/themes/github-light.mjs", () => ({ default: { name: "github-light" } }));
-vi.mock("shiki/themes/github-dark.mjs", () => ({ default: { name: "github-dark" } }));
 vi.mock("shiki/langs/typescript.mjs", () => ({ default: [{ name: "typescript" }] }));
 
 import { CodeBlock } from "./CodeBlock";
@@ -63,13 +64,12 @@ describe("CodeBlock", () => {
     const plainText = container.querySelector("pre")!.textContent;
     expect(plainText).toBe(code);
     await waitFor(() => expect(container.querySelector("[data-shiki]")).not.toBeNull());
-    expect(codeToTokensWithThemes).toHaveBeenCalledWith(code, expect.objectContaining({ lang: "typescript" }));
+    expect(codeToTokensBase).toHaveBeenCalledWith(code, expect.objectContaining({ lang: "typescript" }));
     expect(loadLanguage).toHaveBeenCalled();
     expect(container.querySelector("pre")!.textContent).toBe(plainText);
     expect(container.querySelector(".markdown-code")).toHaveAttribute("data-highlighted", "true");
     const span = container.querySelector<HTMLElement>("[data-shiki]")!;
-    expect(span.style.getPropertyValue("--shiki-light")).toBe("#111");
-    expect(span.style.getPropertyValue("--shiki-dark")).toBe("#eee");
+    expect(span.style.color).toBe("var(--shiki-token-keyword)");
   });
 
   it("stays plain for an unknown language", async () => {
@@ -77,6 +77,6 @@ describe("CodeBlock", () => {
     const { container } = render(<CodeBlock code={"x"} lang="brainfuck" closed />);
     await new Promise((r) => setTimeout(r, 120));
     expect(container.querySelector("[data-shiki]")).toBeNull();
-    expect(codeToTokensWithThemes).not.toHaveBeenCalled();
+    expect(codeToTokensBase).not.toHaveBeenCalled();
   });
 });

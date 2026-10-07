@@ -8,7 +8,6 @@ const baseURL = `http://127.0.0.1:${port}`;
 // since throttling goes through CDP; iPhone 14 (WebKit) covers layout, desktop is the expansion.
 export default defineConfig({
   testDir: "./e2e",
-  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -30,9 +29,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm start:standalone",
+    // The database is reset by the same command that starts the server (see e2e/reset-db.mjs), and a
+    // server another session left on the port is never reused: it would run other code against another database.
+    command: "node e2e/reset-db.mjs && pnpm start:standalone",
     url: `${baseURL}/api/health`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
     env: {
       PORT: String(port),

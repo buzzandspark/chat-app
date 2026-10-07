@@ -12,9 +12,12 @@ interface ThinkingBlockProps {
   endedAt: number | null;
   /** Auto-collapse on the first text delta only while auto-follow is engaged (D12). */
   collapseSignal: boolean;
+  onUserToggle?: (open: boolean) => void;
 }
 
 function label(startedAt: number | null, endedAt: number | null, streaming: boolean, now: number): string {
+  // A saved reply has no stamps (they are this client's clock): past tense, no number (#66).
+  if (!streaming && (startedAt === null || endedAt === null)) return "Thought";
   if (startedAt === null || (endedAt === null && now === 0)) return "Thinking";
   const ms = (endedAt ?? now) - startedAt;
   const s = Math.max(1, Math.round(ms / 1000));
@@ -22,7 +25,7 @@ function label(startedAt: number | null, endedAt: number | null, streaming: bool
   return `Thought for ${s}s`;
 }
 
-export function ThinkingBlock({ text, redacted, streaming, startedAt, endedAt, collapseSignal }: ThinkingBlockProps) {
+export function ThinkingBlock({ text, redacted, streaming, startedAt, endedAt, collapseSignal, onUserToggle }: ThinkingBlockProps) {
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   // Latch: once collapsed while following, stay collapsed even if the user scrolls up.
   const [latched, setLatched] = useState(false);
@@ -35,7 +38,10 @@ export function ThinkingBlock({ text, redacted, streaming, startedAt, endedAt, c
     <div className="my-1">
       <button
         type="button"
-        onClick={() => setUserOpen(!open)}
+        onClick={() => {
+          setUserOpen(!open);
+          onUserToggle?.(!open);
+        }}
         aria-expanded={open}
         className="flex min-h-11 items-center gap-1 text-small text-muted-foreground"
       >

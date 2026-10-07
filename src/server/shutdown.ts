@@ -2,24 +2,28 @@ import "server-only";
 import { openStreams, waitForStreamsToClose } from "./streams";
 
 type Drain = () => Promise<void> | void;
+/** "drain" work runs first (LIFO); "close" work runs after connected clients have had their last bytes. */
+type Phase = "drain" | "close";
 
 interface ShutdownState {
   draining: boolean;
   drains: Drain[];
+  closers: Drain[];
   installed: boolean;
 }
 
 const g = globalThis as unknown as { __cadenceShutdown?: ShutdownState };
-const state: ShutdownState = (g.__cadenceShutdown ??= { draining: false, drains: [], installed: false });
+const state: ShutdownState = (g.__cadenceShutdown ??= { draining: false, drains: [], closers: [], installed: false });
+state.closers ??= [];
 
 /** True once a termination signal has arrived; new generations are refused. */
 export function isDraining(): boolean {
   return state.draining;
 }
 
-/** Register work to run before exit; drains run last-registered first. */
-export function onShutdown(drain: Drain): void {
-  state.drains.push(drain);
+/** Register work to run before exit; drains run last-registered first, closers after the streams have flushed (#70). */
+export function onShutdown(drain: Drain, phase: Phase = "drain"): void {
+  (phase === "close" ? state.closers : state.drains).push(drain);
 }
 
 export function installSignalHandlers(gracePeriodMs = 25_000): void {
@@ -46,13 +50,21 @@ export function installSignalHandlers(gracePeriodMs = 25_000): void {
           console.error("[shutdown] drain failed", err);
         }
       }
-      // Let connected clients receive their terminal events before the sockets die.
+      // Let connected clients receive their terminal events before the sockets die; the database
+      // closes only after that, so a late persist never finds it gone.
       const pending = openStreams();
       if (pending > 0) {
         console.log(`[shutdown] waiting for ${pending} stream(s) to flush`);
         await waitForStreamsToClose(2000);
       }
       await new Promise((r) => setTimeout(r, 100));
+      for (const closer of [...state.closers].reverse()) {
+        try {
+          await closer();
+        } catch (err) {
+          console.error("[shutdown] close failed", err);
+        }
+      }
       console.log(`[shutdown] drained in ${Date.now() - started}ms`);
       process.exit(code);
     })();

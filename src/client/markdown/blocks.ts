@@ -11,6 +11,8 @@ export interface MarkdownBlock {
   /** False for an unclosed fence and always for the final block, which may still grow. */
   closed: boolean;
   kind: BlockKind;
+  /** Character offset of the block's first line in the whole text (for incremental re-splitting). */
+  start: number;
 }
 
 const BLANK = /^[ \t]*$/;
@@ -33,46 +35,67 @@ export function hashString(s: string): string {
 interface Open {
   char: string;
   len: number;
+  /** The fence is indented inside a list item: it belongs to the list block, which marked renders whole. */
+  inList: boolean;
 }
 
-export function splitBlocks(markdown: string): MarkdownBlock[] {
+/** Splits from `base` (a character offset at a block boundary); `startIndex` numbers the blocks that follow. */
+function splitFrom(markdown: string, base: number, startIndex: number): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
   const lines = markdown.split("\n");
   let cur: string[] = [];
+  let curStart = 0;
   let kind: BlockKind = "other";
   let fence: Open | null = null;
   let pendingBlanks = 0;
+  let offset = 0;
 
   const flush = (closed: boolean) => {
     if (cur.length === 0) return;
     const source = cur.join("\n");
-    const index = blocks.length;
-    blocks.push({ key: `b${index}-${kind}`, hash: hashString(source), source, closed, kind });
+    const index = startIndex + blocks.length;
+    blocks.push({ key: `b${index}-${kind}`, hash: hashString(source), source, closed, kind, start: base + curStart });
     cur = [];
     kind = "other";
     pendingBlanks = 0;
   };
+  const push = (line: string, at: number) => {
+    if (cur.length === 0) curStart = at;
+    cur.push(line);
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
+    const lineStart = offset;
+    offset += line.length + 1;
 
     if (fence) {
       cur.push(line);
       const trimmed = line.trimEnd();
-      const m = /^ {0,3}(`+|~+)$/.exec(trimmed);
+      // A fence inside a list item closes at the item's indent; a top-level one within 3 spaces.
+      const m = (fence.inList ? /^\s*(`+|~+)$/ : /^ {0,3}(`+|~+)$/).exec(trimmed);
       if (m && m[1]![0] === fence.char && m[1]!.length >= fence.len) {
+        const inList = fence.inList;
         fence = null;
-        flush(true);
+        if (!inList) flush(true); // in a list the item (and the list) keeps collecting
       }
       continue;
     }
 
     const open = FENCE_OPEN.exec(line);
     if (open && !(open[2]![0] === "`" && open[3]!.includes("`"))) {
-      flush(true);
-      cur.push(line);
-      kind = "fence";
-      fence = { char: open[2]![0]!, len: open[2]!.length };
+      // An indented fence that follows a list marker is part of that list item (#24): keep it in the
+      // list block so marked nests it and Copy gets the code without the indent.
+      const inList = cur.length > 0 && kind === "other" && LIST_MARKER.test(cur[0]!) && open[1]!.length > 0;
+      if (!inList) {
+        flush(true);
+        kind = "fence";
+      } else {
+        for (let b = 0; b < pendingBlanks; b++) cur.push("");
+        pendingBlanks = 0;
+      }
+      push(line, lineStart);
+      fence = { char: open[2]![0]!, len: open[2]!.length, inList };
       continue;
     }
 
@@ -99,12 +122,43 @@ export function splitBlocks(markdown: string): MarkdownBlock[] {
     if (cur.length === 1 && kind === "other" && line.includes("-") && TABLE_DELIM.test(line) && cur[0]!.includes("|")) {
       kind = "table";
     }
-    cur.push(line);
+    push(line, lineStart);
   }
 
   // The final block can still grow; an open fence is unclosed by definition.
   flush(false);
   return blocks;
+}
+
+export function splitBlocks(markdown: string): MarkdownBlock[] {
+  return splitFrom(markdown, 0, 0);
+}
+
+// #25: while a reply streams, every frame appends to the same text. The blocks before the last one
+// are final (a later line can only extend the last block), so only the tail is re-split. A small
+// cache of recent results is kept here rather than in React state, so the renderer stays pure.
+const RECENT = 8;
+const recent: Array<{ text: string; blocks: MarkdownBlock[] }> = [];
+
+export function splitBlocksIncremental(markdown: string): MarkdownBlock[] {
+  let result: MarkdownBlock[] | null = null;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const entry = recent[i]!;
+    if (entry.text === markdown) {
+      result = entry.blocks;
+      break;
+    }
+    if (entry.blocks.length > 1 && markdown.length > entry.text.length && markdown.startsWith(entry.text)) {
+      const stable = entry.blocks.slice(0, -1);
+      const tailStart = entry.blocks[entry.blocks.length - 1]!.start;
+      result = stable.concat(splitFrom(markdown.slice(tailStart), tailStart, stable.length));
+      break;
+    }
+  }
+  if (!result) result = splitFrom(markdown, 0, 0);
+  recent.push({ text: markdown, blocks: result });
+  if (recent.length > RECENT) recent.shift();
+  return result;
 }
 
 export function parseFence(source: string, closed: boolean): { lang: string | null; code: string } {

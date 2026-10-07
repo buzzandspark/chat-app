@@ -1,7 +1,7 @@
 import { isTerminal, type RelayEvent } from "@relay/events";
 import { createSseParser, parseRelayEvent } from "@relay/sse";
 import { uuidv7 } from "@shared/id";
-import type { ModelId, ThinkingOptions } from "@shared/types";
+import { MAX_MESSAGE_CHARS, type ModelId, type ThinkingOptions } from "@shared/types";
 import { createMessageState, type ChatStore } from "../store/chat-store";
 
 export interface SendInput {
@@ -10,6 +10,13 @@ export interface SendInput {
   model: ModelId;
   thinking: ThinkingOptions;
   scenario?: string;
+  /** D10: an edit replaces this message and everything after it, in the same request. */
+  replaceFrom?: string;
+}
+
+export interface SendHooks {
+  /** The server accepted the generation (the POST answered 2xx, or a resume found it): safe to list the chat. */
+  onAccepted?: () => void;
 }
 
 export interface RetryInput {
@@ -20,6 +27,8 @@ export interface RetryInput {
   model: ModelId;
   thinking: ThinkingOptions;
   scenario?: string;
+  /** Regenerate replaces the old reply (and anything after it) in the same request. */
+  replaceFrom?: string;
 }
 
 interface PostBody {
@@ -31,6 +40,7 @@ interface PostBody {
   model: ModelId;
   thinking: ThinkingOptions;
   scenario?: string;
+  replaceFromMessageId?: string;
 }
 
 export interface BackoffOptions {
@@ -43,10 +53,19 @@ const DEFAULT_BACKOFF: BackoffOptions = { baseMs: 500, maxMs: 8000, maxAttempts:
 /** D16 watchdog: the server writes a keepalive every 15 s, so longer silence is a half-open socket. */
 const DEFAULT_IDLE_MS = 25_000;
 
+interface Inflight {
+  controller: AbortController;
+  /** Preempts whatever the loop is waiting on (a stale read, a backoff sleep) so it retries now. */
+  nudge: (() => void) | null;
+}
+
 /** D2/D16: failures after the POST go through the resume path with backoff; ids are chosen here. */
 export class GenerationClient {
-  private inflight = new Map<string, AbortController>();
+  private inflight = new Map<string, Inflight>();
   private bodies = new Map<string, PostBody>();
+  /** Generations the server has acknowledged: a later 404 means the chat is gone, not that the POST was lost. */
+  private acked = new Set<string>();
+  private accepted = new Map<string, () => void>();
   private backoff: BackoffOptions;
   private idleMs: number;
   private fetchImpl: typeof fetch;
@@ -75,7 +94,7 @@ export class GenerationClient {
   }
 
   /** Optimistic send: both messages appear immediately; the stream fills the second. */
-  send(input: SendInput): { generationId: string; userMessageId: string; assistantMessageId: string } {
+  send(input: SendInput, hooks: SendHooks = {}): { generationId: string; userMessageId: string; assistantMessageId: string } {
     const generationId = uuidv7();
     const userMessageId = uuidv7();
     const assistantMessageId = uuidv7();
@@ -111,14 +130,16 @@ export class GenerationClient {
       model: input.model,
       thinking: input.thinking,
       scenario: input.scenario,
+      replaceFromMessageId: input.replaceFrom,
     };
     this.bodies.set(generationId, body);
+    if (hooks.onAccepted) this.accepted.set(generationId, hooks.onAccepted);
     void this.post(body);
     return { generationId, userMessageId, assistantMessageId };
   }
 
   /** Regenerate after an interrupted or stopped reply: same user message, new assistant message. */
-  retry(input: RetryInput): { generationId: string; assistantMessageId: string } {
+  retry(input: RetryInput, hooks: SendHooks = {}): { generationId: string; assistantMessageId: string } {
     const generationId = uuidv7();
     const assistantMessageId = uuidv7();
     const now = Date.now();
@@ -144,8 +165,10 @@ export class GenerationClient {
       model: input.model,
       thinking: input.thinking,
       scenario: input.scenario,
+      replaceFromMessageId: input.replaceFrom,
     };
     this.bodies.set(generationId, body);
+    if (hooks.onAccepted) this.accepted.set(generationId, hooks.onAccepted);
     void this.post(body);
     return { generationId, assistantMessageId };
   }
@@ -160,20 +183,45 @@ export class GenerationClient {
   /** Resume a generation this client did not start (e.g. after a reload mid-stream). */
   attach(generationId: string, messageId: string): void {
     if (this.inflight.has(generationId)) return;
+    // The row the caller saw may be stale: a reply that already finished here has nothing to resume.
+    const current = this.store.getMessage(messageId);
+    if (current && current.status !== "streaming") return;
     this.store.updateMessage(messageId, { generationId, connection: "reconnecting" });
     void this.resume(generationId, messageId);
   }
 
-  /** D16: `online` and `visibilitychange` trigger an immediate attempt for every pending message. */
+  /**
+   * D16: `online` and `visibilitychange` trigger an immediate attempt for every pending message. A
+   * loop already in flight is nudged: a read that went quiet is cancelled and a backoff sleep is cut
+   * short, so recovery does not wait for the 25 s watchdog or the next scheduled attempt.
+   */
   resumeAll(): void {
     for (const m of this.store.pendingMessages()) {
-      if (m.generationId && !this.inflight.has(m.generationId)) void this.resume(m.generationId, m.id);
+      if (!m.generationId) continue;
+      const entry = this.inflight.get(m.generationId);
+      if (entry) entry.nudge?.();
+      else void this.resume(m.generationId, m.id);
     }
+  }
+
+  private accept(generationId: string): void {
+    this.acked.add(generationId);
+    const cb = this.accepted.get(generationId);
+    if (cb) {
+      this.accepted.delete(generationId);
+      cb();
+    }
+  }
+
+  private isSettled(messageId: string): boolean {
+    const m = this.store.getMessage(messageId);
+    return m !== undefined && m.status !== "streaming";
   }
 
   private async post(body: PostBody): Promise<void> {
     const controller = new AbortController();
-    this.inflight.set(body.generationId, controller);
+    const entry: Inflight = { controller, nudge: null };
+    this.inflight.set(body.generationId, entry);
     try {
       let res: Response;
       try {
@@ -194,31 +242,41 @@ export class GenerationClient {
         this.failFromResponse(body.assistantMessageId, res, await safeJson(res));
         return;
       }
-      const finished = await this.consume(res, body.generationId, body.assistantMessageId, controller.signal);
+      this.accept(body.generationId);
+      const finished = await this.consume(res, entry, body.generationId, body.assistantMessageId);
       if (!finished && !controller.signal.aborted) {
         // The stream was cut before a terminal event: catch up from the last seq.
         this.inflight.delete(body.generationId);
         await this.resume(body.generationId, body.assistantMessageId);
       }
     } finally {
-      if (this.inflight.get(body.generationId) === controller) this.inflight.delete(body.generationId);
+      if (this.inflight.get(body.generationId) === entry) this.inflight.delete(body.generationId);
     }
   }
 
   private async resume(generationId: string, messageId: string): Promise<void> {
     if (this.inflight.has(generationId)) return;
     const controller = new AbortController();
-    this.inflight.set(generationId, controller);
+    const entry: Inflight = { controller, nudge: null };
+    this.inflight.set(generationId, entry);
     try {
+      let waitMs = 0;
       for (let attempt = 0; attempt < this.backoff.maxAttempts; attempt++) {
+        if (this.isSettled(messageId)) return;
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
           this.store.setConnection(messageId, "offline", attempt);
           return;
         }
         this.store.setConnection(messageId, "reconnecting", attempt);
-        if (attempt > 0) {
-          const delay = Math.min(this.backoff.maxMs, this.backoff.baseMs * 2 ** (attempt - 1));
-          await this.sleepImpl(delay * (0.7 + Math.random() * 0.6), controller.signal);
+        if (attempt > 0 || waitMs > 0) {
+          const backoff = attempt > 0 ? Math.min(this.backoff.maxMs, this.backoff.baseMs * 2 ** (attempt - 1)) * (0.7 + Math.random() * 0.6) : 0;
+          // A nudge (online, visible) cuts the sleep short; aborting the loop ends it.
+          const wake = new AbortController();
+          entry.nudge = () => wake.abort();
+          await this.sleepImpl(Math.max(backoff, waitMs), anySignal(controller.signal, wake.signal));
+          entry.nudge = null;
+          waitMs = 0;
+          if (controller.signal.aborted) return;
         }
         this.store.flush(); // the cursor must include everything already received
         const after = this.store.getMessage(messageId)?.lastSeq ?? -1;
@@ -230,6 +288,15 @@ export class GenerationClient {
           continue;
         }
         if (res.status === 404) {
+          if (this.acked.has(generationId)) {
+            // The server knew this generation and no longer does: its chat was deleted.
+            this.store.updateMessage(messageId, {
+              status: "error",
+              connection: "idle",
+              error: { kind: "gone", message: "This chat was deleted", retryable: false, status: 404 },
+            });
+            return;
+          }
           // The server never received the POST: re-POST with the same ids (D2).
           const body = this.bodies.get(generationId);
           if (!body) {
@@ -245,25 +312,38 @@ export class GenerationClient {
           return;
         }
         if (!res.ok) {
+          // A server that is restarting, overloaded or rate limiting still has the reply: keep trying.
+          // Only a definite answer about this client or this generation ends the loop.
+          if (res.status >= 500 || res.status === 429 || res.status === 408) {
+            const retryAfter = Number(res.headers.get("retry-after"));
+            waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 0;
+            continue;
+          }
           this.failFromResponse(messageId, res, await safeJson(res));
           return;
         }
-        const finished = await this.consume(res, generationId, messageId, controller.signal);
+        this.accept(generationId);
+        const finished = await this.consume(res, entry, generationId, messageId);
         if (finished || controller.signal.aborted) return;
+        // Nothing left to fetch for a reply that has already ended here.
+        if (this.isSettled(messageId)) return;
         // Stream ended without a terminal event: try again, counting progress as a fresh start.
         if ((this.store.getMessage(messageId)?.lastSeq ?? -1) > after) attempt = -1;
       }
       this.store.setConnection(messageId, "offline", this.backoff.maxAttempts);
     } finally {
-      if (this.inflight.get(generationId) === controller) this.inflight.delete(generationId);
+      if (this.inflight.get(generationId) === entry) this.inflight.delete(generationId);
     }
   }
 
   /** Resolves true when a terminal event arrived. */
-  private async consume(res: Response, generationId: string, messageId: string, signal: AbortSignal): Promise<boolean> {
+  private async consume(res: Response, entry: Inflight, generationId: string, messageId: string): Promise<boolean> {
+    const { signal } = entry.controller;
     this.store.setConnection(messageId, "streaming", 0);
     if (!res.body) return false;
     const reader = res.body.getReader();
+    // A nudge (online, visible) treats the current read as stale: cancel it and resume from the last seq.
+    entry.nudge = () => void reader.cancel().catch(() => {});
     const decoder = new TextDecoder();
     let terminal = false;
     let firstByte = false;
@@ -277,7 +357,7 @@ export class GenerationClient {
     };
     armIdle();
     const parser = createSseParser((msg) => {
-      const event = parseRelayEvent(msg.data);
+      const event = parseRelayEvent(msg.data, generationId);
       if (!event) return;
       this.dispatch(event, messageId);
       if (isTerminal(event) || event.type === "snapshot") terminal = true;
@@ -300,6 +380,7 @@ export class GenerationClient {
       if (signal.aborted) return terminal;
       // connection dropped mid-stream
     } finally {
+      entry.nudge = null;
       if (idleTimer) clearTimeout(idleTimer);
       try {
         reader.releaseLock();
@@ -350,9 +431,9 @@ export class GenerationClient {
             ? "session"
             : res.status === 403
               ? "forbidden"
-            : res.status === 503
-              ? "api_error"
-              : "bad_request";
+              : res.status === 503
+                ? "unavailable"
+                : "bad_request";
     const message =
       kind === "quota_exceeded"
         ? "You have used your whole budget on this instance"
@@ -362,15 +443,34 @@ export class GenerationClient {
             ? "Your session has ended"
             : kind === "forbidden"
               ? "This chat belongs to another account"
-          : res.status === 503
-            ? "The server is restarting"
-            : `Request failed (${res.status})`;
+              : kind === "unavailable"
+                ? "The server is restarting"
+                : tooLong(body)
+                  ? `This message is too long (the limit is ${MAX_MESSAGE_CHARS.toLocaleString()} characters)`
+                  : `Request failed (${res.status})`;
     this.store.updateMessage(messageId, {
       status: "error",
       connection: "idle",
-      error: { kind, message, retryable: kind === "rate_limited" || res.status === 503, retryAfterMs, status: res.status },
+      error: { kind, message, retryable: kind === "rate_limited" || kind === "unavailable", retryAfterMs: retryAfterMs ?? (kind === "unavailable" ? 5000 : undefined), status: res.status },
     });
   }
+}
+
+/** The route's 400 for a message over the limit (zod's `too_big` on `text`). */
+function tooLong(body: Record<string, unknown>): boolean {
+  const issues = body.issues;
+  return Array.isArray(issues) && issues.some((i) => (i as { code?: string; path?: unknown[] }).code === "too_big" && (i as { path?: unknown[] }).path?.[0] === "text");
+}
+
+function anySignal(...signals: AbortSignal[]): AbortSignal {
+  const abortSignalAny = (AbortSignal as unknown as { any?: (s: AbortSignal[]) => AbortSignal }).any;
+  if (abortSignalAny) return abortSignalAny.call(AbortSignal, signals);
+  const controller = new AbortController();
+  for (const s of signals) {
+    if (s.aborted) controller.abort();
+    else s.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+  return controller.signal;
 }
 
 async function safeJson(res: Response): Promise<Record<string, unknown>> {

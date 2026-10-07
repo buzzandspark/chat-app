@@ -2,32 +2,21 @@
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
+import { saveLastChoice } from "@client/hooks/use-last-choice";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { textOf, type ChatSettings } from "@client/store/chat-store";
+import { ensureMarkdown, useMarkdownReady } from "@client/markdown/ready";
 import { useChat, useChatSeeded, useChatStore } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
 import { isUuid } from "@shared/id";
 import { isModelId } from "@shared/models";
-import { ChatContext, type EditingState } from "./chat-context";
+import { ChatActionsContext, ChatLiveStateContext, type EditingState } from "./chat-context";
 import { Composer, type ComposerHandle } from "./composer";
 import { LiveRegion } from "./live-region";
 import { MessageList, type MessageListHandle } from "./message-list";
 import { useShellUser } from "../shell/shell-user";
 import { ThreadSkeleton } from "./thread-skeleton";
-
-async function truncateOnServer(chatId: string, fromMessageId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/chats/${chatId}/truncate`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fromMessageId }),
-    });
-    return res.ok || res.status === 404;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * ADR-0005: the view renders from the client store at once; the id comes from the URL and the
@@ -42,7 +31,21 @@ export function ChatView({ children }: { children: ReactNode }) {
   const client = useMemo(() => getGenerationClient(store), [store]);
   const chat = useChat(chatId);
   const settings = chat.settings;
-  const setSettings = useCallback((patch: Partial<ChatSettings>) => store.setSettings(chatId, patch), [store, chatId]);
+  // The callbacks read the current settings through a ref, so they stay stable while the user changes them (#43).
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+  const setSettings = useCallback(
+    (patch: Partial<ChatSettings>) => {
+      store.setSettings(chatId, patch);
+      if (patch.model !== undefined || patch.thinking !== undefined) {
+        const next = store.getChat(chatId).settings;
+        saveLastChoice(userId, { model: next.model, thinking: next.thinking });
+      }
+    },
+    [store, chatId, userId],
+  );
   const [editing, setEditing] = useState<EditingState | null>(null);
   const composerRef = useRef<ComposerHandle>(null);
   const listRef = useRef<MessageListHandle>(null);
@@ -56,37 +59,45 @@ export function ChatView({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [isEmpty, chatId]);
 
-  // The URL already is this chat's own, so a send only has to name it in the sidebar.
+  // The URL already is this chat's own, so a send only has to name it. The header title is local
+  // and immediate; the sidebar row waits until the server has accepted the generation, so a refused
+  // or lost first POST leaves no ghost entry behind.
   const announceChat = useCallback(
     (text: string) => {
-      getSidebarStore().upsert({ id: chatId, title: chat.title ?? text.slice(0, 60), updatedAt: Date.now() });
-      if (!chat.title) store.setChatTitle(chatId, text.slice(0, 60));
+      const title = chat.title ?? text.slice(0, 60);
+      if (!chat.title) store.setChatTitle(chatId, title);
+      return () => getSidebarStore().upsert({ id: chatId, title, updatedAt: Date.now() });
     },
     [chatId, chat.title, store],
   );
 
+  // `edit` is explicit (#36): only the composer's own submit replaces a message. Continue and a
+  // scenario pick while an edit is open leave the edited turns alone and cancel the edit instead.
   const send = useCallback(
-    (text: string, scenario?: string) => {
+    (text: string, scenario?: string, edit: EditingState | null = null) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       const lastId = store.getChat(chatId).messageIds.at(-1);
       const last = lastId ? store.getMessage(lastId) : undefined;
       if (last?.role === "assistant" && last.status === "streaming") return;
-      const opts = { chatId, model: settings.model, thinking: settings.thinking, scenario: scenario ?? settings.scenario?.name };
-      if (editing) {
-        // D10: replace the edited user message and everything after it, then regenerate.
-        const from = editing.userMessageId;
-        setEditing(null);
-        store.truncateFrom(from);
-        void truncateOnServer(chatId, from).then(() => client.send({ ...opts, text: trimmed }));
+      const current = settingsRef.current;
+      const opts = { chatId, model: current.model, thinking: current.thinking, scenario: scenario ?? current.scenario?.name };
+      const hooks = { onAccepted: announceChat(trimmed) };
+      // The reply will need the Markdown renderer's chunk; fetch it while the request is in flight.
+      void ensureMarkdown();
+      if (edit) {
+        // D10: replace the edited user message and everything after it in the same request (#21).
+        store.truncateFrom(edit.userMessageId);
+        client.send({ ...opts, text: trimmed, replaceFrom: edit.userMessageId }, hooks);
       } else {
-        client.send({ ...opts, text: trimmed });
+        client.send({ ...opts, text: trimmed }, hooks);
       }
+      setEditing(null);
       listRef.current?.engage();
-      announceChat(trimmed);
-      composerRef.current?.focus();
+      // Only where a keyboard is physical: on a phone, focusing pops the keyboard over the reply (#32).
+      if (window.matchMedia("(hover: hover) and (min-width: 768px)").matches) composerRef.current?.focus();
     },
-    [chatId, client, settings, editing, store, announceChat],
+    [chatId, client, store, announceChat],
   );
 
   const retry = useCallback(
@@ -95,15 +106,18 @@ export function ChatView({ children }: { children: ReactNode }) {
       const text = textOf(store.getMessage(userMessageId)?.blocks ?? []) || undefined;
       // The replaced reply's own model and scenario, not whatever the picker shows now.
       const replaced = store.getMessage(fromMessageId);
-      const model = isModelId(replaced?.requestedModel) ? replaced.requestedModel : settings.model;
-      const scenario = replaced?.scenario ?? settings.scenario?.name;
+      const current = settingsRef.current;
+      const model = isModelId(replaced?.requestedModel) ? replaced.requestedModel : current.model;
+      const scenario = replaced?.scenario ?? current.scenario?.name;
       store.truncateFrom(fromMessageId);
-      void truncateOnServer(chatId, fromMessageId).then(() =>
-        client.retry({ chatId, userMessageId, text, model, thinking: settings.thinking, scenario }),
+      // A retry after a refused first send is the chat's first accepted generation: list it then.
+      client.retry(
+        { chatId, userMessageId, text, model, thinking: current.thinking, scenario, replaceFrom: fromMessageId },
+        { onAccepted: announceChat(text ?? "") },
       );
       listRef.current?.engage();
     },
-    [chatId, client, settings, store],
+    [chatId, client, store, announceChat],
   );
 
   const editMessage = useCallback(
@@ -116,40 +130,44 @@ export function ChatView({ children }: { children: ReactNode }) {
     [store],
   );
 
-  const ctx = useMemo(
+  const actions = useMemo(
     () => ({
       chatId,
       userId,
       client,
-      settings,
       setSettings,
       send,
       retry,
       editMessage,
-      editing,
       cancelEdit: () => setEditing(null),
       focusComposer: () => composerRef.current?.focus(),
-      autoFollow: { engaged: followEngaged, engage: () => listRef.current?.engage() },
+      autoFollow: { engage: () => listRef.current?.engage(), disengage: () => listRef.current?.disengage() },
       scenarioPanel,
     }),
-    [chatId, userId, client, settings, setSettings, send, retry, editMessage, editing, followEngaged, scenarioPanel],
+    [chatId, userId, client, setSettings, send, retry, editMessage, scenarioPanel],
   );
+  const live = useMemo(() => ({ settings, editing, followEngaged }), [settings, editing, followEngaged]);
 
   if (!isUuid(chatId)) return <MissingChat />;
 
   return (
-    <ChatContext.Provider value={ctx}>
-      <div className="flex min-h-0 flex-1 flex-col">
-        {children}
-        <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />
-        <LiveRegion chatId={chatId} />
-        <Composer ref={composerRef} chatId={chatId} />
-      </div>
-    </ChatContext.Provider>
+    <ChatActionsContext.Provider value={actions}>
+      <ChatLiveStateContext.Provider value={live}>
+        <div className="flex min-h-0 flex-1 flex-col">
+          {children}
+          <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />
+          <LiveRegion chatId={chatId} />
+          <Composer ref={composerRef} chatId={chatId} />
+        </div>
+      </ChatLiveStateContext.Provider>
+    </ChatActionsContext.Provider>
   );
 }
 
-/** The skeleton stands in only until the chat is seeded; the composer around it is the real one. */
+/**
+ * The skeleton stands in until the chat is seeded and, for a chat with rows, until the Markdown chunk is
+ * in (#83): rows that paint with empty bodies and fill in later would shift everything below them.
+ */
 function Thread({
   chatId,
   listRef,
@@ -160,7 +178,9 @@ function Thread({
   onFollowChange: (engaged: boolean) => void;
 }) {
   const seeded = useChatSeeded(chatId);
-  if (!seeded) return <ThreadSkeleton />;
+  const chat = useChat(chatId);
+  const markdownReady = useMarkdownReady();
+  if (!seeded || (chat.messageIds.length > 0 && !markdownReady)) return <ThreadSkeleton />;
   return <MessageList ref={listRef} chatId={chatId} onFollowChange={onFollowChange} />;
 }
 

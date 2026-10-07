@@ -9,6 +9,11 @@ function readDark(): boolean {
 }
 function setDark(dark: boolean): void {
   document.documentElement.classList.toggle("dark", dark);
+  // The browser chrome follows the in-app theme, not the OS one (#77); the colours match app/layout.tsx.
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    meta.removeAttribute("media");
+    meta.content = dark ? "#1a1816" : "#faf9f6";
+  }
   try {
     localStorage.setItem("cadence-theme", dark ? "dark" : "light");
   } catch {
