@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
-import { lastAssistant, openNewChat, runScenario, visible } from "./helpers";
+import { lastAssistant, newChatPath, openNewChat, runScenario, visible } from "./helpers";
 
 // D0, D26: budgets run only on Pixel 7, where CPU 4x and Fast 3G throttling go through CDP;
 // results append to docs/perf/ so the design doc quotes measured numbers.
@@ -48,7 +48,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
       }).observe({ type: "layout-shift", buffered: true });
     });
     const started = Date.now();
-    await page.goto("/c/new");
+    await page.goto(newChatPath());
     await expect(visible(page, "composer")).toHaveAttribute("data-hydrated", "true", { timeout: 60_000 });
     const hydratedAt = Date.now() - started;
     await page.waitForTimeout(1500);

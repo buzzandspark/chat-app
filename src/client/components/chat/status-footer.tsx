@@ -2,6 +2,7 @@
 import { RefreshCw, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useNewChat } from "@client/hooks/use-new-chat";
 import { useNow } from "@client/hooks/use-now";
 import type { MessageState } from "@client/store/chat-store";
 import { modelDisplayName } from "@shared/models";
@@ -21,6 +22,7 @@ function Countdown({ until }: { until: number }) {
 
 /** D17: every terminal and non-terminal state has its own wording and action. */
 export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusFooterProps) {
+  const newChat = useNewChat();
   const base = "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-muted-foreground";
   const retry = (
     <Button size="sm" variant="outline" className="touch-target" onClick={onRetry}>
@@ -127,8 +129,8 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
           return (
             <div className={base}>
               <span>This chat is too long to continue.</span>
-              <Button asChild size="sm" variant="outline" className="touch-target">
-                <Link href="/c/new">Start a new chat</Link>
+              <Button size="sm" variant="outline" className="touch-target" onClick={newChat}>
+                Start a new chat
               </Button>
             </div>
           );

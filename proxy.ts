@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { uuidv7 } from "@shared/id";
 
 const SESSION_COOKIES = ["better-auth.session_token", "__Secure-better-auth.session_token"];
 
@@ -6,13 +7,22 @@ const SESSION_COOKIES = ["better-auth.session_token", "__Secure-better-auth.sess
 // Development and the e2e harness run against the seeded dev user without a cookie.
 export function proxy(request: NextRequest) {
   const hasCookie = SESSION_COOKIES.some((name) => request.cookies.has(name));
-  if (hasCookie) return NextResponse.next();
   const bypass = process.env.NODE_ENV !== "production" || process.env.E2E === "1";
-  if (bypass) return NextResponse.next();
-  const url = request.nextUrl.clone();
-  url.pathname = "/login";
-  url.searchParams.set("next", request.nextUrl.pathname);
-  return NextResponse.redirect(url);
+  if (!hasCookie && !bypass) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("next", request.nextUrl.pathname);
+    return NextResponse.redirect(url);
+  }
+  // `/c/new` is an alias, not a page: a new chat is an id with no rows yet, chosen by the client, so
+  // no "new" view is ever mounted and kept alive by the router (ADR-0005). In-app affordances
+  // navigate straight to `/c/<uuid>`; this covers bookmarks and external links.
+  if (request.nextUrl.pathname === "/c/new") {
+    const url = request.nextUrl.clone();
+    url.pathname = `/c/${uuidv7()}`;
+    return NextResponse.redirect(url, 307);
+  }
+  return NextResponse.next();
 }
 
 export const config = {

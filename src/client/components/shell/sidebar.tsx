@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
+import { newChatHref } from "@client/hooks/use-new-chat";
 import { getSidebarStore, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { useModals } from "../ui/modal-manager";
 import { ThemeToggle } from "./theme-toggle";
@@ -80,7 +81,16 @@ export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, use
               <Search />
             </IconButton>
             <IconButton asChild label="New chat">
-              <Link href="/c/new" onClick={onNavigate}>
+              {/* href keeps open-in-new-tab working through the /c/new alias; a plain click goes straight to a fresh id. */}
+              <Link
+                href="/c/new"
+                prefetch={false}
+                onClick={onNavigate}
+                onNavigate={(e) => {
+                  e.preventDefault();
+                  router.push(newChatHref());
+                }}
+              >
                 <Plus />
               </Link>
             </IconButton>

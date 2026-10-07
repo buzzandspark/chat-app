@@ -1,20 +1,32 @@
 "use client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@auth/client";
+import { newChatHref } from "@client/hooks/use-new-chat";
 
 function LoginFormInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") ?? "/c/new";
+  const next = params.get("next");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  // Adopt values typed before hydration so the controlled inputs do not drop them.
+  useEffect(() => {
+    const early = { email: emailRef.current?.value ?? "", password: passwordRef.current?.value ?? "" };
+    const frame = requestAnimationFrame(() => {
+      if (early.email) setEmail((v) => (v === "" ? early.email : v));
+      if (early.password) setPassword((v) => (v === "" ? early.password : v));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +38,7 @@ function LoginFormInner() {
       setError(result.error.message ?? "Sign-in failed");
       return;
     }
-    router.push(next.startsWith("/") ? next : "/c/new");
+    router.push(next && next.startsWith("/") && next !== "/c/new" ? next : newChatHref());
     router.refresh();
   };
 
@@ -34,11 +46,11 @@ function LoginFormInner() {
     <form onSubmit={(e) => void submit(e)} className="space-y-4" aria-label="Sign in">
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 text-body" />
+        <Input ref={emailRef} id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 text-body" />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password">Password</Label>
-        <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="h-11 text-body" />
+        <Input ref={passwordRef} id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="h-11 text-body" />
       </div>
       {error ? (
         <p role="alert" className="text-small text-destructive">

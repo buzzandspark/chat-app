@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { newChatHref } from "@client/hooks/use-new-chat";
 
 /** ADR-0004: one tap creates a private 24 h demo user; no login wall. */
 export function TryDemoButton() {
@@ -14,8 +15,7 @@ export function TryDemoButton() {
     try {
       const res = await fetch("/api/demo/start", { method: "POST" });
       if (!res.ok) throw new Error(String(res.status));
-      const body = (await res.json()) as { redirect: string };
-      router.push(body.redirect);
+      router.push(newChatHref());
       router.refresh();
     } catch {
       setError("The demo could not start. Try again in a moment.");

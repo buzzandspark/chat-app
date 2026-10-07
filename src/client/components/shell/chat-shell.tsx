@@ -1,6 +1,6 @@
 "use client";
 import { Menu, MessageSquareText, PanelLeft } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
@@ -10,6 +10,7 @@ import { useChat } from "@client/store/hooks";
 import { ChatStoreProvider } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
 import { useIsDesktop } from "@client/hooks/use-media-query";
+import { useNewChat } from "@client/hooks/use-new-chat";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
 import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
@@ -40,12 +41,12 @@ export function ChatShell(props: ChatShellProps) {
 
 function ChatShellInner({ initialChats, userLabel, children }: ChatShellProps) {
   const desktop = useIsDesktop();
-  const router = useRouter();
   const pathname = usePathname();
   const chats = useSidebarChats();
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
   const { show } = useModals();
+  const newChat = useNewChat();
   const searchCloser = useRef<(() => void) | null>(null);
   useVisualViewport();
 
@@ -56,7 +57,10 @@ function ChatShellInner({ initialChats, userLabel, children }: ChatShellProps) {
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
   const openChat = useChat(currentChatId ?? "");
   const currentSummary = currentChatId ? chats.find((c) => c.id === currentChatId) : undefined;
-  const title = currentChatId ? (currentSummary?.title ?? openChat.title ?? "") : pathname === "/c/new" ? "New chat" : "";
+  // An id the server knows nothing about is a new chat; until the rows have arrived the title stays blank.
+  const title = currentChatId
+    ? (currentSummary?.title ?? openChat.title ?? (openChat.seeded && openChat.messageIds.length === 0 ? "New chat" : ""))
+    : "";
 
   const openSearch = useCallback(() => {
     searchCloser.current?.();
@@ -77,7 +81,7 @@ function ChatShellInner({ initialChats, userLabel, children }: ChatShellProps) {
     const onKey = (e: KeyboardEvent) => {
       if (isModifier(e) && e.shiftKey && e.key.toLowerCase() === "o") {
         e.preventDefault();
-        router.push("/c/new");
+        newChat();
       } else if (isModifier(e) && !e.shiftKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
         openSearch();
@@ -87,7 +91,7 @@ function ChatShellInner({ initialChats, userLabel, children }: ChatShellProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [desktop, phoneOpen, router, openSearch]);
+  }, [desktop, phoneOpen, newChat, openSearch]);
 
   // Inset swipe-to-open: starts at least 24 px in from the left edge (D0).
   useEffect(() => {
@@ -137,7 +141,7 @@ function ChatShellInner({ initialChats, userLabel, children }: ChatShellProps) {
           <IconButton label={open ? "Hide sidebar" : "Show sidebar"} tipAlign="start" aria-expanded={open} onClick={toggle}>
             {desktop ? <PanelLeft /> : <Menu />}
           </IconButton>
-          {currentChatId && title ? (
+          {currentChatId && currentSummary ? (
             <Button
               variant="ghost"
               size="sm"

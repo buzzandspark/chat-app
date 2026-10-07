@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { newChatHref } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
@@ -75,7 +76,7 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       if (res.ok) {
         getSidebarStore().remove(chat.id);
         onOpenChange(false);
-        if (currentChatId === chat.id) router.push("/c/new");
+        if (currentChatId === chat.id) router.push(newChatHref());
       }
     } finally {
       setBusy(false);

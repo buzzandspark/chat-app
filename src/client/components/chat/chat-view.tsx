@@ -1,5 +1,4 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { messageStateFromRow, textOf } from "@client/store/chat-store";
 import { useChat, useChatStore } from "@client/store/hooks";
@@ -37,7 +36,6 @@ async function truncateOnServer(chatId: string, fromMessageId: string): Promise<
 
 export function ChatView({ chatId, userId, title, updatedAt, initialMessages, isNew, scenarioPanel }: ChatViewProps) {
   const store = useChatStore();
-  const router = useRouter();
   const client = useMemo(() => getGenerationClient(store), [store]);
   // Seed the store during the first render so the first paint has the messages;
   // notifications are deferred so no ancestor subscriber is updated mid-render.
@@ -54,15 +52,13 @@ export function ChatView({ chatId, userId, title, updatedAt, initialMessages, is
   const composerRef = useRef<ComposerHandle>(null);
   const listRef = useRef<MessageListHandle>(null);
   const [followEngaged, setFollowEngaged] = useState(true);
-  const startedRef = useRef(!isNew);
 
   // A chat opened by navigation joins the sidebar list even if the layout rendered before it existed.
   useEffect(() => {
     if (!isNew && title) getSidebarStore().ensure({ id: chatId, title, updatedAt: updatedAt ?? 0 });
   }, [chatId, title, isNew, updatedAt]);
 
-  // Desktop only (a phone would pop the keyboard): focus on a new chat, and after the
-  // first send, when router.replace remounts this view under the chat's own URL.
+  // Desktop only (a phone would pop the keyboard): focus on a new chat and after a reload mid-stream.
   useEffect(() => {
     if (!window.matchMedia("(hover: hover) and (min-width: 768px)").matches) return;
     const last = initialMessages.at(-1);
@@ -80,18 +76,13 @@ export function ChatView({ chatId, userId, title, updatedAt, initialMessages, is
     }
   }, [client, initialMessages]);
 
+  // The URL already is this chat's own (ADR-0005), so a send only has to name it in the sidebar.
   const announceChat = useCallback(
     (text: string) => {
-      if (!startedRef.current) {
-        startedRef.current = true;
-        // Through the router, not history.replaceState: Next must know the route changed,
-        // or a later navigation back to /c/new is a no-op that leaves this thread on screen.
-        router.replace(`/c/${chatId}`, { scroll: false });
-      }
       getSidebarStore().upsert({ id: chatId, title: chat.title ?? text.slice(0, 60), updatedAt: Date.now() });
       if (!chat.title) store.setChatTitle(chatId, text.slice(0, 60));
     },
-    [chatId, chat.title, store, router],
+    [chatId, chat.title, store],
   );
 
   const send = useCallback(

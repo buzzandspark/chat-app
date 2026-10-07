@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { assistantText, ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText, waitForChatUrl } from "./helpers";
+import { CHAT_URL, assistantText, ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText, waitForChatUrl } from "./helpers";
 
 test.describe("edit, regenerate, drafts", () => {
   test("editing the last message replaces it and regenerates", async ({ page }) => {
@@ -71,6 +71,7 @@ test.describe("edit, regenerate, drafts", () => {
 test.describe("chat management", () => {
   test("rename, search, and delete a chat", async ({ page }) => {
     await openNewChat(page);
+    const firstUrl = page.url();
     await sendText(page, "pineapple pizza debate");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await ensureSidebarOpen(page);
@@ -90,7 +91,8 @@ test.describe("chat management", () => {
     await page.getByRole("complementary", { name: "Chats" }).getByRole("button", { name: /Actions for Renamed chat/ }).first().click();
     await page.getByRole("menuitem", { name: "Delete" }).click();
     await page.getByRole("button", { name: "Delete" }).click();
-    await expect(page).toHaveURL(/\/c\/new$/);
+    await expect(page).not.toHaveURL(firstUrl);
+    await expect(page).toHaveURL(CHAT_URL);
   });
 });
 

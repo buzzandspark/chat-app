@@ -5,7 +5,7 @@ import { ThreadSkeleton } from "@client/components/chat/thread-skeleton";
 import { getChatWithMessages } from "@server/chats";
 import { requireUser } from "@server/current-user";
 import { env } from "@shared/env";
-import { isUuid, uuidv7 } from "@shared/id";
+import { isUuid } from "@shared/id";
 
 export default function ChatPage({ params }: PageProps<"/c/[id]">) {
   return (
@@ -15,25 +15,22 @@ export default function ChatPage({ params }: PageProps<"/c/[id]">) {
   );
 }
 
+// An id with no rows is a new chat (the engine creates the row on the first send), not a 404.
 async function ChatLoader({ params }: { params: PageProps<"/c/[id]">["params"] }) {
   const { id } = await params;
   const user = await requireUser();
-  const scenarioPanel = env.scenarioPanel || user.role === "demo";
-  if (id === "new") {
-    return <ChatView key="new" chatId={uuidv7()} userId={user.id} title={null} initialMessages={[]} isNew scenarioPanel={scenarioPanel} />;
-  }
   if (!isUuid(id)) notFound();
+  const scenarioPanel = env.scenarioPanel || user.role === "demo";
   const data = getChatWithMessages(id, user.id);
-  if (!data) notFound();
   return (
     <ChatView
       key={id}
       chatId={id}
       userId={user.id}
-      title={data.chat.title}
-      updatedAt={data.chat.updatedAt}
-      initialMessages={data.messages}
-      isNew={false}
+      title={data?.chat.title ?? null}
+      updatedAt={data?.chat.updatedAt}
+      initialMessages={data?.messages ?? []}
+      isNew={data === null}
       scenarioPanel={scenarioPanel}
     />
   );

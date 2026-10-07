@@ -21,7 +21,7 @@ export async function POST(request: Request): Promise<Response> {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     db.update(schema.users).set({ role: "demo", name: "Demo visitor", updatedAt: new Date() }).where(eq(schema.users.id, user.id)).run();
     db.update(schema.sessions).set({ expiresAt }).where(eq(schema.sessions.userId, user.id)).run();
-    const res = Response.json({ ok: true, redirect: "/c/new" }, { headers: { "cache-control": "no-store" } });
+    const res = Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
     result.headers.forEach((value, key) => {
       if (key.toLowerCase() === "set-cookie") res.headers.append("set-cookie", value);
     });

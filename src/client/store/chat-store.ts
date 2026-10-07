@@ -43,6 +43,8 @@ export interface ChatState {
   id: string;
   messageIds: string[];
   title: string | null;
+  /** True once the server's rows have been applied (or the chat was created locally), so an empty list means a new chat. */
+  seeded: boolean;
 }
 
 interface Internal {
@@ -52,7 +54,7 @@ interface Internal {
 
 type Listener = () => void;
 
-export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null };
+export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false };
 
 export function createMessageState(partial: Partial<MessageState> & Pick<MessageState, "id" | "chatId" | "role">): MessageState {
   return {
@@ -183,10 +185,11 @@ export class ChatStore {
     const previous = this.chats.get(chatId);
     const same =
       previous &&
+      previous.seeded &&
       previous.title === title &&
       previous.messageIds.length === ids.length &&
       previous.messageIds.every((id, i) => id === ids[i]);
-    if (!same) this.chats.set(chatId, { id: chatId, messageIds: ids, title });
+    if (!same) this.chats.set(chatId, { id: chatId, messageIds: ids, title, seeded: true });
     const notify = () => {
       for (const id of touched) this.notifyMessage(id);
       if (!same) this.notifyChat(chatId);
@@ -199,7 +202,7 @@ export class ChatStore {
     this.messages.set(message.id, message);
     this.internals.set(message.id, { blockIndex: new Map() });
     if (message.generationId) this.byGeneration.set(message.generationId, message.id);
-    const chat = this.chats.get(message.chatId) ?? { id: message.chatId, messageIds: [], title: null };
+    const chat = this.chats.get(message.chatId) ?? { id: message.chatId, messageIds: [], title: null, seeded: false };
     if (!chat.messageIds.includes(message.id)) {
       this.chats.set(message.chatId, { ...chat, messageIds: [...chat.messageIds, message.id] });
       this.notifyChat(message.chatId);
@@ -241,7 +244,7 @@ export class ChatStore {
   }
 
   setChatTitle(chatId: string, title: string | null): void {
-    const chat = this.chats.get(chatId) ?? { id: chatId, messageIds: [], title: null };
+    const chat = this.chats.get(chatId) ?? { id: chatId, messageIds: [], title: null, seeded: false };
     if (chat.title === title) return;
     this.chats.set(chatId, { ...chat, title });
     this.notifyChat(chatId);
