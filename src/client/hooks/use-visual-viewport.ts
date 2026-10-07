@@ -1,14 +1,7 @@
 "use client";
 import { useEffect } from "react";
 
-/**
- * D19: one shared hook drives the composer and every bottom sheet with a text
- * field. It writes the keyboard's height to `--keyboard-inset` on the root
- * and marks `data-keyboard="open"` so bottom safe-area padding collapses to
- * zero while the keyboard is up. Browsers honouring
- * `interactive-widget=resizes-content` report no difference and nothing
- * changes; iOS Safari reports it through `visualViewport`.
- */
+/** D19: writes the keyboard height to --keyboard-inset and data-keyboard for the composer and sheets. */
 export function useVisualViewport(): void {
   useEffect(() => {
     const vv = window.visualViewport;

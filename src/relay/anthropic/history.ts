@@ -15,14 +15,8 @@ function lastFallbackIndex(content: readonly StoredContentBlock[]): number {
   return -1;
 }
 
-/**
- * One stored assistant message to request params (D9, D12). Thinking blocks
- * are echoed unchanged so same-model turns keep their reasoning and the API
- * drops what a different serving model cannot read. Blocks before the final
- * `fallback` block that are not text are omitted, because the fallback model
- * only ever saw the text before the boundary. Thinking blocks without a
- * signature (an interrupted stream) are dropped: the API rejects them.
- */
+// Non-text blocks before the final fallback block are omitted: the fallback model never saw them (D9).
+// Thinking without a signature (an interrupted stream) is dropped: the API rejects it.
 export function assistantParams(content: readonly StoredContentBlock[]): Param[] {
   const boundary = lastFallbackIndex(content);
   const out: Param[] = [];
@@ -61,14 +55,8 @@ export function userParams(content: readonly StoredContentBlock[]): Param[] {
   return out;
 }
 
-/**
- * Stored messages to `MessageParam[]` (D9, D13). Refused assistant messages
- * are excluded (their partial text was discarded), as are assistant messages
- * that ended up with no usable content. A trailing-whitespace text block is
- * trimmed so no turn can be mistaken for a prefill. The newest user message
- * carries the moving cache breakpoint; the system prompt carries the fixed
- * one (see request.ts).
- */
+// Refused and errored assistant messages are excluded (D9); trailing whitespace is trimmed so no
+// turn reads as a prefill; the newest user message carries the moving cache breakpoint (D13).
 export function buildHistory(messages: readonly HistoryMessage[]): Anthropic.Beta.BetaMessageParam[] {
   const out: Anthropic.Beta.BetaMessageParam[] = [];
   for (const m of messages) {
@@ -76,7 +64,6 @@ export function buildHistory(messages: readonly HistoryMessage[]): Anthropic.Bet
       if (m.status === "refused" || m.status === "error") continue;
       const content = assistantParams(m.content);
       if (!content.some((b) => b.type !== "fallback")) continue;
-      // Collapse a fallback-only tail and trim trailing whitespace on the last text block.
       const last = content[content.length - 1];
       if (last && last.type === "text") last.text = last.text.trimEnd();
       if (last && last.type === "text" && last.text.length === 0) content.pop();

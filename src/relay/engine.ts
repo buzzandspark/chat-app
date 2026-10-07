@@ -110,11 +110,7 @@ interface Active {
   faults: EngineFaults;
 }
 
-/**
- * The relay engine (D2 to D5, D22). Route handlers call `start`, `resume`,
- * and `stop`; a generation runs as a detached promise that outlives the HTTP
- * response (D1). No framework imports: tests drive it directly.
- */
+/** Relay engine (D2 to D5, D22): a generation runs as a detached promise that outlives the response. */
 export class Engine {
   private db: Db;
   private store: EventStore;
@@ -546,12 +542,8 @@ export class Engine {
     );
   }
 
-  /**
-   * D22: without final usage, input tokens are exact from `message_start` and
-   * output tokens are elapsed streaming time times the model's measured
-   * tokens-per-second, because billed output includes full thinking while
-   * only its summary is visible.
-   */
+  // D22: input tokens are exact from message_start; output is elapsed time times measured tokens/s,
+  // because billed output includes full thinking while only its summary is visible.
   private estimateRows(active: Active, servingModel: string): UsageRow[] {
     const u = active.acc.usage;
     if (!active.acc.apiMessageId) return [];

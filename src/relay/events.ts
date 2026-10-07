@@ -9,13 +9,8 @@ import type {
 } from "@shared/types";
 import type { StoredContentBlock } from "@shared/blocks";
 
-/**
- * The relay's event vocabulary (D2, D3). Producer events carry a sequence
- * number that is their index in the generation's buffer. Control events
- * (`snapshot`, and any terminal produced by the GET path rather than the
- * producer) carry `seq: null` and bypass sequence dedupe on the client.
- * `t` is milliseconds since the generation started, on the server clock.
- */
+// Producer events carry seq, their index in the buffer; control events (snapshot, GET-path terminals)
+// carry seq null and bypass dedupe. t is ms since generation start on the server clock (D2, D3).
 export interface RelayEventBase {
   seq: number | null;
   generationId: string;

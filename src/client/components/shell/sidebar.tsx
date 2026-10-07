@@ -29,12 +29,7 @@ interface SidebarProps {
   userLabel: string;
 }
 
-/**
- * One sidebar (D0): an overlay on phones, docked and collapsible at `md`.
- * Message and chat actions sit behind a visible "⋯" button; with a hovering
- * pointer the button appears on hover or focus (`@media (hover: hover)`, not
- * a width breakpoint, so iPads at the `md` layout still see it).
- */
+/** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
 export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: SidebarProps) {
   const chats = useSidebarChats();
   const pathname = usePathname();

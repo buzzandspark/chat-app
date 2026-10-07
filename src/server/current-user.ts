@@ -15,16 +15,11 @@ export interface CurrentUser {
   name: string;
 }
 
-/**
- * ADR-0004: real validation through better-auth's `getSession`, once per
- * request and once per SSE connection. Without a session, development and
- * the e2e harness fall back to the seeded dev user so the chat can be
- * exercised without logging in; production never does.
- */
+// ADR-0004: validated through better-auth once per request. Without a session, development
+// and the e2e harness fall back to the seeded dev user; production never does.
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  // better-sqlite3 is synchronous, so nothing before this line signals
-  // "request time" to the prerenderer; `connection()` does, which keeps the
-  // database out of the build and the shell static (D21).
+  // better-sqlite3 is synchronous, so only `connection()` tells the prerenderer this is request
+  // time; it keeps the database out of the build and the shell static (D21).
   await connection();
   const reqHeaders = await headers();
   const session = await getAuth().api.getSession({ headers: reqHeaders });

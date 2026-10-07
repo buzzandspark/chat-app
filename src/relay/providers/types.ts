@@ -15,11 +15,7 @@ export interface ProviderStreamOptions {
   signal: AbortSignal;
 }
 
-/**
- * D24: every source of model output is a Provider yielding raw Anthropic
- * stream events, so the engine, parser, and client never know whether the
- * tokens came from the API, a recorded fixture, or a script.
- */
+/** Every output source yields raw Anthropic stream events, so nothing downstream knows which (D24). */
 export interface Provider {
   readonly name: "anthropic" | "replay" | "scripted" | "recording";
   stream(request: ProviderRequest, options: ProviderStreamOptions): AsyncIterable<NormalizableEvent>;
@@ -33,11 +29,8 @@ export interface FixtureThrow {
   retryAfter?: number;
 }
 
-/**
- * One line of a `*.jsonl` fixture: `t` is ms since the first line. Either a
- * raw API event, a control instruction (`disconnect` ends the stream as if the
- * upstream connection dropped), or an error to throw.
- */
+// One jsonl fixture line; t is ms since the first line. A raw API event, a control instruction
+// (disconnect ends the stream as a dropped upstream would), or an error to throw.
 export type FixtureLine =
   | { t: number; event: NormalizableEvent }
   | { t: number; control: "disconnect" }

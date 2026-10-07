@@ -1,8 +1,4 @@
-/**
- * D0/D28: design-review screenshots, phone frame first, then desktop; light
- * then dark. Boots the standalone server on its own port, drives a scenario,
- * and writes PNGs to docs/design/<label>/.
- */
+// D0/D28: design-review screenshots into docs/design/<label>/: phone frame first, then desktop.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -19,9 +15,7 @@ async function waitForServer(): Promise<void> {
     try {
       const res = await fetch(`${base}/api/health`);
       if (res.ok) return;
-    } catch {
-      // not up yet
-    }
+    } catch {}
     await new Promise((r) => setTimeout(r, 500));
   }
   throw new Error("server did not start");

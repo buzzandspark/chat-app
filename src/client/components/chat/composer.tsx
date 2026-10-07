@@ -29,13 +29,7 @@ export interface ComposerHandle {
 
 const MAX_ROWS_PX = 180;
 
-/**
- * Phone base: sticky at the bottom, follows the keyboard through the
- * `--keyboard-inset` variable (D19), 16 px text so iOS never zooms, 44 px
- * targets. Enter sends only where a hardware keyboard is likely (hover +
- * md); on phones Enter is a newline and the arrow button sends. Drafts are
- * kept per (user, chat) in localStorage (D18).
- */
+/** D19/D18: sticky above the keyboard, 16 px text so iOS never zooms; Enter sends only with hover + md. */
 export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function Composer({ chatId }, ref) {
   const { send, settings, setSettings, client, userId, editing, cancelEdit, editMessage } = useChatContext();
   const store = useChatStore();
@@ -50,9 +44,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
-  // Progressive enhancement: text typed into the server-rendered textarea
-  // before hydration is adopted rather than discarded, and the root carries a
-  // marker so tests know when the composer is live.
+  // Adopt text typed before hydration; data-hydrated tells tests the composer is live.
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = textareaRef.current;
@@ -63,8 +55,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
       if (root) root.dataset.hydrated = "true";
     });
     return () => cancelAnimationFrame(frame);
-    // Mount only: later value changes are React's own.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
   }, []);
 
   // Entering edit mode loads the message text (derived state adjusted during render).
@@ -75,8 +66,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     else if (lastEdit) setValue("");
   }
 
-  // Subscribe to the last message itself: its status decides Stop vs Send and
-  // whether ↑ may edit (the id list alone does not change when a reply ends).
+  // The id list does not change when a reply ends; the last message's status decides Stop/Send and ↑.
   const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
   const streamingId = lastMessage?.role === "assistant" && lastMessage.status === "streaming" ? lastMessage.generationId : null;
   const lastUserId = (() => {
@@ -109,7 +99,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
       e.preventDefault();
       submit();
     } else if (e.key === "Escape") {
-      // D19: Esc closes an open dialog or menu first (they handle it); here it cancels an edit, then stops.
+      // D19: open dialogs and menus handle Esc themselves; here it cancels an edit, else stops.
       if (editing) {
         e.preventDefault();
         cancelEdit();

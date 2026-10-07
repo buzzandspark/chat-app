@@ -4,11 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 export type StoredContentBlock = Anthropic.Beta.BetaContentBlock;
 export type IterationUsage = NonNullable<Anthropic.Beta.BetaUsage["iterations"]>;
 
-/**
- * What the client renders. Thinking and text are the visible stream; a
- * `divider` marks a mid-stream safety fallback (D12). Tool use is unused in
- * v1 and collapses to nothing on the client.
- */
+/** What the client renders; a divider marks a mid-stream fallback (D12). Tool use collapses to nothing. */
 export type ClientBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; text: string; redacted?: boolean }

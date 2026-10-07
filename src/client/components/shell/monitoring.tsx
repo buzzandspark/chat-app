@@ -1,10 +1,7 @@
 "use client";
 import { useEffect } from "react";
 
-/**
- * D25: Sentry's browser SDK is imported in idle time after first paint, so it
- * is never part of the route bundle or the first-load measurement.
- */
+/** D25: Sentry's browser SDK loads in idle time after first paint, outside the route bundle. */
 export function Monitoring({ dsn }: { dsn: string | null }) {
   useEffect(() => {
     if (!dsn) return;

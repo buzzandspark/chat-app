@@ -21,11 +21,7 @@ const Body = z.object({
   scenario: z.enum(SCENARIO_NAMES).optional(),
 });
 
-/**
- * D2: idempotent on `generationId`. Writes the user message and a `running`
- * generation before calling upstream, then streams SSE directly. A duplicate
- * POST attaches to the existing generation instead of starting again.
- */
+/** D2: idempotent on `generationId`; a duplicate POST attaches to the existing generation. */
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireUser();

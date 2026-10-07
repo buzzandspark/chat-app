@@ -11,11 +11,8 @@ export async function waitForComposer(page: Page): Promise<void> {
   await expect(visible(page, "composer")).toHaveAttribute("data-hydrated", "true");
 }
 
-/**
- * Next keeps the previous page mounted but hidden after a client-side
- * navigation, so test-id locators must be scoped to visible elements (role
- * queries already skip hidden ones).
- */
+// Next keeps the previous page mounted but hidden after a client-side navigation, so test-id
+// locators must be scoped to visible elements (role queries already skip hidden ones).
 export function visible(page: Page, testId: string): Locator {
   return page.getByTestId(testId).locator("visible=true").first();
 }

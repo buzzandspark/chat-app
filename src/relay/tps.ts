@@ -1,10 +1,7 @@
 import { seedOutputTps } from "./anthropic/pricing";
 
-/**
- * D22: rolling output tokens-per-second per model, measured from completed
- * generations and seeded with defaults, used to estimate billed output for
- * stopped or interrupted generations where only elapsed time is known.
- */
+// Rolling output tokens/s per model, seeded, for estimating billed output when only elapsed time
+// is known (D22).
 export class TpsStats {
   private ema = new Map<string, number>();
   constructor(private alpha = 0.2) {}

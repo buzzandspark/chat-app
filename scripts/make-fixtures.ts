@@ -1,9 +1,5 @@
-/**
- * D24: writes deterministic `fixtures/<model>/<scenario>.jsonl` files from the
- * scenario scripts, so replay mode works with no recordings and no API key.
- * Recorded live streams (RECORD=1) land in fixtures/recorded/ and can replace
- * these one for one.
- */
+// D24: deterministic fixtures/<model>/<scenario>.jsonl from the scenario scripts, so replay mode
+// needs no recordings or API key. RECORD=1 recordings in fixtures/recorded/ can replace them.
 import fs from "node:fs";
 import path from "node:path";
 import { MODEL_IDS } from "../src/shared/models";

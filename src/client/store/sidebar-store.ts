@@ -9,7 +9,7 @@ export interface ChatSummary {
 
 type Listener = () => void;
 
-/** Small external store for the chat list so a first send updates the sidebar without a server round trip. */
+/** Chat list store so a first send updates the sidebar without a server round trip. */
 class SidebarStore {
   private chats: ChatSummary[] = [];
   private listeners = new Set<Listener>();

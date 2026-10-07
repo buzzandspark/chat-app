@@ -5,11 +5,7 @@ import type { HighlighterCore, ThemedTokenWithVariants } from "shiki/core";
 import { cn } from "@/lib/utils";
 import "./code.css";
 
-/**
- * D15: only closed fences are highlighted, scheduled in an idle callback, via
- * shiki/core with per-language dynamic imports. Plain and highlighted output
- * share one <pre> so highlighting changes paint only.
- */
+/** D15: closed fences only, highlighted in idle time via shiki/core; plain and highlighted share one <pre>. */
 
 const LANG_ALIASES: Record<string, string> = {
   ts: "typescript",
@@ -164,8 +160,7 @@ interface CodeBlockProps {
 
 function CodeBlockImpl({ code, lang, closed, className }: CodeBlockProps) {
   const resolved = resolveLanguage(lang);
-  // Tokens are keyed to the code they were produced from, so a code change
-  // simply stops matching instead of needing a reset inside the effect.
+  // Tokens are keyed to their code, so a code change stops matching without a reset.
   const [highlighted, setHighlighted] = useState<{
     code: string;
     lang: string;

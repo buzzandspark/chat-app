@@ -1,13 +1,6 @@
 #!/usr/bin/env sh
-# D3 verification against the built standalone server (the Docker image runs
-# the same server.js):
-#  1. SIGTERM mid-stream: the partial is in SQLite, a usage_events row flagged
-#     estimated exists, the generation is `interrupted { reason: "shutdown" }`,
-#     the connected client received the interrupted event, and the process
-#     exited within the grace period.
-#  2. SIGKILL mid-stream: the saved content is within 2 s of what the client
-#     displayed; on the next boot the backstop marks the row interrupted
-#     (reason crash) and writes an estimated usage row.
+# D3 check against the built standalone server: SIGTERM mid-stream drains (partial saved, estimated
+# usage, client gets `interrupted`); SIGKILL loses at most 2 s and the next boot's backstop marks it.
 set -eu
 cd "$(dirname "$0")/.."
 PORT=${PORT:-3126}
@@ -66,7 +59,6 @@ SERVER=$(pid)
 kill -KILL "$SERVER"
 sleep 0.5
 wait $CURL_PID 2>/dev/null || true
-# What the client displayed: every text_delta received, joined.
 CLIENT_TEXT=$(node -e '
 const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");let t="";
 for (const line of s.split("\n")) if (line.startsWith("data: ")) { const e=JSON.parse(line.slice(6)); if (e.type==="text_delta") t+=e.text; }
@@ -75,7 +67,7 @@ SAVED_TEXT=$(node -e "const D=require('better-sqlite3');const d=new D('$DB',{rea
 echo "client chars: ${#CLIENT_TEXT}, saved chars: ${#SAVED_TEXT}"
 [ "${#SAVED_TEXT}" -gt 0 ] || fail "nothing persisted before SIGKILL"
 case "$CLIENT_TEXT" in "$SAVED_TEXT"*) ;; *) fail "saved text is not a prefix of what the client displayed";; esac
-# slow_tokens streams 3 chars per 400 ms, so 2 s of loss is at most 15 chars (plus one in-flight chunk).
+# slow_tokens streams 3 chars per 400 ms: 2 s of loss is at most 15 chars plus one in-flight chunk.
 DIFF=$(( ${#CLIENT_TEXT} - ${#SAVED_TEXT} ))
 [ "$DIFF" -le 18 ] || fail "saved content is more than 2 s behind the client ($DIFF chars)"
 echo "saved content within 2 s of the client (behind by $DIFF chars)"

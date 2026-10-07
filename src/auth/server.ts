@@ -6,12 +6,7 @@ import { admin, anonymous } from "better-auth/plugins";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
 
-/**
- * ADR-0004: better-auth on the Drizzle adapter, email + password with
- * sign-up disabled (invites create accounts), the admin plugin for roles and
- * bans, and the anonymous plugin for the public demo path (each visitor gets
- * their own short-lived user, role `demo`).
- */
+/** ADR-0004: email + password with sign-up disabled, admin plugin for roles/bans, anonymous plugin for demo visitors. */
 function createAuth() {
   return betterAuth({
     appName: "Cadence",

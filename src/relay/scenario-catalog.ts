@@ -1,8 +1,4 @@
-/**
- * D24 scenario names and descriptions, client-safe: the scenario panel and
- * composer import this, never `scenarios.ts`, which carries the scripts
- * (long markdown, generated code) and belongs to the server bundle only.
- */
+// Client-safe scenario catalogue (D24); the scripts live in scenarios.ts and stay out of the client bundle.
 export const SCENARIO_NAMES = [
   "normal",
   "long_reply",

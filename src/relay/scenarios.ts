@@ -5,11 +5,7 @@ import { type ScenarioName } from "./scenario-catalog";
 
 export { SCENARIO_NAMES, SCENARIOS, isScenarioName, type ScenarioInfo, type ScenarioName } from "./scenario-catalog";
 
-/**
- * D24 scenario scripts (server only; the client-safe catalogue is in
- * scenario-catalog.ts). Each is a script the ScriptedProvider streams, or an
- * instruction the engine/route applies (dropped connection, producer restart).
- */
+// Server-only scenario scripts (D24); the client-safe catalogue is scenario-catalog.ts.
 const LOREM = [
   "The relay keeps every generation in an in-memory buffer keyed by id, with sequence numbers as array indices.",
   "A client that reconnects asks for events after the last sequence it saw, and the server replays the slice before attaching it live.",
@@ -167,7 +163,7 @@ export function scenarioScript(name: ScenarioName, request: ProviderRequest): Sc
   }
 }
 
-/** Replay fixture path for a demo turn on a given model (D6): varies by turn so a demo chat is not repetitive. */
+/** Demo fixture per model, varied by turn so a demo chat is not repetitive (D6). */
 export function demoFixture(model: ModelId, turn: number): string {
   const pool = ["normal", "long_reply", "table_mid_stream", "thinking_long", "giant_code_block"] as const;
   return `${model}/${pool[turn % pool.length]}`;

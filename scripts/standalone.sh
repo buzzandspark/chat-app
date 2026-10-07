@@ -1,7 +1,6 @@
 #!/usr/bin/env sh
-# Mirrors the Dockerfile layout so local/e2e runs exercise the same server.js
-# that production runs (D1). Copies static assets next to the standalone output,
-# then starts it with manual signal handling so our SIGTERM drain runs.
+# Runs the standalone build as the Dockerfile does (D1): assets copied next to server.js,
+# manual signal handling so our SIGTERM drain runs.
 set -eu
 cd "$(dirname "$0")/.."
 if [ ! -f .next/standalone/server.js ]; then

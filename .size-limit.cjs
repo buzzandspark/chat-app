@@ -1,8 +1,5 @@
-// D21: 180 KB gzipped JS budget on the chat route. Turbopack (Next 16) writes
-// per-route manifests under .next/server/app/<route>/: the runtime chunks in
-// page/build-manifest.json and the client component chunks in
-// page_client-reference-manifest.js. Lazy imports (shiki, per-language
-// grammars) are separate chunks and are not in either, as intended.
+// D21 budget for the chat route. Turbopack keeps per-route manifests under .next/server/app/<route>/:
+// runtime chunks in page/build-manifest.json, client component chunks in page_client-reference-manifest.js.
 const fs = require("node:fs");
 const path = require("node:path");
 

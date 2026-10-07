@@ -13,19 +13,8 @@ export interface ModelParams {
   fallbacks?: "default";
 }
 
-/**
- * D11, checked against the bundled Claude API reference on 2026-10-06.
- *
- * Sonnet 5.5 and Opus 5.5: adaptive thinking with summarized display, effort
- * `low` by default and `high` for "Think harder", server-side fallbacks in
- * the `"default"` form, and `drop_block` so a system-prompt edit on deploy
- * degrades existing chats instead of turning them into 400s (the binding
- * check covers the system prompt and tools and is enforced for API accounts
- * created on or after 2026-08-31).
- *
- * Haiku 4.5: `thinking: { type: "enabled", budget_tokens }` when toggled,
- * nothing otherwise, and none of the betas.
- */
+// D11, checked against the Claude API reference on 2026-10-06. drop_block keeps chats with thinking
+// blocks working when the system prompt changes; the binding check is enforced for accounts created on or after 2026-08-31.
 export function modelParams(model: ModelId, opts: ThinkingOptions): ModelParams {
   switch (model) {
     case "claude-sonnet-5-5":

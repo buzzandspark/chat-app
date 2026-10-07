@@ -9,7 +9,6 @@ test.describe("streaming", () => {
     await expect(row).toHaveAttribute("data-status", "streaming");
     await expect(row).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     expect(await assistantText(row)).toContain("Here is how resume works");
-    // The chat now has a URL of its own and appears in the sidebar list.
     await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
   });
 

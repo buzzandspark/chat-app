@@ -20,11 +20,11 @@ export interface ChatContextValue {
   client: GenerationClient;
   settings: ChatSettings;
   setSettings: (patch: Partial<ChatSettings>) => void;
-  /** Send a new user turn (used by Continue after max_tokens and by the composer). */
+  /** Also used by Continue after max_tokens. */
   send: (text: string, scenario?: string) => void;
   /** Regenerate from a user message, dropping that reply and everything after it. */
   retry: (userMessageId: string, fromMessageId: string) => void;
-  /** D10 edit-last-message: load a user message into the composer. */
+  /** D10: load a user message into the composer for editing. */
   editMessage: (userMessageId: string) => void;
   editing: EditingState | null;
   cancelEdit: () => void;

@@ -7,11 +7,7 @@ import { getRelay } from "@server/relay";
 
 const Body = z.object({ fromMessageId: z.string().uuid() });
 
-/**
- * D10 edit-last-message and regenerate: remove a message and everything after
- * it in the chat so the next send continues from the prefix. Any generation
- * still running for a removed message is stopped first.
- */
+/** D10: drops a message and everything after it; running generations for them are stopped first. */
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[id]/truncate">): Promise<Response> {
   try {
     const user = await requireUser();

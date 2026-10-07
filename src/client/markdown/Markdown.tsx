@@ -6,12 +6,7 @@ import { cn } from "@/lib/utils";
 import { parseFence, splitBlocks, type MarkdownBlock } from "./blocks";
 import { CodeBlock } from "./CodeBlock";
 
-/**
- * D9 (client): markdown rendered block by block. Finished blocks are memoised
- * by hash so only the trailing block re-parses while text streams in. Tokens
- * come from marked's lexer; rendering to React is done here with text nodes
- * only, so no HTML from the model is ever injected.
- */
+/** D9: finished blocks memoise by hash; marked's lexer tokens render to React text nodes, never innerHTML. */
 
 interface MarkdownProps {
   text: string;
@@ -49,8 +44,7 @@ function BlockImpl({ block, closed, onRender }: BlockProps) {
     const { lang, code } = parseFence(block.source, block.closed);
     return <CodeBlock code={code} lang={lang} closed={closed && block.closed} />;
   }
-  // While a table streams, a trailing row without its closing pipe is still
-  // being written; leave it out until it completes.
+  // A trailing table row without its closing pipe is still being typed; leave it out.
   const source = block.kind === "table" && !closed ? dropIncompleteRow(block.source) : block.source;
   const tokens = Lexer.lex(source, { gfm: true });
   if (block.kind === "table" && !tokens.some((t) => t.type === "table")) {

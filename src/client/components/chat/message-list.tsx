@@ -11,11 +11,7 @@ export interface MessageListHandle {
 
 const DISENGAGE_PX = 48;
 
-/**
- * D16 scrolling: auto-follow while streaming; a scroll-up of more than 48 px
- * disengages; "Jump to latest" appears; sending re-engages. D14: rows use
- * `content-visibility: auto` so long threads stay cheap to lay out.
- */
+/** D16 auto-follow: a 48 px scroll-up disengages, sending re-engages. D14: rows use content-visibility. */
 export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFollowChange?: (engaged: boolean) => void }>(
   function MessageList({ chatId, onFollowChange }, ref) {
     const chat = useChat(chatId);
@@ -48,8 +44,7 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
 
     useImperativeHandle(ref, () => ({ engage }), [engage]);
 
-    // Follow content growth: a ResizeObserver on the inner column fires once per
-    // layout change, which with per-frame flushes means once per frame at most.
+    // With per-frame store flushes the ResizeObserver fires at most once per frame.
     useEffect(() => {
       const el = scrollRef.current;
       const inner = endRef.current?.parentElement;

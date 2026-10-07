@@ -24,8 +24,7 @@ function label(startedAt: number | null, endedAt: number | null, streaming: bool
 
 export function ThinkingBlock({ text, redacted, streaming, startedAt, endedAt, collapseSignal }: ThinkingBlockProps) {
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
-  // Latch the auto-collapse: once text has arrived while following, stay collapsed
-  // even if the user later scrolls up (derived state adjusted during render).
+  // Latch: once collapsed while following, stay collapsed even if the user scrolls up.
   const [latched, setLatched] = useState(false);
   if (collapseSignal && !latched) setLatched(true);
   const open = userOpen ?? !latched;

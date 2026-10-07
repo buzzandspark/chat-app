@@ -3,10 +3,7 @@ import path from "node:path";
 import type { NormalizableEvent } from "../anthropic/parse-stream";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./types";
 
-/**
- * D24: wraps a provider and writes each stream to `<dir>/<timestamp>-<model>.jsonl`
- * with relative timestamps, so a live session becomes a replayable fixture.
- */
+/** Wraps a provider and records each stream as a replayable jsonl fixture (D24). */
 export class RecordingProvider implements Provider {
   readonly name = "recording" as const;
   constructor(

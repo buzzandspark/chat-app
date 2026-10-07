@@ -4,9 +4,7 @@ import Script from "next/script";
 import { Monitoring } from "@client/components/shell/monitoring";
 import "./globals.css";
 
-// D21: self-hosted via next/font with metric-matched fallbacks so there is no
-// layout shift; `optional` means a slow first load renders in the fallback
-// rather than flashing from one face to another.
+// D21: next/font with metric-matched fallbacks; `optional` avoids a swap flash on slow loads.
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],

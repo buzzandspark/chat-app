@@ -49,11 +49,7 @@ export class SendError extends Error {
   }
 }
 
-/**
- * D2, D16: POST streams the generation; any failure after the POST was
- * issued goes through the single resume path with backoff. Exactly one
- * generation per send on a flaky network because the ids are chosen here.
- */
+/** D2/D16: failures after the POST go through the resume path with backoff; ids are chosen here. */
 export class GenerationClient {
   private inflight = new Map<string, AbortController>();
   private bodies = new Map<string, PostBody>();
@@ -260,7 +256,7 @@ export class GenerationClient {
     }
   }
 
-  /** Reads one SSE response into the store. Resolves true when a terminal event arrived. */
+  /** Resolves true when a terminal event arrived. */
   private async consume(res: Response, generationId: string, messageId: string, signal: AbortSignal): Promise<boolean> {
     this.store.setConnection(messageId, "streaming", 0);
     if (!res.body) return false;

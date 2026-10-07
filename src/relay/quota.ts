@@ -14,13 +14,8 @@ export class QuotaExceededError extends Error {
   }
 }
 
-/**
- * D22: per-user all-time cost cap. On send, a reservation (input estimate
- * plus `max_tokens` at the requested model's output rate) is added
- * atomically in memory so two concurrent sends cannot both pass. On a
- * terminal event the reservation is released and the actual (or estimated)
- * cost is settled into `users.cost_spent_usd`.
- */
+// D22: a reservation (input estimate plus max_tokens at the output rate) is held in memory on send so
+// two concurrent sends cannot both pass; settle() releases it and adds the real or estimated cost.
 export class QuotaManager {
   private reserved = new Map<string, number>();
   constructor(private db: Db) {}

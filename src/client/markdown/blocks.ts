@@ -1,21 +1,11 @@
-/**
- * D9 (client): split markdown into top-level blocks so finished blocks can be
- * memoised by hash and only the trailing block re-parses while streaming.
- *
- * Single O(n) pass over lines. Fence-aware (CommonMark backtick/tilde fences,
- * up to 3 spaces of indentation, closing fence at least as long as the opener)
- * and table-aware (a GFM table is consecutive non-blank lines, so the blank
- * line rule keeps it whole; the kind lets the renderer draw partial tables).
- * Loose lists and indented code blocks are merged across blank lines so their
- * structure survives the split.
- */
+/** D9: top-level blocks, fence- and table-aware with lists kept whole, so finished blocks memoise by hash. */
 
 export type BlockKind = "fence" | "table" | "other";
 
 export interface MarkdownBlock {
-  /** Stable while streaming: index plus kind. React key. */
+  /** React key: stable while streaming. */
   key: string;
-  /** Hash of `source`; memoisation key. */
+  /** Memoisation key. */
   hash: string;
   source: string;
   /** False for an unclosed fence and always for the final block, which may still grow. */
@@ -92,7 +82,6 @@ export function splitBlocks(markdown: string): MarkdownBlock[] {
     }
 
     if (cur.length > 0 && pendingBlanks > 0) {
-      // Decide whether this non-blank line continues the current block.
       const first = cur[0]!;
       const continues =
         kind === "other" &&
@@ -118,7 +107,6 @@ export function splitBlocks(markdown: string): MarkdownBlock[] {
   return blocks;
 }
 
-/** Parse a fence block's source into language and body. */
 export function parseFence(source: string, closed: boolean): { lang: string | null; code: string } {
   const nl = source.indexOf("\n");
   const opener = nl === -1 ? source : source.slice(0, nl);

@@ -7,11 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenario-catalog";
 import { useChatContext } from "./chat-context";
 
-/**
- * D24: the scenario panel. Each entry sends a message with the scenario name;
- * the server forces a scripted provider for it, so nothing here can spend
- * money or bypass a cap.
- */
+/** D24: the server forces a scripted provider for scenarios, so the panel cannot spend money. */
 export function ScenarioPanel() {
   const { send } = useChatContext();
   const router = useRouter();

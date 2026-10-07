@@ -33,11 +33,8 @@ export interface RefusalInfo {
   explanation: string | null;
 }
 
-/**
- * D20 latency breakdown. Server stamps are server clock, client stamps are
- * client clock; they are never subtracted across machines. Intervals are
- * derived on whichever side owns both endpoints.
- */
+// D20: server stamps on the server clock, client stamps on the client clock; intervals are derived
+// on the side that owns both endpoints, never across machines.
 export interface Timings {
   server?: {
     received: number;

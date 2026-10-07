@@ -5,11 +5,7 @@ import { useChat, useChatStore } from "@client/store/hooks";
 
 const SENTENCE_END = /[.!?](\s|$)/g;
 
-/**
- * D19: one polite live region, updated at most every 2 s with the completed
- * sentences streamed since the last announcement, so a screen reader hears
- * prose rather than a token at a time.
- */
+/** D19: announces completed sentences at most every 2 s, so a reader hears prose, not tokens. */
 export function LiveRegion({ chatId }: { chatId: string }) {
   const store = useChatStore();
   const chat = useChat(chatId);

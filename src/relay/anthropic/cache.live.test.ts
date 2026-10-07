@@ -1,10 +1,5 @@
-/**
- * D13 cache test, opt-in because it spends real money: `pnpm test:cache`.
- * Builds requests with the production request builder (so each model's
- * combination of betas, `fallbacks`, and `block_binding` is accepted), sends
- * a fixture above Haiku 4.5's 4096-token minimum twice per model, and
- * asserts non-zero `cache_read_input_tokens` on the second request.
- */
+// D13, opt-in because it spends money: pnpm test:cache. Uses the production request builder and a
+// fixture above Haiku 4.5's 4096-token minimum; asserts cache_read_input_tokens > 0 on the second request.
 import { describe, expect, it } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL_IDS } from "@shared/models";

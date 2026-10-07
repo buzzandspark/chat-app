@@ -1,8 +1,4 @@
-/**
- * The three models in the picker (D11). Per-model request configuration lives
- * in src/relay/anthropic/thinking-config.ts and prices in pricing.ts; this file
- * is the shared, client-safe catalogue.
- */
+// Client-safe model catalogue (D11); request params live in thinking-config.ts, prices in pricing.ts.
 export const MODEL_IDS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-4-5"] as const;
 export type ModelId = (typeof MODEL_IDS)[number];
 export const DEFAULT_MODEL: ModelId = "claude-sonnet-5-5";

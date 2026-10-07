@@ -62,10 +62,8 @@ export interface UsageRow extends TokenCounts {
   costUsd: number;
 }
 
-/**
- * D22: each iteration priced at its own model's rates. A declined attempt is a
- * `message` entry for the declined model; the serving hop is `fallback_message`.
- */
+// D22: each iteration at its own model's rates. A declined attempt is a message entry for the
+// declined model; the serving hop is fallback_message.
 export function priceIterations(iterations: IterationUsage, defaultModel: string): UsageRow[] {
   const rows: UsageRow[] = [];
   for (const it of iterations) {
@@ -101,11 +99,7 @@ export function summarize(rows: UsageRow[], estimated = false): UsageSummary {
   return s;
 }
 
-/**
- * Seeded output tokens-per-second per model, used to estimate the billed
- * output of a stopped or interrupted generation from elapsed streaming time
- * (D22). The engine keeps a rolling average from completed generations.
- */
+// Seed tokens/s per model for estimating billed output of stopped or interrupted generations (D22).
 export const SEED_OUTPUT_TPS: Record<string, number> = {
   "claude-sonnet-5-5": 80,
   "claude-opus-5-5": 50,

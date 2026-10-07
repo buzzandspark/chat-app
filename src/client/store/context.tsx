@@ -4,11 +4,7 @@ import { ChatStore } from "./chat-store";
 
 const ChatStoreContext = createContext<ChatStore | null>(null);
 
-/**
- * One store per shell instance: a fresh one for every server render (no
- * cross-request accumulation) and a single long-lived one on the client,
- * because the (chat) layout persists across navigations.
- */
+/** One store per shell: fresh per server render, long-lived on the client because the layout persists. */
 export function ChatStoreProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() => new ChatStore());
   return <ChatStoreContext.Provider value={store}>{children}</ChatStoreContext.Provider>;

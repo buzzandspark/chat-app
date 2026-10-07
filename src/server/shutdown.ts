@@ -17,7 +17,7 @@ export function isDraining(): boolean {
   return state.draining;
 }
 
-/** Register work to run before exit, in registration order. */
+/** Register work to run before exit; drains run last-registered first. */
 export function onShutdown(drain: Drain): void {
   state.drains.push(drain);
 }

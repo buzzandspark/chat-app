@@ -1,7 +1,4 @@
-/**
- * D17: per-user sliding-window rate limit, in memory (one process, D1).
- * Defaults: 20 messages per minute and 300 per day.
- */
+// D17: in-memory per-user sliding window, 20 per minute and 300 per day by default.
 export interface RateLimitResult {
   ok: boolean;
   retryAfterMs: number;

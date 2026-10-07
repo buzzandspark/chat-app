@@ -33,9 +33,8 @@ export interface StreamAccumulator {
   servingModel: string | null;
   blocks: Map<number, BlockAcc>;
   order: number[];
-  /** True once any text delta has been emitted. */
   hasText: boolean;
-  /** The fallback boundaries seen, in order, with whether text preceded them. */
+  /** Fallback boundaries in order; `visible` means text preceded the switch. */
   boundaries: Array<{ index: number; from: string; to: string; category: string | null; visible: boolean }>;
   stopReason: StopReason | null;
   refusal: RefusalInfo | null;
@@ -81,11 +80,7 @@ function newBlock(type: StoredContentBlock["type"]): BlockAcc {
   };
 }
 
-/**
- * D9: one raw Anthropic stream event in, zero or more relay event bodies out,
- * with the accumulator updated so `accumulate.ts` can build the content to
- * persist. Pure: no I/O, no timers.
- */
+/** One raw Anthropic event in, relay event bodies out, accumulator updated (D9). Pure. */
 export function normalizeEvent(raw: NormalizableEvent, acc: StreamAccumulator): RelayEventBody[] {
   switch (raw.type) {
     case "message_start": {
@@ -143,8 +138,7 @@ export function normalizeEvent(raw: NormalizableEvent, acc: StreamAccumulator): 
           ];
         }
         default:
-          // Server-tool blocks and other types are unused in v1; keep the slot so
-          // indices stay aligned, emit nothing.
+          // Unused block types keep their index slot so later indices stay aligned.
           return [];
       }
     }
@@ -204,12 +198,8 @@ export function normalizeEvent(raw: NormalizableEvent, acc: StreamAccumulator): 
   }
 }
 
-/**
- * Serving model (D9): the last fallback block's `to.model`, else the model
- * `message_start` named. A sticky-routed turn has no block, so the
- * `fallback_message` iteration entry is the cross-check: when present and it
- * disagrees with `message_start`, trust the iteration entry.
- */
+// The last fallback block's to.model wins, else message_start's model. Sticky-routed turns have
+// no block, so a fallback_message iteration entry is the cross-check (D9).
 export function resolveServingModel(acc: StreamAccumulator): string | null {
   const lastBoundary = acc.boundaries[acc.boundaries.length - 1];
   if (lastBoundary) return lastBoundary.to;

@@ -5,11 +5,7 @@ import { getDb, schema } from "@db/client";
 import { errorResponse, jsonError } from "@server/current-user";
 import { isDraining } from "@server/shutdown";
 
-/**
- * ADR-0004: "Try the demo" creates an ephemeral anonymous user with role
- * `demo` and a 24 h session. The provider resolver forces replay for demo
- * users server-side, so the demo can never spend API money.
- */
+/** ADR-0004: anonymous demo user with a 24 h session; the provider resolver forces replay for `demo`. */
 export async function POST(): Promise<Response> {
   try {
     if (isDraining()) return jsonError(503, { error: "draining" });

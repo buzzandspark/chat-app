@@ -1,12 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 
-/**
- * D21: a small conflict-aware class merger in place of tailwind-merge (10 kB
- * gzipped). Later classes win within a conflict group, where a group is the
- * utility's property family plus its variant prefix (`md:`, `hover:`,
- * `dark:` ...). Only the families this codebase overrides are grouped;
- * anything else passes through untouched, as clsx would.
- */
+// Conflict-aware class merger replacing tailwind-merge (10 kB gzipped, D21): later classes win within
+// a family plus variant prefix; unknown utilities pass through as clsx would.
 const FAMILIES: Array<[RegExp, string]> = [
   [/^(?:size)-/, "size"],
   [/^(?:min-h)-/, "min-h"],

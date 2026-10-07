@@ -1,8 +1,5 @@
-// D21: attributes the chat route's gzipped JS to packages and project folders
-// using the browser source maps from `SOURCEMAPS=1 pnpm build`. Bytes per
-// source are generated characters between consecutive mapping segments,
-// scaled by each chunk's gzip ratio, so the table is an estimate that sums
-// to the measured total.
+// D21: attributes the chat route's gzipped JS by source, from `SOURCEMAPS=1 pnpm build` maps.
+// Bytes per source are generated chars between mapping segments, scaled by each chunk's gzip ratio.
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";

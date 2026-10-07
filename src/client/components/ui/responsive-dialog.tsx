@@ -12,11 +12,7 @@ interface ResponsiveDialogProps {
   className?: string;
 }
 
-/**
- * D19: one dialog that is a bottom sheet on phones and a centred modal at
- * `md`. Bottom padding follows the keyboard through `--keyboard-inset` so a
- * sheet with a text field is never covered.
- */
+/** D19: a bottom sheet on phones, a centred modal at md; bottom padding follows the keyboard. */
 export function ResponsiveDialog({ open, onOpenChange, title, description, children, className }: ResponsiveDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

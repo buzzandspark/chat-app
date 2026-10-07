@@ -16,11 +16,8 @@ export interface EventStoreOptions {
   now?: () => number;
 }
 
-/**
- * D3: `Map<generationId, { events, subscribers, terminal }>`. Sequence numbers
- * are the array index. `append` pushes and notifies subscribers synchronously
- * so a connected client sees a delta in the same tick the producer did.
- */
+// D3: seq numbers are the array index; append notifies synchronously so a connected client
+// sees a delta in the same tick as the producer.
 export class EventStore {
   private buffers = new Map<string, GenerationBuffer>();
   private evictAfterMs: number;
@@ -54,7 +51,6 @@ export class EventStore {
     return this.buffers.get(generationId);
   }
 
-  /** Appends a producer event, assigning `seq` and `t`, and notifies subscribers. */
   append(generationId: string, body: RelayEventBody): RelayEvent {
     const buffer = this.buffers.get(generationId);
     if (!buffer) throw new Error(`no buffer for generation ${generationId}`);
@@ -81,10 +77,7 @@ export class EventStore {
     return event;
   }
 
-  /**
-   * Replays buffered events with `seq > after` synchronously, then attaches
-   * for live events until the terminal event. Returns an unsubscribe function.
-   */
+  /** Replays buffered events with seq > after, then attaches live until the terminal event. */
   subscribe(generationId: string, after: number, subscriber: Subscriber): () => void {
     const buffer = this.buffers.get(generationId);
     if (!buffer) throw new Error(`no buffer for generation ${generationId}`);
@@ -96,14 +89,12 @@ export class EventStore {
     };
   }
 
-  /** Ids of generations that have not reached a terminal event. */
   running(): string[] {
     const out: string[] = [];
     for (const [id, b] of this.buffers) if (!b.terminal) out.push(id);
     return out;
   }
 
-  /** Evict completed generations past their deadline. Returns evicted ids. */
   sweep(): string[] {
     const now = this.now();
     const evicted: string[] = [];

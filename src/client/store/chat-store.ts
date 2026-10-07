@@ -29,7 +29,6 @@ export interface MessageState {
   interruptedReason: InterruptedReason | null;
   /** D17: painted partial text on a no-fallback refusal is dimmed and not saved. */
   discardedText: boolean;
-  /** Transport state for the generation that fills this message. */
   connection: ConnectionState;
   reconnectAttempt: number;
   /** Client-clock timestamps for the thinking duration label (D12). */
@@ -85,14 +84,7 @@ export function textOf(blocks: readonly ClientBlock[]): string {
   return s;
 }
 
-/**
- * D10: an external store keyed by message id with per-message subscribers.
- * Producer events are queued and flushed once per animation frame, applied
- * idempotently by `(generationId, seq)`. Control events (`seq: null`) are
- * always applied. Each flush publishes one new state object per touched
- * message, so a streaming message re-renders once per frame and nothing
- * else re-renders at all.
- */
+/** D10: per-message subscribers; producer events batch per frame, dedupe by seq; control events always apply. */
 export class ChatStore {
   private messages = new Map<string, MessageState>();
   private internals = new Map<string, Internal>();
@@ -115,8 +107,6 @@ export class ChatStore {
     this.now = options.now ?? Date.now;
   }
 
-  // ---- reads --------------------------------------------------------------
-
   getMessage(id: string): MessageState | undefined {
     return this.messages.get(id);
   }
@@ -137,8 +127,6 @@ export class ChatStore {
     }
     return out;
   }
-
-  // ---- subscriptions --------------------------------------------------------
 
   subscribeMessage(id: string, listener: Listener): () => void {
     let set = this.messageListeners.get(id);
@@ -176,15 +164,7 @@ export class ChatStore {
     if (set) for (const l of set) l();
   }
 
-  // ---- writes ---------------------------------------------------------------
-
-  /**
-   * Replace a chat's messages from a server render or fetch. Keeps live state
-   * for in-flight messages. With `deferNotify`, subscribers are told in a
-   * microtask: the caller is seeding during its own render (so the first
-   * paint already has the messages) and a synchronous notification would set
-   * state in an ancestor mid-render.
-   */
+  /** Keeps in-flight messages. deferNotify: the caller seeds during its own render, so notify in a microtask. */
   hydrateChat(chatId: string, title: string | null, incoming: MessageState[], options: { deferNotify?: boolean } = {}): void {
     const ids: string[] = [];
     const touched: string[] = [];
@@ -291,8 +271,6 @@ export class ChatStore {
     this.updateMessage(id, { timings: { ...(m.timings ?? {}), client } });
   }
 
-  // ---- events ---------------------------------------------------------------
-
   /** Queue a producer event for the next frame; control events apply immediately. */
   enqueue(event: RelayEvent): void {
     if (isControl(event)) {
@@ -304,7 +282,6 @@ export class ChatStore {
     if (this.flushHandle === null) this.flushHandle = this.schedule(() => this.flush());
   }
 
-  /** Apply everything queued now (also called before control events and by tests). */
   flush(): void {
     if (this.flushHandle !== null) {
       this.cancel(this.flushHandle);
@@ -326,7 +303,6 @@ export class ChatStore {
     }
   }
 
-  /** Apply one event synchronously (control events, tests). */
   apply(event: RelayEvent): void {
     const drafts = new Map<string, MessageState>();
     const id = this.applyToDraft(event, drafts);
@@ -439,13 +415,7 @@ export class ChatStore {
     return id;
   }
 
-  /**
-   * D2 snapshot rules: `done` (and any other complete server state) replaces
-   * local state because the server copy is complete; `interrupted` or
-   * `stopped` keeps the local text when it extends the snapshot (the saved
-   * partial can be up to 2 s behind) and applies only the status, so visible
-   * text never shrinks.
-   */
+  /** D2: done replaces local state; interrupted/stopped keep longer local text and apply only the status. */
   private applySnapshot(d: MessageState, snapshot: MessageSnapshot, status: MessageStatus, internal: Internal): void {
     const serverBlocks = toClientBlocks(snapshot.content as StoredContentBlock[]);
     const keepLocal =

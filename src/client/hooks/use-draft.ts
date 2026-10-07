@@ -23,11 +23,7 @@ export function clearDraft(key: string): void {
   }
 }
 
-/**
- * D18: composer text per (userId, chatId) in localStorage, debounced 300 ms,
- * flushed on `pagehide`. Restoring happens in the composer's state
- * initializer so the first paint already shows the draft.
- */
+/** D18: drafts per (user, chat) in localStorage, debounced 300 ms, flushed on pagehide. */
 export function useDraft(key: string, value: string): void {
   const latest = useRef(value);
   useEffect(() => {

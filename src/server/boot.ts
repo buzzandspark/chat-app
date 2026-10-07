@@ -35,14 +35,8 @@ export async function boot(): Promise<void> {
   );
 }
 
-/**
- * Boot backstop (D3, D22): a row still `running` at boot means the previous
- * process died without draining. Mark it interrupted so resume returns a
- * snapshot instead of waiting for events that never come, and settle an
- * estimated cost from the saved partial content: the crashed process never
- * wrote usage, so input is the chat's text at four characters per token and
- * output is the partial's text the same way, flagged `estimated`.
- */
+// D3/D22 backstop: a row still `running` at boot died un-drained; mark it interrupted and settle
+// an estimated cost from the saved text at four characters per token (no usage was written).
 function backstopInterruptedGenerations(): void {
   const { db } = openDatabase(env.DATABASE_PATH);
   const running = db

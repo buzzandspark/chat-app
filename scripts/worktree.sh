@@ -1,9 +1,6 @@
 #!/usr/bin/env sh
-# Creates (or refreshes) a sibling git worktree for agents, CI-like runs and
-# experiments, so the developer's checkout and its dev server are never
-# touched. Usage: sh scripts/worktree.sh [name] [commit]   (defaults: wt, HEAD)
-# The worktree gets its own node_modules (from the pnpm store, offline when
-# possible), its own data/ directory and its own dev port (3141).
+# Sibling git worktree for agents and harness runs, so the developer's checkout and dev server stay untouched.
+# Usage: sh scripts/worktree.sh [name] [commit] (defaults: wt, HEAD); own node_modules, data/ and port 3141.
 set -eu
 cd "$(dirname "$0")/.."
 NAME=${1:-wt}

@@ -10,12 +10,8 @@ import type {
   UserRole,
 } from "@shared/types";
 
-/*
- * ADR-0003: SQLite via Drizzle. JSON columns are `text` with `{ mode: "json" }`.
- * Column property names on the better-auth tables (users, sessions, accounts,
- * verifications) must match better-auth's field names exactly; the DB column
- * names are free, so they are snake_case like the rest of the schema.
- */
+// ADR-0003: JSON columns are text with { mode: "json" }. Property names on the better-auth tables
+// must match better-auth's field names; the DB column names are free.
 
 const now = () => new Date();
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" });

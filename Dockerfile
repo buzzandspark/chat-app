@@ -1,12 +1,10 @@
 # syntax=docker/dockerfile:1.7
-# D1: one long-lived Node process. Both stages are Debian slim (glibc) because
-# better-sqlite3 ships prebuilt glibc binaries; Alpine (musl) would force a
-# source build at every install.
+# D1: one long-lived Node process. Debian slim (glibc) because better-sqlite3 ships glibc
+# prebuilt binaries; Alpine (musl) would compile from source on every install.
 
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
-# Fallback toolchain in case a prebuilt better-sqlite3 binary is unavailable
-# for this Node version and node-gyp has to compile from source.
+# Fallback toolchain for node-gyp when no prebuilt better-sqlite3 binary matches this Node.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
   && rm -rf /var/lib/apt/lists/*
@@ -21,16 +19,14 @@ FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# Next.js installs its own SIGTERM handler that exits immediately unless this is
-# set; our handler in instrumentation.ts drains in-flight generations first (D3).
+# Next's own SIGTERM handler exits at once; ours in instrumentation.ts drains generations first (D3).
 ENV NEXT_MANUAL_SIG_HANDLE=true
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV DATABASE_PATH=/data/app.db
 RUN mkdir -p /data && chown node:node /data
-# The standalone output's file trace includes better-sqlite3 and the `bindings`
-# package it loads its binary through; copying node_modules/better-sqlite3 alone
-# would miss `bindings`.
+# The standalone trace includes better-sqlite3 and the `bindings` package it loads its binary
+# through; copying node_modules/better-sqlite3 alone would miss `bindings`.
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public

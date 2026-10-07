@@ -1,11 +1,7 @@
 import type { RelayEvent } from "./events";
 
-/**
- * Server-Sent Events encoder and decoder sharing one module (D2) so the
- * client decoder and the server encoder cannot drift. Hand-written because
- * `EventSource` cannot POST, cannot set headers, and auto-reconnects on its
- * own schedule.
- */
+// SSE encoder and decoder in one module so client and server cannot drift (D2).
+// Hand-written because EventSource cannot POST, set headers, or defer to our backoff.
 
 export const SSE_HEADERS: Record<string, string> = {
   "content-type": "text/event-stream; charset=utf-8",
@@ -35,12 +31,8 @@ export interface SseParser {
   flush(): void;
 }
 
-/**
- * Incremental parser per the WHATWG EventSource spec: fields are `name: value`,
- * lines starting with `:` are comments, a blank line dispatches. Handles CRLF,
- * LF, and lone CR line endings and chunks split anywhere, including inside a
- * multi-byte sequence (callers decode with a streaming TextDecoder).
- */
+// WHATWG EventSource parsing: CRLF, LF and lone CR line endings, chunks split anywhere.
+// Callers decode bytes with a streaming TextDecoder so multi-byte splits are safe.
 export function createSseParser(onMessage: (message: SseMessage) => void): SseParser {
   let buffer = "";
   let event: string | null = null;

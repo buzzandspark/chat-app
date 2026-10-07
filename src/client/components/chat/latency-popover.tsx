@@ -9,11 +9,7 @@ function ms(a: number | undefined, b: number | undefined): string {
   return `${Math.max(0, Math.round(b - a))} ms`;
 }
 
-/**
- * D20: six stages, server intervals computed on the server clock and client
- * intervals on the client clock, joined by message id and never compared
- * across machines.
- */
+/** D20: server and client intervals are on different clocks, joined by message id, never compared. */
 export function LatencyPopover({ timings, usage }: { timings: Timings | null; usage: UsageSummary | null }) {
   const s = timings?.server;
   const c = timings?.client;

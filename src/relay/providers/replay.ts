@@ -46,11 +46,7 @@ export async function* readFixtureFile(file: string, signal?: AbortSignal): Asyn
   }
 }
 
-/**
- * Replays fixture lines with their original pacing scaled by `speed`
- * (1 = real time, 0 = no delays). Shared by the file-backed ReplayProvider
- * and the in-memory ScriptedProvider.
- */
+/** Replays fixture lines with their pacing scaled by speed (1 is real time, 0 is no delays). */
 export async function* replayLines(
   lines: AsyncIterable<FixtureLine> | Iterable<FixtureLine>,
   speed: number,

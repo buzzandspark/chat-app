@@ -4,12 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/*
- * D28 design tokens. Defined for the phone first (type ramp, spacing, sheet
- * radii) and extended at md. The palette is a warm paper neutral with a
- * sea-teal accent; the shadcn semantic names map onto it so the primitives
- * pick it up without per-component overrides.
- */
+/* D28 tokens: phone first, extended at md; a warm paper neutral with a sea-teal accent. */
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

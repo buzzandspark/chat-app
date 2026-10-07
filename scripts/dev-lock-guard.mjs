@@ -1,17 +1,6 @@
 #!/usr/bin/env node
-/**
- * Refuses to run Next or the harness in a checkout whose dev server is live.
- *
- * Next 16 keeps one dev server per checkout (`.next/dev/lock`). Running
- * `next build`, `next typegen`, Playwright, the screenshot pass or the
- * shutdown script in the same checkout does not delete `.next/dev` (build
- * cleaning skips it), but every one of them drives that server or rewrites
- * the sources it is watching: a document load that lands during one of its
- * recompiles can receive a chunk list that no longer matches the module
- * graph, which the browser reports as "module factory is not available".
- * Agents and scripts work in a git worktree with their own dev server
- * (scripts/worktree.sh); the developer's checkout belongs to the developer.
- */
+// Refuses to run Next or the harness while this checkout's dev server (.next/dev/lock) is live:
+// those runs drive or re-chunk what it serves, and a tab can hit "module factory is not available".
 import fs from "node:fs";
 import path from "node:path";
 

@@ -1,10 +1,7 @@
 import { eq } from "drizzle-orm";
 import { openDatabase, schema } from "./client";
 
-/**
- * Seeds the dev user that build steps 2-5 run against (D6). Idempotent.
- * The first admin is created by the auth bootstrap in step 6.
- */
+/** Dev user for running without sign-in (D6); idempotent. The admin is seeded by the auth bootstrap. */
 export function seedDevUser(userId: string = process.env.DEV_USER_ID ?? "dev-user"): void {
   const { db } = openDatabase();
   const existing = db.select().from(schema.users).where(eq(schema.users.id, userId)).get();

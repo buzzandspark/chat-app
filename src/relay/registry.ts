@@ -16,12 +16,8 @@ export interface RegistryOptions {
   anthropic?: AnthropicProvider;
 }
 
-/**
- * D24: chooses the provider per request, server-side, so the scenario panel
- * can never spend API money or bypass caps. Demo users always get replay or
- * scripted; scenario requests always get scripted; everything else gets the
- * live API unless the process booted in replay mode.
- */
+// Provider choice is server-side so the panel cannot spend money or bypass caps (D24):
+// scenarios get scripted, demo users and replay mode get replay, everything else goes live.
 export function createProviderResolver(options: RegistryOptions): ProviderResolver {
   const fixturesDir = options.fixturesDir ?? path.resolve(process.cwd(), "fixtures");
   const speed = options.speed ?? 1;

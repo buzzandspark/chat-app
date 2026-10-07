@@ -3,12 +3,8 @@ import path from "node:path";
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 import { lastAssistant, openNewChat, runScenario, visible } from "./helpers";
 
-/**
- * D0, D26: performance budgets run only on the Pixel 7 project, where CPU
- * and network throttling go through the Chrome DevTools protocol (CPU 4x,
- * Playwright's Fast 3G profile). Results are appended to docs/perf/ so the
- * design doc quotes measured numbers.
- */
+// D0, D26: budgets run only on Pixel 7, where CPU 4x and Fast 3G throttling go through CDP;
+// results append to docs/perf/ so the design doc quotes measured numbers.
 test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
   test.skip(({ browserName, isMobile }) => browserName !== "chromium" || !isMobile, "budgets are measured on the Pixel 7 project only");
 

@@ -10,12 +10,7 @@ export interface SearchHit {
   updatedAt: number;
 }
 
-/**
- * D19 search (⌘/Ctrl+K): titles and message text, newest first. One process
- * (D1) has no search service, so this scans the user's own chats in SQLite
- * and matches text blocks in JavaScript; a personal history is small enough
- * that this stays well under a frame at a few thousand messages.
- */
+/** D19: scans the user's chats in JS; one process (D1) has no search service and a history is small. */
 export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireUser();
