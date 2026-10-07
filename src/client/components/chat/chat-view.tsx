@@ -8,6 +8,7 @@ import { useChat, useChatSeeded, useChatStore } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
 import { isUuid } from "@shared/id";
+import { isModelId } from "@shared/models";
 import { ChatContext, type EditingState } from "./chat-context";
 import { Composer, type ComposerHandle } from "./composer";
 import { LiveRegion } from "./live-region";
@@ -33,7 +34,9 @@ async function truncateOnServer(chatId: string, fromMessageId: string): Promise<
  * server's rows arrive through `children` (a Suspense child that seeds the store) whenever they do.
  */
 export function ChatView({ children }: { children: ReactNode }) {
-  const { id: chatId } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  // One instance per URL; a hidden instance must not follow the active chat's params.
+  const [chatId] = useState(params.id);
   const { userId, scenarioPanel } = useShellUser();
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
@@ -90,9 +93,13 @@ export function ChatView({ children }: { children: ReactNode }) {
     (userMessageId: string, fromMessageId: string) => {
       // The text travels with the retry: after a refused first POST the server has no user row to retry from.
       const text = textOf(store.getMessage(userMessageId)?.blocks ?? []) || undefined;
+      // The replaced reply's own model and scenario, not whatever the picker shows now.
+      const replaced = store.getMessage(fromMessageId);
+      const model = isModelId(replaced?.requestedModel) ? replaced.requestedModel : settings.model;
+      const scenario = replaced?.scenario ?? settings.scenario?.name;
       store.truncateFrom(fromMessageId);
       void truncateOnServer(chatId, fromMessageId).then(() =>
-        client.retry({ chatId, userMessageId, text, model: settings.model, thinking: settings.thinking, scenario: settings.scenario?.name }),
+        client.retry({ chatId, userMessageId, text, model, thinking: settings.thinking, scenario }),
       );
       listRef.current?.engage();
     },

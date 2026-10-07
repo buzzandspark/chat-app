@@ -2,33 +2,36 @@
 import { useCallback, useRef, useState } from "react";
 
 /**
- * D21: a Radix-backed control's chunk loads on the first sign of intent (hover, focus, touch, press),
- * not at mount. Until then a look-alike button stands in; once intent is seen the `next/dynamic`
- * component mounts (its `loading` is the same look-alike, inert), and a press made before the chunk
- * arrived is remembered so the real control opens as soon as it mounts. The chunks stay behind
- * `next/dynamic`, which keeps them out of the route's client-reference manifest and so out of the
- * size gate; a raw `import()` or `new Worker` target is listed there and counted.
+ * D21: a Radix-backed control's chunk loads on the first sign of intent, not at mount. Hover, touch
+ * and focus only warm the chunk: swapping the element on any event that precedes a click (mousedown
+ * focuses the button) would lose the click. A press arms the real control and asks it to open; a
+ * keyboard press is a click too, and Radix returns focus to the real trigger when it closes. The
+ * chunks stay behind `next/dynamic`, which keeps them out of the route's client-reference manifest
+ * (a raw `import()` target is listed there and counted by the size gate).
  */
-export function useIntent() {
+export function useIntent(warm: () => Promise<unknown>) {
   const [armed, setArmed] = useState(false);
   const [wanted, setWanted] = useState<string | null>(null);
-  const armedRef = useRef(false);
-  const start = useCallback(() => {
-    if (armedRef.current) return;
-    armedRef.current = true;
-    setArmed(true);
-  }, []);
+  const warmed = useRef(false);
+  const warmUp = useCallback(() => {
+    if (warmed.current) return;
+    warmed.current = true;
+    warm().catch(() => {
+      warmed.current = false;
+    });
+  }, [warm]);
   const press = useCallback(
     (what: string) => {
-      start();
+      warmUp();
+      setArmed(true);
       setWanted(what);
     },
-    [start],
+    [warmUp],
   );
-  return { armed, wanted, start, press };
+  return { armed, wanted, warmUp, press };
 }
 
-/** Event props that count as intent for a stand-in button. */
-export function intentProps(start: () => void) {
-  return { onPointerEnter: start, onFocus: start, onTouchStart: start, onPointerDown: start };
+/** Event props for a stand-in button: warm the chunk on hover, touch and focus; never swap before a click. */
+export function intentProps(i: { warmUp: () => void }) {
+  return { onPointerEnter: i.warmUp, onTouchStart: i.warmUp, onFocus: i.warmUp };
 }

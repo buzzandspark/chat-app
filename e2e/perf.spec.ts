@@ -268,8 +268,12 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     const sorted = [...frames].sort((a, b) => a - b);
     const p = (q: number) => Number((sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0).toFixed(1));
     const maxFrame = Number(Math.max(0, ...frames).toFixed(1));
-    // D15: reopening the chat must not tokenise or commit the block in one go either.
+    // D15: reopening the chat must not tokenise or commit the block in one go either. The hidden view
+    // keeps its chat (Activity), so the usual reopen shows the very same element; a remount is a cache hit.
     const chatUrl = page.url();
+    await lastAssistant(page).locator(".markdown-code").evaluate((el) => {
+      (el as HTMLElement & { __kept?: boolean }).__kept = true;
+    });
     await ensureSidebarOpen(page);
     await page.getByRole("link", { name: "New chat" }).click();
     await expect(page).not.toHaveURL(chatUrl);
@@ -286,13 +290,17 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
       requestAnimationFrame(tick);
     });
     await ensureSidebarOpen(page);
-    await page.getByRole("complementary", { name: "Chats" }).getByRole("link", { name: /Giant code block/ }).click();
+    // By href, not title: layout.spec runs the same scenario earlier in the suite, so the title is not unique.
+    await page.getByRole("complementary", { name: "Chats" }).locator(`a[href="${new URL(chatUrl).pathname}"]`).click();
     await expect(page).toHaveURL(chatUrl);
     await expect(lastAssistant(page).locator(".markdown-code")).toHaveAttribute("data-committed", "all", { timeout: 30_000 });
     await page.waitForTimeout(1000);
     const reopenFrames = await page.evaluate(() => (window as Window & { __frames?: number[] }).__frames ?? []);
     const reopenMaxFrame = Number(Math.max(0, ...reopenFrames).toFixed(1));
-    const reopenSource = await lastAssistant(page).locator(".markdown-code").getAttribute("data-highlight-source");
+    const reopen = await lastAssistant(page)
+      .locator(".markdown-code")
+      .evaluate((el) => ({ kept: (el as HTMLElement & { __kept?: boolean }).__kept === true, source: el.getAttribute("data-highlight-source") }));
+    const reopenSource = reopen.kept ? "kept" : reopen.source;
     record("giant_code_block", {
       frames: frames.length,
       p50: p(0.5),
@@ -306,11 +314,11 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
       reopenSource,
     });
     expect(source).toBe("worker");
-    expect(reopenSource).toBe("cache");
+    expect(["kept", "cache"]).toContain(reopenSource);
     // Measured 2026-10-07 at 4x CPU: longest frame 317 ms when the reply finishes and 367 ms on reopen
     // (about 80 and 90 ms unthrottled), 4 to 5 frames over 50 ms in a 2,000-frame window, p99 33 ms.
     // The review's 1.8 s freeze was tokenising on the main thread plus one commit of the whole block;
-    // tokenising is now off-thread (source "worker"), reopening is a cache hit, and commits touch one
+    // tokenising is now off-thread (source "worker"), reopening keeps the element or hits the cache, and commits touch one
     // contained line group. The remaining spikes recur every ~30 groups and grow with the committed
     // DOM, which points at garbage collection or style work, not at tokenising; they are gated here.
     expect(maxFrame).toBeLessThan(500);

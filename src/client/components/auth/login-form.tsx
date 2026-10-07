@@ -8,10 +8,16 @@ import { Label } from "@/components/ui/label";
 import { authClient } from "@auth/client";
 import { newChatHref } from "@client/hooks/use-new-chat";
 
-/** Only a same-origin path: not `//host`, not `/\\host`, not a scheme, and not the `/c/new` alias. */
+/** Only a same-origin path, resolved the way the browser would (so `/\t/evil` and friends cannot leave the origin). */
 function safeNext(next: string | null): string | null {
-  if (!next || !/^\/(?![\/\\])/.test(next) || next === "/c/new") return null;
-  return next;
+  if (!next) return null;
+  try {
+    const url = new URL(next, window.location.origin);
+    if (url.origin !== window.location.origin || url.pathname === "/c/new") return null;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return null;
+  }
 }
 
 function LoginFormInner() {

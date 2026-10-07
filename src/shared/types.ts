@@ -71,6 +71,8 @@ export const ERROR_KINDS = [
   "overloaded",
   "api_error",
   "auth",
+  "session",
+  "forbidden",
   "quota_exceeded",
   "context_full",
   "bad_request",

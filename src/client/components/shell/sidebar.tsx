@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/context";
 import { prefetchChat } from "@client/store/prefetch";
-import { getSidebarStore, setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
+import { setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { useModals } from "../ui/modal-manager";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
@@ -29,11 +29,13 @@ const ChatItemMenu = dynamic(() => import("./chat-item-menu").then((m) => m.Chat
   ),
 });
 
+const warmChatItemMenu = () => import("./chat-item-menu");
+
 function ChatItemMenuOnIntent(props: { title: string; onRename: () => void; onDelete: () => void }) {
-  const { armed, wanted, start, press } = useIntent();
-  if (armed) return <ChatItemMenu {...props} defaultOpen={wanted === "menu"} />;
+  const intent = useIntent(warmChatItemMenu);
+  if (intent.armed) return <ChatItemMenu {...props} defaultOpen={intent.wanted === "menu"} />;
   return (
-    <IconButton label={`Actions for ${props.title}`} tipAlign="end" className={MENU_BUTTON} {...intentProps(start)} onClick={() => press("menu")}>
+    <IconButton label={`Actions for ${props.title}`} tipAlign="end" className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
       <MoreHorizontal />
     </IconButton>
   );
@@ -58,7 +60,7 @@ interface SidebarProps {
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
 export function Sidebar({ initialChats, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel }: SidebarProps) {
-  const chats = useSidebarChats();
+  const chats = useSidebarChats(initialChats);
   const pathname = usePathname();
   const router = useRouter();
   const { show } = useModals();
@@ -68,10 +70,6 @@ export function Sidebar({ initialChats, phoneOpen, desktopOpen, open, onClose, o
   // D21: the clicked row is active at once; the router catches up when the thread arrives.
   const pendingChatId = usePendingChat();
   const activeChatId = pendingChatId ?? currentChatId;
-
-  useEffect(() => {
-    getSidebarStore().hydrate(initialChats);
-  }, [initialChats]);
 
   // D21: on intent (hover, focus, touchstart) and for the top five when the sidebar opens, warm the
   // route shell and seed the chat's rows into the store, so the click renders from memory (ADR-0005).

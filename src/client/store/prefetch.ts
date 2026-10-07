@@ -1,4 +1,5 @@
 "use client";
+import { getGenerationClient } from "../transport/generation-client";
 import type { ChatStore, SeedRow } from "./chat-store";
 
 interface ChatJson {
@@ -26,6 +27,11 @@ export function prefetchChat(store: ChatStore, chatId: string): Promise<void> {
       if (!res.ok) return;
       const data = (await res.json()) as ChatJson;
       store.seedChat(chatId, data.chat.title, data.messages);
+      // A reply still streaming on the server reattaches now, so the chat is current when opened.
+      const client = getGenerationClient(store);
+      for (const row of data.messages) {
+        if (row.role === "assistant" && row.status === "streaming" && row.generationId) client.attach(row.generationId, row.id);
+      }
     } catch {
       // Offline or aborted: the navigation's own seed still arrives.
     } finally {

@@ -188,6 +188,7 @@ export const generations = sqliteTable(
     index("generations_chat_idx").on(t.chatId),
     index("generations_status_idx").on(t.status),
     index("generations_user_idx").on(t.userId),
+    index("generations_message_idx").on(t.messageId),
   ],
 );
 

@@ -18,9 +18,17 @@ import { ThinkingBlock } from "./thinking-block";
 const ACTION_BUTTON =
   "text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
 
-function ActionsStandIn({ message, start, onPress }: { message: MessageState; start?: () => void; onPress?: (what: string) => void }) {
+function ActionsStandIn({
+  message,
+  intent,
+  onPress,
+}: {
+  message: MessageState;
+  intent?: { warmUp: () => void };
+  onPress?: (what: string) => void;
+}) {
   return (
-    <div className="flex items-center gap-1" {...(start ? intentProps(start) : {})}>
+    <div className="flex items-center gap-1" {...(intent ? intentProps(intent) : {})}>
       <ServedBy message={message} />
       <IconButton label="Latency breakdown" className="text-muted-foreground" disabled={!onPress} onClick={() => onPress?.("latency")}>
         <Timer />
@@ -36,10 +44,14 @@ const AssistantActions = dynamic(() => import("./assistant-actions").then((m) =>
   loading: () => <div className="h-11" aria-hidden />,
 });
 
+const warmAssistantActions = () => import("./assistant-actions");
+
 function AssistantActionsOnIntent(props: { message: MessageState; text: string; canRegenerate: boolean; onRegenerate: () => void }) {
-  const { armed, wanted, start, press } = useIntent();
-  if (armed) return <AssistantActions {...props} defaultOpen={wanted === "menu" || wanted === "latency" ? wanted : null} />;
-  return <ActionsStandIn message={props.message} start={start} onPress={press} />;
+  const intent = useIntent(warmAssistantActions);
+  if (intent.armed) {
+    return <AssistantActions {...props} defaultOpen={intent.wanted === "menu" || intent.wanted === "latency" ? intent.wanted : null} />;
+  }
+  return <ActionsStandIn message={props.message} intent={intent} onPress={intent.press} />;
 }
 
 function ModelDivider({ from, to, category }: { from: string; to: string; category: string | null }) {
@@ -131,7 +143,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
       <StatusFooter
         message={message}
         onRetry={onRetry}
-        onContinue={() => send("Continue.")}
+        onContinue={() => send("Continue.", message.scenario ?? undefined)}
         onResume={() => client.resumeAll()}
       />
       {!streaming ? (

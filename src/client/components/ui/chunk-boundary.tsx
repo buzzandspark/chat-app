@@ -6,6 +6,8 @@ interface Props {
   /** What to show instead; by default nothing, so a failed lazy chunk costs one control, not the page. */
   fallback?: ReactNode;
   label?: string;
+  /** Called once when the subtree fails, so an owner (a modal entry) can remove itself. */
+  onError?: () => void;
 }
 
 /** A failed lazy chunk or a throwing widget must not take the thread down with it. */
@@ -18,6 +20,7 @@ export class ChunkBoundary extends Component<Props, { failed: boolean }> {
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error(`[boundary] ${this.props.label ?? "widget"} failed`, error, info.componentStack);
+    this.props.onError?.();
   }
 
   override render(): ReactNode {

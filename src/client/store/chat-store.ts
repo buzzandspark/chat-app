@@ -1,6 +1,6 @@
 import type { ClientBlock, StoredContentBlock } from "@shared/blocks";
 import { toClientBlocks } from "@shared/blocks";
-import { DEFAULT_MODEL, type ModelId } from "@shared/models";
+import { DEFAULT_MODEL, isModelId, type ModelId } from "@shared/models";
 import type {
   InterruptedReason,
   MessageStatus,
@@ -41,6 +41,8 @@ export interface MessageState {
   createdAt: number;
   /** Added by this client and not yet listed by the server (a POST in flight, or one it refused). */
   local: boolean;
+  /** The scripted scenario this reply comes from, so Continue and retries keep it. */
+  scenario: string | null;
 }
 
 /** Per-chat composer settings (ADR-0005): kept here so a remount or an Activity eviction never resets them. */
@@ -60,6 +62,8 @@ export interface ChatState {
   /** True once the server's rows have been applied (or the chat was created locally), so an empty list means a new chat. */
   seeded: boolean;
   settings: ChatSettings;
+  /** True once the user changed a setting here; a seed then leaves the model alone. */
+  settingsTouched: boolean;
 }
 
 /** A message row as the page and `GET /api/chats/:id` deliver it. */
@@ -77,6 +81,7 @@ export interface SeedRow {
   timings: Timings | null;
   generationId: string | null;
   lastSeq?: number | null;
+  scenario?: string | null;
   createdAt: number;
 }
 
@@ -87,10 +92,10 @@ interface Internal {
 
 type Listener = () => void;
 
-export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS };
+export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false };
 
 function emptyChat(id: string): ChatState {
-  return { id, messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS };
+  return { id, messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false };
 }
 
 const TERMINAL: ReadonlySet<MessageStatus> = new Set(["done", "stopped", "interrupted", "error", "refused"]);
@@ -116,6 +121,7 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
     lastSeq: -1,
     createdAt: Date.now(),
     local: false,
+    scenario: null,
     ...partial,
   };
 }
@@ -230,7 +236,7 @@ export class ChatStore {
 
   setSettings(chatId: string, patch: Partial<ChatSettings>): void {
     const chat = this.chats.get(chatId) ?? emptyChat(chatId);
-    this.chats.set(chatId, { ...chat, settings: { ...chat.settings, ...patch } });
+    this.chats.set(chatId, { ...chat, settings: { ...chat.settings, ...patch }, settingsTouched: true });
     this.notifyChat(chatId);
   }
 
@@ -266,13 +272,25 @@ export class ChatStore {
       }
     }
     const nextTitle = title ?? previous?.title ?? null;
+    // An existing chat opens on the model its last reply was asked of, unless the user already chose one here.
+    let settings = previous?.settings ?? DEFAULT_SETTINGS;
+    if (!previous?.settingsTouched) {
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i]!;
+        if (row.role === "assistant" && isModelId(row.requestedModel)) {
+          if (settings.model !== row.requestedModel) settings = { ...settings, model: row.requestedModel };
+          break;
+        }
+      }
+    }
     const same =
       previous !== undefined &&
       previous.seeded &&
       previous.title === nextTitle &&
+      previous.settings === settings &&
       previous.messageIds.length === ids.length &&
       previous.messageIds.every((id, i) => id === ids[i]);
-    if (!same) this.chats.set(chatId, { ...(previous ?? emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true });
+    if (!same) this.chats.set(chatId, { ...(previous ?? emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true, settings });
     const notify = () => {
       for (const id of touched) this.notifyMessage(id);
       if (!same) this.notifyChat(chatId);
@@ -417,6 +435,7 @@ export class ChatStore {
       case "started":
         d.generationId = event.generationId;
         d.requestedModel = event.requestedModel;
+        if (event.scenario !== undefined) d.scenario = event.scenario;
         if (d.status !== "streaming") d.status = "streaming";
         break;
       case "message_start":
@@ -552,6 +571,7 @@ export function messageStateFromRow(row: SeedRow): MessageState {
     generationId: row.generationId,
     discardedText: row.status === "refused" && textOf(blocks).length > 0,
     lastSeq: row.lastSeq ?? -1,
+    scenario: row.scenario ?? null,
     createdAt: row.createdAt,
   });
 }

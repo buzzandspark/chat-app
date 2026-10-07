@@ -50,7 +50,7 @@ export function ChatShell({ userId, scenarioPanel, ...props }: ChatShellProps) {
 function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellProps, "userId" | "scenarioPanel">) {
   const desktop = useIsDesktop();
   const pathname = usePathname();
-  const chats = useSidebarChats();
+  const chats = useSidebarChats(initialChats);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
   const { show } = useModals();

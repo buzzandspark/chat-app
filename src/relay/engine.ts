@@ -1,4 +1,4 @@
-import { asc, eq, max } from "drizzle-orm";
+import { asc, desc, eq, max } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages, usageEvents } from "@db/schema";
 import { uuidv7 } from "@shared/id";
@@ -168,6 +168,20 @@ export class Engine {
     if (existingRow) return { created: false, reason: "exists" };
     if (this.isDraining()) throw new DrainingError();
 
+    const chatText = input.text ?? "";
+    const userRowExists =
+      this.db.select({ id: messages.id }).from(messages).where(eq(messages.id, input.userMessageId)).get() !== undefined;
+    // A retry or regenerate with no scenario of its own keeps the scenario of the reply it replaces,
+    // so "Scenario: …" never becomes a prompt for the live model.
+    if (userRowExists && input.scenario === undefined) {
+      const previous = this.db
+        .select({ scenario: generations.scenario })
+        .from(generations)
+        .where(eq(generations.userMessageId, input.userMessageId))
+        .orderBy(desc(generations.startedAt))
+        .get();
+      if (previous?.scenario) input = { ...input, scenario: previous.scenario };
+    }
     const provider = this.providers({
       userId: input.userId,
       userRole: input.userRole,
@@ -175,14 +189,14 @@ export class Engine {
       scenario: input.scenario,
     });
     const billable = isBillable(provider);
-    const chatText = input.text ?? "";
     // A scripted or replayed run spends nothing, so it neither reserves against the cap nor can be refused by it.
     if (billable) {
+      // A retry's text is already in the chat; count it once.
       this.quota.reserve(
         input.userId,
         input.generationId,
         input.model,
-        QuotaManager.estimateInputTokens(this.chatChars(input.chatId) + chatText.length),
+        QuotaManager.estimateInputTokens(this.chatChars(input.chatId) + (userRowExists ? 0 : chatText.length)),
       );
     }
 
@@ -299,6 +313,7 @@ export class Engine {
       messageId: input.assistantMessageId,
       userMessageId: input.userMessageId,
       requestedModel: input.model,
+      scenario: input.scenario ?? null,
     });
     active.promise = this.run(active, input).catch((err) => {
       console.error(`[engine] generation ${active.id} crashed`, err);

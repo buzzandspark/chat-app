@@ -1,5 +1,5 @@
 "use client";
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 export interface ChatSummary {
   id: string;
@@ -73,12 +73,21 @@ export function getSidebarStore(): SidebarStore {
   return singleton;
 }
 
-export function useSidebarChats(): ChatSummary[] {
+/**
+ * `initial` is the server's list: it is the server snapshot, so SSR and hydration render the real rows
+ * (no "No chats yet." flash, no shift), and it seeds the store on the first client render.
+ */
+export function useSidebarChats(initial?: ChatSummary[]): ChatSummary[] {
   const store = getSidebarStore();
+  const [seededWith, setSeededWith] = useState<ChatSummary[] | null>(null);
+  if (initial && seededWith !== initial) {
+    store.hydrate(initial);
+    setSeededWith(initial);
+  }
   return useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.get(),
-    () => EMPTY,
+    () => initial ?? EMPTY,
   );
 }
 

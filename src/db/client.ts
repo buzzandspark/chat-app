@@ -25,6 +25,8 @@ export function openDatabase(filePath: string = process.env.DATABASE_PATH ?? "da
   sqlite.pragma("synchronous = NORMAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("busy_timeout = 5000");
+  // SQLite's lower() folds ASCII only; search needs the same folding as the query (JavaScript's).
+  sqlite.function("unicode_lower", { deterministic: true }, (value: unknown) => (typeof value === "string" ? value.toLowerCase() : value));
   const db = drizzle(sqlite, { schema });
   g.__cadenceDb = { db, sqlite, path: filePath };
   return g.__cadenceDb;

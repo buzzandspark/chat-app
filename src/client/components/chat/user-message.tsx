@@ -20,11 +20,13 @@ const UserActions = dynamic(() => import("./user-actions").then((m) => m.UserAct
 });
 
 /** D21: the menu's chunk loads on intent; the stand-in is the same button. */
+const warmUserActions = () => import("./user-actions");
+
 function UserActionsOnIntent(props: { text: string; onEdit: () => void }) {
-  const { armed, wanted, start, press } = useIntent();
-  if (armed) return <UserActions {...props} defaultOpen={wanted === "menu"} />;
+  const intent = useIntent(warmUserActions);
+  if (intent.armed) return <UserActions {...props} defaultOpen={intent.wanted === "menu"} />;
   return (
-    <IconButton label="Message actions" className={USER_ACTION_BUTTON} {...intentProps(start)} onClick={() => press("menu")}>
+    <IconButton label="Message actions" className={USER_ACTION_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
       <MoreHorizontal />
     </IconButton>
   );

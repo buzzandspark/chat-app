@@ -24,6 +24,8 @@ export interface MessageRow {
   timings: Timings | null;
   generationId: string | null;
   lastSeq: number | null;
+  /** From the message's generation; a reply from a scripted scenario keeps it through Continue and retries. */
+  scenario: string | null;
   createdAt: number;
 }
 
@@ -53,6 +55,14 @@ export function getChatWithMessages(chatId: string, userId: string): { chat: Cha
     .where(eq(schema.messages.chatId, chatId))
     .orderBy(asc(schema.messages.position))
     .all();
+  const scenarios = new Map(
+    db
+      .select({ id: schema.generations.id, scenario: schema.generations.scenario })
+      .from(schema.generations)
+      .where(eq(schema.generations.chatId, chatId))
+      .all()
+      .map((g) => [g.id, g.scenario] as const),
+  );
   return {
     chat: { id: chat.id, title: chat.title, updatedAt: chat.updatedAt.getTime() },
     messages: rows.map((r) => ({
@@ -69,6 +79,7 @@ export function getChatWithMessages(chatId: string, userId: string): { chat: Cha
       timings: r.timings ?? null,
       generationId: r.generationId,
       lastSeq: r.lastSeq,
+      scenario: (r.generationId && scenarios.get(r.generationId)) || null,
       createdAt: r.createdAt.getTime(),
     })),
   };

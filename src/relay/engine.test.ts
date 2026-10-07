@@ -141,6 +141,31 @@ describe("Engine", () => {
     expect(gen.provider).toBe("scripted");
   });
 
+  it("a retry with no scenario of its own keeps the replaced reply's scenario (never a live prompt)", async () => {
+    const providers: string[] = [];
+    const scripted = new ScriptedProvider((req) => scenarioScript((req.scenario as ScenarioName) ?? "normal", req), 0);
+    engine = new Engine({
+      db,
+      store,
+      providers: (ctx) => {
+        providers.push(ctx.scenario ?? "live");
+        return scripted;
+      },
+      partialPersistMs: 50,
+    });
+    const first = input({ scenario: "max_tokens" });
+    engine.start(first);
+    await collectUntilTerminal(store, first.generationId);
+    const retry = input({ chatId: first.chatId, userMessageId: first.userMessageId, text: undefined, scenario: undefined });
+    engine.start(retry);
+    const events = await collectUntilTerminal(store, retry.generationId);
+    const started = events[0]!;
+    expect(started.type === "started" && started.scenario).toBe("max_tokens");
+    expect(providers.filter((p) => p === "live")).toHaveLength(0);
+    const gen = db.select().from(generations).where(eq(generations.id, retry.generationId)).get()!;
+    expect(gen.scenario).toBe("max_tokens");
+  });
+
   it("is idempotent on generationId", async () => {
     const inp = input();
     expect(engine.start(inp)).toEqual({ created: true });

@@ -1,6 +1,6 @@
 "use client";
 import { ArrowUp, FlaskConical, Square, X } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import { clearDraft, draftKey, readDraft, useDraft } from "@client/hooks/use-draft";
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
@@ -17,27 +17,38 @@ import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
 
 // D21: the panel's chunk (a Radix dialog) loads on intent; the stand-in is the same button.
-const ScenarioPanel = dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
-  ssr: false,
-  loading: () => (
-    <IconButton label="Scenarios" tipSide="top" disabled className="text-muted-foreground">
-      <FlaskConical />
-    </IconButton>
-  ),
-});
-
-function ScenarioPanelOnIntent() {
-  const { armed, wanted, start, press } = useIntent();
-  if (armed) return <ScenarioPanel autoOpen={wanted === "panel"} />;
+function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" | "children">) {
   return (
-    <IconButton label="Scenarios" tipSide="top" className="text-muted-foreground" data-testid="scenario-panel-trigger" {...intentProps(start)} onClick={() => press("panel")}>
+    <IconButton label="Scenarios" tipSide="top" className="text-muted-foreground" {...props}>
       <FlaskConical />
     </IconButton>
   );
 }
+const ScenarioPanel = dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
+  ssr: false,
+  loading: () => <ScenarioButton disabled />,
+});
+
+const warmScenarioPanel = () => import("./scenario-panel");
+
+function ScenarioPanelOnIntent() {
+  const intent = useIntent(warmScenarioPanel);
+  if (intent.armed) return <ScenarioPanel autoOpen={intent.wanted === "panel"} />;
+  return <ScenarioButton data-testid="scenario-panel-trigger" {...intentProps(intent)} onClick={() => intent.press("panel")} />;
+}
 
 /** The picker's trigger as the stand-in: the chunk (Radix popover, sheet, switch) loads on intent. */
-function PickerStandIn({ model, thinking, start, onPress }: { model: ModelId; thinking: ThinkingOptions; start?: () => void; onPress?: () => void }) {
+function PickerStandIn({
+  model,
+  thinking,
+  intent,
+  onPress,
+}: {
+  model: ModelId;
+  thinking: ThinkingOptions;
+  intent?: { warmUp: () => void };
+  onPress?: () => void;
+}) {
   const info = MODELS[model];
   return (
     <Button
@@ -47,7 +58,7 @@ function PickerStandIn({ model, thinking, start, onPress }: { model: ModelId; th
       aria-label="Choose model"
       aria-haspopup="listbox"
       disabled={!onPress}
-      {...(start ? intentProps(start) : {})}
+      {...(intent ? intentProps(intent) : {})}
       onClick={onPress}
     >
       <span className="truncate">{info.short}</span>
@@ -61,10 +72,12 @@ const ModelPicker = dynamic(() => import("./model-picker").then((m) => m.ModelPi
   loading: () => <PickerStandIn model={DEFAULT_MODEL} thinking={{ harder: false }} />,
 });
 
+const warmModelPicker = () => import("./model-picker");
+
 function ModelPickerOnIntent(props: { model: ModelId; thinking: ThinkingOptions; onChange: (patch: Partial<ChatSettings>) => void }) {
-  const { armed, wanted, start, press } = useIntent();
-  if (armed) return <ModelPicker {...props} defaultOpen={wanted === "picker"} />;
-  return <PickerStandIn model={props.model} thinking={props.thinking} start={start} onPress={() => press("picker")} />;
+  const intent = useIntent(warmModelPicker);
+  if (intent.armed) return <ModelPicker {...props} defaultOpen={intent.wanted === "picker"} />;
+  return <PickerStandIn model={props.model} thinking={props.thinking} intent={intent} onPress={() => intent.press("picker")} />;
 }
 
 export interface ComposerHandle {
@@ -89,7 +102,8 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const enterSends = desktop && hasHover;
   // D10/D18: editing a message must not overwrite the unsent draft; it is stashed and restored.
   const [stash, setStash] = useState("");
-  useDraft(key, editing ? stash : value);
+  const [adopted, setAdopted] = useState(false);
+  useDraft(key, editing ? stash : value, adopted);
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
@@ -103,6 +117,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     const frame = requestAnimationFrame(() => {
       if (typedEarly !== null) setValue(typedEarly);
       else if (draft) setValue((v) => (v === "" ? draft : v));
+      setAdopted(true);
       if (root) root.dataset.hydrated = "true";
     });
     return () => cancelAnimationFrame(frame);

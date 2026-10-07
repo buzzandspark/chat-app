@@ -23,11 +23,16 @@ export function clearDraft(key: string): void {
   }
 }
 
-/** D18: drafts per (user, chat) in localStorage, debounced 300 ms, flushed on pagehide. */
-export function useDraft(key: string, value: string): void {
+/**
+ * D18: drafts per (user, chat) in localStorage, debounced 300 ms, flushed when the page hides.
+ * `enabled` is false until the composer has adopted the stored draft: a background tab never runs
+ * the adoption frame, and writing the initial empty value would erase the draft.
+ */
+export function useDraft(key: string, value: string, enabled = true): void {
   const latest = useRef(value);
   useEffect(() => {
     latest.current = value;
+    if (!enabled) return;
     const write = () => {
       try {
         if (value.trim()) localStorage.setItem(key, value);
@@ -38,8 +43,9 @@ export function useDraft(key: string, value: string): void {
     };
     const timer = setTimeout(write, 300);
     return () => clearTimeout(timer);
-  }, [key, value]);
+  }, [key, value, enabled]);
   useEffect(() => {
+    if (!enabled) return;
     const flush = () => {
       try {
         if (latest.current.trim()) localStorage.setItem(key, latest.current);
@@ -48,7 +54,14 @@ export function useDraft(key: string, value: string): void {
         // storage unavailable
       }
     };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
     window.addEventListener("pagehide", flush);
-    return () => window.removeEventListener("pagehide", flush);
-  }, [key]);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [key, enabled]);
 }

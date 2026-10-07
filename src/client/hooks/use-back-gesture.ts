@@ -28,7 +28,12 @@ function listen(): void {
       suppressedPops--;
       return;
     }
-    stack.pop()?.close();
+    if (stack.length > 0) {
+      stack.pop()?.close();
+      return;
+    }
+    // Back landed on an entry a sheet left behind when a navigation closed it: nothing to close, skip it.
+    if ((window.history.state as { [KEY]?: boolean } | null)?.[KEY]) window.history.back();
   });
 }
 

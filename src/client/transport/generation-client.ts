@@ -346,8 +346,10 @@ export class GenerationClient {
         ? "quota_exceeded"
         : body.error === "rate_limited"
           ? "rate_limited"
-          : res.status === 401 || res.status === 403
-            ? "auth"
+          : res.status === 401
+            ? "session"
+            : res.status === 403
+              ? "forbidden"
             : res.status === 503
               ? "api_error"
               : "bad_request";
@@ -356,6 +358,10 @@ export class GenerationClient {
         ? "You have used your whole budget on this instance"
         : kind === "rate_limited"
           ? "Too many messages, slow down a little"
+          : kind === "session"
+            ? "Your session has ended"
+            : kind === "forbidden"
+              ? "This chat belongs to another account"
           : res.status === 503
             ? "The server is restarting"
             : `Request failed (${res.status})`;

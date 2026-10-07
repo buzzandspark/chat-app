@@ -49,6 +49,8 @@ export type RelayEventBody =
       messageId: string;
       userMessageId: string;
       requestedModel: string;
+      /** The scripted scenario this reply comes from, if any; Continue and retries keep it. */
+      scenario?: string | null;
     }
   | {
       type: "message_start";

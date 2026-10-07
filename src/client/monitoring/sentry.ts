@@ -1,4 +1,4 @@
-import { BrowserClient, Scope, dedupeIntegration, defaultStackParser, globalHandlersIntegration, makeFetchTransport } from "@sentry/browser";
+import { BrowserClient, dedupeIntegration, defaultStackParser, globalHandlersIntegration, makeFetchTransport, setCurrentClient } from "@sentry/browser";
 
 /**
  * D25: the minimal client, assembled from named imports so the bundler keeps only what is used (the
@@ -12,7 +12,7 @@ export function startSentry(dsn: string): void {
     integrations: [globalHandlersIntegration(), dedupeIntegration()],
     tracesSampleRate: 0,
   });
-  const scope = new Scope();
-  scope.setClient(client);
+  // The global handlers report through the current client; a detached Scope would drop every event.
+  setCurrentClient(client);
   client.init();
 }

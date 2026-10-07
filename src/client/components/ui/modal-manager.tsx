@@ -54,7 +54,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
     <ModalContext.Provider value={value}>
       {children}
       {entries.map((e) => (
-        <ChunkBoundary key={e.id} label="dialog">
+        <ChunkBoundary key={e.id} label="dialog" onError={() => close(e.id)}>
           {e.render({ open: e.open, close: () => close(e.id) })}
         </ChunkBoundary>
       ))}

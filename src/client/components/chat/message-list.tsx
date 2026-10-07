@@ -60,7 +60,11 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
     }, [chatId]);
 
     // Before paint, so a long chat appears already at its end instead of oldest-first and then jumping.
+    // Once per chat: when Activity re-reveals this list the effect runs again, and the reading position must stay.
+    const scrolledForRef = useRef<string | null>(null);
     useLayoutEffect(() => {
+      if (scrolledForRef.current === chatId) return;
+      scrolledForRef.current = chatId;
       scrollToBottom();
       lastTopRef.current = scrollRef.current?.scrollTop ?? 0;
     }, [chatId, scrollToBottom]);

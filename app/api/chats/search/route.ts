@@ -33,7 +33,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     const rows = db
       .select({ chatId: schema.messages.chatId, content: schema.messages.content, position: schema.messages.position })
       .from(schema.messages)
-      .where(and(inArray(schema.messages.chatId, chats.map((c) => c.id)), sql`lower(${schema.messages.content}) like ${needle} escape '\\'`))
+      .where(and(inArray(schema.messages.chatId, chats.map((c) => c.id)), sql`unicode_lower(${schema.messages.content}) like ${needle} escape '\\'`))
       .orderBy(schema.messages.position)
       .all();
     const snippetByChat = new Map<string, string>();

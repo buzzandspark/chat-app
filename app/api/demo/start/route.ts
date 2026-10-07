@@ -17,7 +17,8 @@ export async function POST(request: Request): Promise<Response> {
     // A returning visitor: a live demo session is reused; an expired or purged one must not block a new one.
     const existing = await auth.api.getSession({ headers: reqHeaders }).catch(() => null);
     const current = existing?.user as { id: string; role?: string | null; banned?: boolean | null } | undefined;
-    if (current && current.role === "demo" && !current.banned) {
+    // Any live session is kept: a demo visitor's is reused, and an invited user is never switched into a demo account.
+    if (current && !current.banned) {
       return Response.json({ ok: true, reused: true }, { headers: { "cache-control": "no-store" } });
     }
     const fresh = new Headers(reqHeaders);

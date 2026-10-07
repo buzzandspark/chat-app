@@ -235,6 +235,24 @@ describe("ChatStore", () => {
       expect(store.getMessage("a1")).toBe(before);
     });
 
+    it("opens an existing chat on the model its last reply was asked of, unless the user chose one here", () => {
+      const { store } = makeStore();
+      store.seedChat("c1", "T", [
+        row({ id: "u1", role: "user", content: [text("q")] }),
+        row({ id: "a1", role: "assistant", content: [text("a")], requestedModel: "claude-opus-5-5" }),
+      ]);
+      expect(store.getChat("c1").settings.model).toBe("claude-opus-5-5");
+      store.setSettings("c1", { model: "claude-haiku-4-5" });
+      store.seedChat("c1", "T", [
+        row({ id: "u1", role: "user", content: [text("q")] }),
+        row({ id: "a1", role: "assistant", content: [text("a")], requestedModel: "claude-opus-5-5" }),
+      ]);
+      expect(store.getChat("c1").settings.model).toBe("claude-haiku-4-5");
+      // An unknown or missing model leaves the default alone.
+      store.seedChat("c2", "T", [row({ id: "a2", chatId: "c2", role: "assistant", content: [text("a")], requestedModel: "claude-opus-4-8" })]);
+      expect(store.getChat("c2").settings.model).toBe("claude-sonnet-5-5");
+    });
+
     it("createChat marks a client-made chat as seeded and empty", () => {
       const { store } = makeStore();
       store.createChat("c9");

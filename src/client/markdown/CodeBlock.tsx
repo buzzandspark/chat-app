@@ -138,6 +138,7 @@ function CodeBlockImpl({ code, lang, closed, className }: CodeBlockProps) {
 }
 
 const LINE_PX = 13 * 1.55; // code.css: 0.8125rem at 1.55
+const CH_PX = 13 * 0.6; // monospace advance at 0.8125rem
 
 /**
  * One group of lines, a block with its own layout containment: a change inside it is laid out on
@@ -150,14 +151,17 @@ const LineGroup = memo(function LineGroup({
   start,
   end,
   last,
+  widthPx,
 }: {
   lines: HighlightLine[] | null;
   plain: string[];
   start: number;
   end: number;
   last: boolean;
+  /** The block's longest line, so a skipped group still reports its width and the <pre> keeps its horizontal scroll range. */
+  widthPx: number;
 }) {
-  const style = { contentVisibility: "auto", containIntrinsicSize: `auto ${Math.round((end - start) * LINE_PX)}px` } as CSSProperties;
+  const style = { "--group-w": `${widthPx}px`, "--group-h": `${Math.round((end - start) * LINE_PX)}px` } as CSSProperties;
   let kids: ReactNode;
   if (lines) {
     const out: ReactNode[] = [];
@@ -177,7 +181,7 @@ const LineGroup = memo(function LineGroup({
     kids = plain.slice(start, end).join("\n") + (last ? "" : "\n");
   }
   return (
-    <span className="block" data-lines={`${start}-${end}`} style={style}>
+    <span className="code-group block" data-lines={`${start}-${end}`} style={style}>
       {kids}
     </span>
   );
@@ -187,10 +191,13 @@ const LineGroup = memo(function LineGroup({
 function renderGroups(lines: HighlightLine[] | null, plain: string[], committedGroups: number): ReactNode[] {
   const out: ReactNode[] = [];
   const total = plain.length;
+  let longest = 0;
+  for (const line of plain) if (line.length > longest) longest = line.length;
+  const widthPx = Math.ceil(longest * CH_PX);
   for (let g = 0; g * GROUP_LINES < total; g++) {
     const start = g * GROUP_LINES;
     const end = Math.min(total, start + GROUP_LINES);
-    out.push(<LineGroup key={g} lines={g < committedGroups ? lines : null} plain={plain} start={start} end={end} last={end === total} />);
+    out.push(<LineGroup key={g} lines={g < committedGroups ? lines : null} plain={plain} start={start} end={end} last={end === total} widthPx={widthPx} />);
   }
   return out;
 }
