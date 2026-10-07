@@ -1,24 +1,25 @@
 import { expect, test } from "@playwright/test";
-import { assistantText, ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText } from "./helpers";
+import { assistantText, ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText, waitForChatUrl } from "./helpers";
 
 test.describe("edit, regenerate, drafts", () => {
   test("editing the last message replaces it and regenerates", async ({ page }) => {
     await openNewChat(page);
     await sendText(page, "first version");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    await page.locator('[data-role="user"]').last().getByRole("button", { name: "Message actions" }).click();
+    await page.locator('[data-role="user"]:visible').last().getByRole("button", { name: "Message actions" }).click();
     await page.getByRole("menuitem", { name: "Edit" }).click();
     await expect(page.getByRole("menu")).toBeHidden();
     const box = page.getByRole("textbox", { name: "Message" });
     await expect(box).toHaveValue("first version");
     await box.fill("second version");
     await page.getByRole("button", { name: "Send edited message" }).click();
-    await expect(page.locator('[data-role="user"]')).toHaveCount(1);
-    await expect(page.locator('[data-role="user"]').last()).toContainText("second version");
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(1);
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("second version");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await waitForChatUrl(page);
     await page.reload();
-    await expect(page.locator('[data-role="user"]')).toHaveCount(1);
-    await expect(page.locator('[data-role="user"]').last()).toContainText("second version");
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(1);
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("second version");
     await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
   });
 
@@ -30,6 +31,7 @@ test.describe("edit, regenerate, drafts", () => {
     await page.getByRole("menuitem", { name: "Regenerate" }).click();
     await expect(page.getByRole("menu")).toBeHidden();
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await waitForChatUrl(page);
     await page.reload();
     await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
   });
@@ -38,6 +40,7 @@ test.describe("edit, regenerate, drafts", () => {
     await openNewChat(page);
     await sendText(page, "anchor");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await waitForChatUrl(page);
     await page.getByRole("textbox", { name: "Message" }).fill("unsent draft text");
     await page.waitForTimeout(400);
     await page.reload();
@@ -98,7 +101,7 @@ test.describe("keyboard", () => {
     const box = page.getByRole("textbox", { name: "Message" });
     await box.fill("keyboard send");
     await box.press("Enter");
-    await expect(page.locator('[data-role="user"]').last()).toContainText("keyboard send");
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("keyboard send");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await box.press("ArrowUp");
     await expect(box).toHaveValue("keyboard send");

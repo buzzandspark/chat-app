@@ -22,8 +22,14 @@ export async function runScenario(page: Page, name: string): Promise<void> {
   await visible(page, `scenario-${name}`).click();
 }
 
+/** Visible only: Next keeps the previous page mounted hidden after a client-side navigation. */
 export function lastAssistant(page: Page): Locator {
-  return page.locator('[data-role="assistant"]').last();
+  return page.locator('[data-role="assistant"]:visible').last();
+}
+
+/** After the first send the view navigates to the chat's own URL; wait for it before reloading. */
+export async function waitForChatUrl(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 }
 
 export async function sendText(page: Page, text: string): Promise<void> {

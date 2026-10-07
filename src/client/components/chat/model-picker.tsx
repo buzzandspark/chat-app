@@ -47,7 +47,7 @@ export function ModelPicker({ model, thinking, onChange }: ModelPickerProps) {
               setOpen(false);
             }}
             className={cn(
-              "flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 text-left",
+              "flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
               selected ? "bg-accent text-accent-foreground" : "hover:bg-muted active:bg-muted",
             )}
           >
@@ -75,7 +75,14 @@ export function ModelPicker({ model, thinking, onChange }: ModelPickerProps) {
     return (
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-        <PopoverContent align="start" className="w-80 p-1" role="listbox" aria-label="Models">
+        <PopoverContent
+          align="start"
+          className="w-80 p-1"
+          role="listbox"
+          aria-label="Models"
+          // Keep focus on the trigger when opened with a pointer; Tab still reaches the options.
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           {body}
         </PopoverContent>
       </Popover>
@@ -84,7 +91,7 @@ export function ModelPicker({ model, thinking, onChange }: ModelPickerProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom" className="rounded-t-sheet px-gutter pb-[max(env(safe-area-inset-bottom,0px),1rem)]">
+      <SheetContent side="bottom" className="rounded-t-sheet px-gutter pb-[max(env(safe-area-inset-bottom,0px),1rem)]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader className="px-0">
           <SheetTitle>Model</SheetTitle>
         </SheetHeader>

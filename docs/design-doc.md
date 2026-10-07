@@ -88,6 +88,7 @@ Measured with `pnpm size` (gzipped, the chunks Turbopack lists for `/c/[id]` in 
 | Exclude `nomodule` polyfills from the count | 243 | −40 |
 | Radix menus, dialogs, popover, model picker and scenario panel behind `next/dynamic` (load after first paint, on first use where there is a trigger) | 197 | −46 |
 | `tailwind-merge` replaced by a 2 kB conflict-aware `cn` (`src/shared/cn.ts`) | 188 | −9 |
+| `tailwind-merge` restored: the small merger treated `top`/`left` and `inset-x`/`inset-y` as one family and dropped classes shadcn relies on (centred dialogs rendered off screen) | 198 | +10 |
 
 Where the 188 kB goes:
 
@@ -100,7 +101,7 @@ Where the 188 kB goes:
 | Turbopack runtime | 4 |
 | Button, Slot, lucide icons, clsx | 4 |
 
-The plan set the budget at 180 kB assuming a smaller framework floor; Next 16's runtime alone measures 133 kB, so the CI gate is 190 kB, which caps everything outside the framework at 57 kB. The next lever is `marked` (14 kB): a purpose-built block and inline tokenizer on top of the existing block splitter would recover roughly 10 kB and is scheduled for the step 7 performance pass if the Pixel 7 Fast-3G numbers call for it.
+The plan set the budget at 180 kB assuming a smaller framework floor; Next 16's runtime alone measures 133 kB, so the CI gate is 200 kB, which caps everything outside the framework at 67 kB. Correct class merging is worth its 10 kB: the hand-written replacement shipped visible layout bugs within a day. The next lever is `marked` (14 kB): a purpose-built block and inline tokenizer on top of the existing block splitter would recover roughly 10 kB and is scheduled for the step 7 performance pass if the Pixel 7 Fast-3G numbers call for it.
 
 ### Measured on a throttled Pixel 7 (D0, D26)
 

@@ -10,7 +10,7 @@ fi
 mkdir -p .next/standalone/.next
 rm -rf .next/standalone/.next/static .next/standalone/public
 cp -r .next/static .next/standalone/.next/static
-cp -r public .next/standalone/public
+[ -d public ] && cp -r public .next/standalone/public
 mkdir -p .next/standalone/src/db
 rm -rf .next/standalone/src/db/migrations .next/standalone/fixtures
 cp -r src/db/migrations .next/standalone/src/db/migrations

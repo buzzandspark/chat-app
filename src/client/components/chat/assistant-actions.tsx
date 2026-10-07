@@ -1,7 +1,7 @@
 "use client";
 import { Check, Copy, MoreHorizontal, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "../ui/icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { MessageState } from "@client/store/chat-store";
 import { LatencyPopover } from "./latency-popover";
@@ -32,14 +32,12 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate }:
       <LatencyPopover timings={message.timings} usage={message.usage} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="touch-target text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
-            aria-label="Message actions"
+          <IconButton
+            label="Message actions"
+            className="text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
           >
             <MoreHorizontal />
-          </Button>
+          </IconButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem onSelect={onCopy} className="min-h-11">

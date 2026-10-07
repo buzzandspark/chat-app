@@ -1,7 +1,6 @@
 "use client";
-import { ArrowUp, Square, X } from "lucide-react";
+import { ArrowUp, FlaskConical, Square, X } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { clearDraft, draftKey, readDraft, useDraft } from "@client/hooks/use-draft";
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
@@ -11,8 +10,19 @@ import { SCENARIOS, isScenarioName } from "@relay/scenario-catalog";
 import { useChatContext } from "./chat-context";
 import dynamic from "next/dynamic";
 import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { IconButton } from "../ui/icon-button";
 
 // D21: the picker's sheet/popover (Radix) loads after first paint.
+const ScenarioPanel = dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
+  ssr: false,
+  loading: () => (
+    <IconButton label="Scenarios" tipSide="top" disabled className="text-muted-foreground">
+      <FlaskConical />
+    </IconButton>
+  ),
+});
+
 const ModelPicker = dynamic(() => import("./model-picker").then((m) => m.ModelPicker), {
   ssr: false,
   loading: () => (
@@ -31,7 +41,7 @@ const MAX_ROWS_PX = 180;
 
 /** D19/D18: sticky above the keyboard, 16 px text so iOS never zooms; Enter sends only with hover + md. */
 export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function Composer({ chatId }, ref) {
-  const { send, settings, setSettings, client, userId, editing, cancelEdit, editMessage } = useChatContext();
+  const { send, settings, setSettings, client, userId, editing, cancelEdit, editMessage, scenarioPanel } = useChatContext();
   const store = useChatStore();
   const chat = useChat(chatId);
   const key = draftKey(userId, chatId);
@@ -87,7 +97,8 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   useEffect(() => resize(), [value, resize]);
 
   const submit = () => {
-    if (!value.trim()) return;
+    // One generation at a time: while a reply streams, Enter and the button do nothing.
+    if (!value.trim() || streamingId) return;
     send(value, settings.scenario ?? undefined);
     setValue("");
     clearDraft(key);
@@ -127,17 +138,17 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
         {editing ? (
           <div className="mb-2 flex items-center gap-2 text-caption text-muted-foreground">
             <span className="min-w-0 truncate rounded-md bg-accent px-2 py-1 text-accent-foreground">Editing: {editingText.slice(0, 60)}</span>
-            <button type="button" className="touch-target inline-flex items-center justify-center" aria-label="Cancel edit" onClick={cancelEdit}>
-              <X className="size-4" />
-            </button>
+            <IconButton label="Cancel edit" size="icon-sm" onClick={cancelEdit}>
+              <X />
+            </IconButton>
           </div>
         ) : null}
         {scenario ? (
           <div className="mb-2 flex items-center gap-2 text-caption text-muted-foreground">
             <span className="rounded-md bg-accent px-2 py-1 text-accent-foreground">Scenario: {scenario.title}</span>
-            <button type="button" className="touch-target inline-flex items-center justify-center" aria-label="Clear scenario" onClick={() => setSettings({ scenario: null })}>
-              <X className="size-4" />
-            </button>
+            <IconButton label="Clear scenario" size="icon-sm" onClick={() => setSettings({ scenario: null })}>
+              <X />
+            </IconButton>
           </div>
         ) : null}
         <div className="flex flex-col rounded-xl border border-input bg-card shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
@@ -153,29 +164,33 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
             className="max-h-[180px] min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-body outline-none placeholder:text-muted-foreground"
           />
           <div className="flex items-center justify-between gap-1 px-1.5 pb-1.5">
-            <ModelPicker model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
+            <div className="flex min-w-0 items-center gap-0.5">
+              <ModelPicker model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
+              {scenarioPanel ? <ScenarioPanel /> : null}
+            </div>
             {streamingId ? (
-              <Button
-                type="button"
-                size="icon"
+              <IconButton
+                label="Stop generating"
+                tipSide="top"
+                tipAlign="end"
                 variant="secondary"
-                className="touch-target rounded-full"
-                aria-label="Stop generating"
+                className="rounded-full"
                 onClick={() => void client.stop(streamingId)}
               >
                 <Square className="fill-current" />
-              </Button>
+              </IconButton>
             ) : (
-              <Button
-                type="button"
-                size="icon"
-                className={cn("touch-target rounded-full", !value.trim() && "opacity-40")}
-                aria-label={editing ? "Send edited message" : "Send message"}
+              <IconButton
+                label={editing ? "Send edited message" : "Send message"}
+                tipSide="top"
+                tipAlign="end"
+                variant="default"
+                className={cn("rounded-full", !value.trim() && "bg-muted text-muted-foreground disabled:opacity-100")}
                 disabled={!value.trim()}
                 onClick={submit}
               >
                 <ArrowUp />
-              </Button>
+              </IconButton>
             )}
           </div>
         </div>

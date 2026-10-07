@@ -1,7 +1,7 @@
 "use client";
 import { Check, Copy, MoreHorizontal, Pencil } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "../ui/icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export function UserActions({ text, onEdit }: { text: string; onEdit: () => void }) {
@@ -18,14 +18,12 @@ export function UserActions({ text, onEdit }: { text: string; onEdit: () => void
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="touch-target shrink-0 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/user:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
-          aria-label="Message actions"
+        <IconButton
+          label="Message actions"
+          className="shrink-0 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/user:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
         >
           <MoreHorizontal />
-        </Button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem className="min-h-11" onSelect={onEdit}>

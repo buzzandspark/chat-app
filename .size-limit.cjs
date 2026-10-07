@@ -21,7 +21,7 @@ module.exports = [
   {
     name: "chat route JS (gzip)",
     path: paths,
-    limit: "190 kB",
+    limit: "200 kB",
     gzip: true,
   },
 ];

@@ -1,7 +1,7 @@
 "use client";
 import { Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "../ui/icon-button";
 
 const listeners = new Set<() => void>();
 function readDark(): boolean {
@@ -27,14 +27,8 @@ export function ThemeToggle() {
     () => false,
   );
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="touch-target"
-      aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-      onClick={() => setDark(!dark)}
-    >
+    <IconButton label={dark ? "Switch to light theme" : "Switch to dark theme"} tipSide="top" tipAlign="end" onClick={() => setDark(!dark)}>
       {dark ? <Sun /> : <Moon />}
-    </Button>
+    </IconButton>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { messageStateFromRow, textOf } from "@client/store/chat-store";
 import { useChat, useChatStore } from "@client/store/hooks";
@@ -10,12 +11,6 @@ import { ChatContext, type ChatSettings, type EditingState } from "./chat-contex
 import { Composer, type ComposerHandle } from "./composer";
 import { LiveRegion } from "./live-region";
 import { MessageList, type MessageListHandle } from "./message-list";
-import dynamic from "next/dynamic";
-
-const ScenarioPanel = dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
-  ssr: false,
-  loading: () => <div className="h-9" aria-hidden />,
-});
 
 interface ChatViewProps {
   chatId: string;
@@ -41,6 +36,7 @@ async function truncateOnServer(chatId: string, fromMessageId: string): Promise<
 
 export function ChatView({ chatId, userId, title, initialMessages, isNew, scenarioPanel }: ChatViewProps) {
   const store = useChatStore();
+  const router = useRouter();
   const client = useMemo(() => getGenerationClient(store), [store]);
   // Seed the store during the first render so the first paint has the messages;
   // notifications are deferred so no ancestor subscriber is updated mid-render.
@@ -64,6 +60,16 @@ export function ChatView({ chatId, userId, title, initialMessages, isNew, scenar
     if (!isNew && title) getSidebarStore().upsert({ id: chatId, title, updatedAt: Date.now() });
   }, [chatId, title, isNew]);
 
+  // Desktop only (a phone would pop the keyboard): focus on a new chat, and after the
+  // first send, when router.replace remounts this view under the chat's own URL.
+  useEffect(() => {
+    if (!window.matchMedia("(hover: hover) and (min-width: 768px)").matches) return;
+    const last = initialMessages.at(-1);
+    if (!isNew && last?.status !== "streaming") return;
+    const t = setTimeout(() => composerRef.current?.focus(), 80);
+    return () => clearTimeout(t);
+  }, [isNew, chatId, initialMessages]);
+
   // D2: a reload mid-stream reattaches to the generation through the resume path.
   useEffect(() => {
     for (const row of initialMessages) {
@@ -77,18 +83,23 @@ export function ChatView({ chatId, userId, title, initialMessages, isNew, scenar
     (text: string) => {
       if (!startedRef.current) {
         startedRef.current = true;
-        window.history.replaceState(null, "", `/c/${chatId}`);
+        // Through the router, not history.replaceState: Next must know the route changed,
+        // or a later navigation back to /c/new is a no-op that leaves this thread on screen.
+        router.replace(`/c/${chatId}`, { scroll: false });
       }
       getSidebarStore().upsert({ id: chatId, title: chat.title ?? text.slice(0, 60), updatedAt: Date.now() });
       if (!chat.title) store.setChatTitle(chatId, text.slice(0, 60));
     },
-    [chatId, chat.title, store],
+    [chatId, chat.title, store, router],
   );
 
   const send = useCallback(
     (text: string, scenario?: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      const lastId = store.getChat(chatId).messageIds.at(-1);
+      const last = lastId ? store.getMessage(lastId) : undefined;
+      if (last?.role === "assistant" && last.status === "streaming") return;
       const opts = { chatId, model: settings.model, thinking: settings.thinking, scenario: scenario ?? settings.scenario ?? undefined };
       if (editing) {
         // D10: replace the edited user message and everything after it, then regenerate.
@@ -141,8 +152,9 @@ export function ChatView({ chatId, userId, title, initialMessages, isNew, scenar
       cancelEdit: () => setEditing(null),
       focusComposer: () => composerRef.current?.focus(),
       autoFollow: { engaged: followEngaged, engage: () => listRef.current?.engage() },
+      scenarioPanel,
     }),
-    [chatId, userId, client, settings, setSettings, send, retry, editMessage, editing, followEngaged],
+    [chatId, userId, client, settings, setSettings, send, retry, editMessage, editing, followEngaged, scenarioPanel],
   );
 
   return (
@@ -150,7 +162,6 @@ export function ChatView({ chatId, userId, title, initialMessages, isNew, scenar
       <div className="flex min-h-0 flex-1 flex-col">
         <MessageList ref={listRef} chatId={chatId} onFollowChange={setFollowEngaged} />
         <LiveRegion chatId={chatId} />
-        {scenarioPanel ? <ScenarioPanel /> : null}
         <Composer ref={composerRef} chatId={chatId} />
       </div>
     </ChatContext.Provider>

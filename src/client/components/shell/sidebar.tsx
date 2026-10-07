@@ -3,10 +3,12 @@ import { MoreHorizontal, Plus, Search, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
 import { getSidebarStore, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
+import { useModals } from "../ui/modal-manager";
 import { ThemeToggle } from "./theme-toggle";
 
 // D21: Radix menus and dialogs load after first paint.
@@ -25,17 +27,18 @@ interface SidebarProps {
   initialChats: ChatSummary[];
   open: boolean;
   onClose: () => void;
+  /** Called after a link is followed; the shell closes the overlay on phones and keeps the dock on desktop. */
+  onNavigate: () => void;
   onSearch: () => void;
   userLabel: string;
 }
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
-export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: SidebarProps) {
+export function Sidebar({ initialChats, open, onClose, onNavigate, onSearch, userLabel }: SidebarProps) {
   const chats = useSidebarChats();
   const pathname = usePathname();
   const router = useRouter();
-  const [renaming, setRenaming] = useState<ChatSummary | null>(null);
-  const [deleting, setDeleting] = useState<ChatSummary | null>(null);
+  const { show } = useModals();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
 
   useEffect(() => {
@@ -62,7 +65,7 @@ export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: Si
         aria-label="Chats"
         data-open={open}
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[min(20rem,85vw)] flex-col bg-sidebar text-sidebar-foreground",
+          "fixed inset-y-0 left-0 z-40 flex w-full flex-col bg-sidebar text-sidebar-foreground",
           "border-r border-sidebar-border transition-transform duration-200 ease-out",
           "safe-top pb-[env(safe-area-inset-bottom,0px)]",
           open ? "translate-x-0" : "-translate-x-full",
@@ -73,17 +76,17 @@ export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: Si
         <div className="flex h-14 items-center justify-between gap-1 px-2">
           <span className="px-1 text-small font-semibold tracking-tight">Cadence</span>
           <div className="flex items-center">
-            <Button variant="ghost" size="icon" className="touch-target" aria-label="Search chats" onClick={onSearch}>
+            <IconButton label="Search chats" onClick={onSearch}>
               <Search />
-            </Button>
-            <Button asChild variant="ghost" size="icon" className="touch-target" aria-label="New chat">
-              <Link href="/c/new" onClick={onClose}>
+            </IconButton>
+            <IconButton asChild label="New chat">
+              <Link href="/c/new" onClick={onNavigate}>
                 <Plus />
               </Link>
-            </Button>
-            <Button variant="ghost" size="icon" className="touch-target md:hidden" aria-label="Close sidebar" onClick={onClose}>
+            </IconButton>
+            <IconButton label="Close sidebar" tipAlign="end" className="md:hidden" onClick={onClose}>
               <X />
-            </Button>
+            </IconButton>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-2 pb-2">
@@ -99,7 +102,7 @@ export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: Si
                     <Link
                       href={href}
                       prefetch={false}
-                      onClick={onClose}
+                      onClick={onNavigate}
                       onTouchStart={() => router.prefetch(href)}
                       onPointerEnter={() => router.prefetch(href)}
                       onFocus={() => router.prefetch(href)}
@@ -111,7 +114,15 @@ export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: Si
                     >
                       <span className="truncate">{chat.title}</span>
                     </Link>
-                    <ChatItemMenu title={chat.title} onRename={() => setRenaming(chat)} onDelete={() => setDeleting(chat)} />
+                    <ChatItemMenu
+                      title={chat.title}
+                      onRename={() => show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />)}
+                      onDelete={() =>
+                        show(({ open, close }) => (
+                          <DeleteDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />
+                        ))
+                      }
+                    />
                   </li>
                 );
               })}
@@ -123,8 +134,7 @@ export function Sidebar({ initialChats, open, onClose, onSearch, userLabel }: Si
           <ThemeToggle />
         </div>
       </aside>
-      {renaming ? <RenameDialog chat={renaming} onClose={() => setRenaming(null)} /> : null}
-      {deleting ? <DeleteDialog chat={deleting} onClose={() => setDeleting(null)} currentChatId={currentChatId} /> : null}
+
     </>
   );
 }

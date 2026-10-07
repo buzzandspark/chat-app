@@ -1,7 +1,7 @@
 "use client";
 import { Timer } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "../ui/icon-button";
 import type { Timings, UsageSummary } from "@shared/types";
 
 function ms(a: number | undefined, b: number | undefined): string {
@@ -24,9 +24,9 @@ export function LatencyPopover({ timings, usage }: { timings: Timings | null; us
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="touch-target text-muted-foreground" aria-label="Latency breakdown">
+        <IconButton label="Latency breakdown" className="text-muted-foreground">
           <Timer />
-        </Button>
+        </IconButton>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] text-small">
         <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">

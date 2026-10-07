@@ -7,22 +7,23 @@ import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
-export function RenameDialog({ chat, onClose }: { chat: ChatSummary | null; onClose: () => void }) {
+interface DialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat: ChatSummary }) {
   const store = useChatStore();
-  const [value, setValue] = useState(chat?.title ?? "");
+  const [value, setValue] = useState(chat.title);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [lastChat, setLastChat] = useState(chat);
-  if (chat !== lastChat) {
-    setLastChat(chat);
-    setValue(chat?.title ?? "");
-  }
   useEffect(() => {
-    if (chat) setTimeout(() => inputRef.current?.select(), 50);
-  }, [chat]);
+    const t = setTimeout(() => inputRef.current?.select(), 50);
+    return () => clearTimeout(t);
+  }, []);
 
   const submit = async () => {
-    if (!chat || !value.trim() || busy) return;
+    if (!value.trim() || busy) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/chats/${chat.id}`, {
@@ -33,7 +34,7 @@ export function RenameDialog({ chat, onClose }: { chat: ChatSummary | null; onCl
       if (res.ok) {
         getSidebarStore().upsert({ ...chat, title: value.trim(), updatedAt: Date.now() });
         store.setChatTitle(chat.id, value.trim());
-        onClose();
+        onOpenChange(false);
       }
     } finally {
       setBusy(false);
@@ -41,7 +42,7 @@ export function RenameDialog({ chat, onClose }: { chat: ChatSummary | null; onCl
   };
 
   return (
-    <ResponsiveDialog open={chat !== null} onOpenChange={(o) => !o && onClose()} title="Rename chat">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Rename chat">
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -51,7 +52,7 @@ export function RenameDialog({ chat, onClose }: { chat: ChatSummary | null; onCl
       >
         <Input ref={inputRef} value={value} onChange={(e) => setValue(e.target.value)} aria-label="Chat title" maxLength={120} className="h-11 text-body" />
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" className="touch-target" onClick={onClose}>
+          <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button type="submit" className="touch-target" disabled={!value.trim() || busy}>
@@ -63,17 +64,17 @@ export function RenameDialog({ chat, onClose }: { chat: ChatSummary | null; onCl
   );
 }
 
-export function DeleteDialog({ chat, onClose, currentChatId }: { chat: ChatSummary | null; onClose: () => void; currentChatId: string | null }) {
+export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const confirm = async () => {
-    if (!chat || busy) return;
+    if (busy) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
       if (res.ok) {
         getSidebarStore().remove(chat.id);
-        onClose();
+        onOpenChange(false);
         if (currentChatId === chat.id) router.push("/c/new");
       }
     } finally {
@@ -82,13 +83,13 @@ export function DeleteDialog({ chat, onClose, currentChatId }: { chat: ChatSumma
   };
   return (
     <ResponsiveDialog
-      open={chat !== null}
-      onOpenChange={(o) => !o && onClose()}
+      open={open}
+      onOpenChange={onOpenChange}
       title="Delete chat?"
-      description={chat ? `"${chat.title}" and its messages will be removed. This cannot be undone.` : undefined}
+      description={`"${chat.title}" and its messages will be removed. This cannot be undone.`}
     >
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" className="touch-target" onClick={onClose}>
+        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
         <Button type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>

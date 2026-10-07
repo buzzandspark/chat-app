@@ -12,13 +12,12 @@ interface ResponsiveDialogProps {
   className?: string;
 }
 
-/** D19: a bottom sheet on phones, a centred modal at md; bottom padding follows the keyboard. */
+/** D19: a bottom sheet on phones (slides from the bottom, follows the keyboard), a centred modal at `md`. */
 export function ResponsiveDialog({ open, onOpenChange, title, description, children, className }: ResponsiveDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
-        // D19: focus returns to the composer after a dialog closes.
         onCloseAutoFocus={(e) => {
           const composer = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
           if (composer) {
@@ -27,10 +26,11 @@ export function ResponsiveDialog({ open, onOpenChange, title, description, child
           }
         }}
         className={cn(
-          "fixed inset-x-0 bottom-0 top-auto w-full max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-sheet px-gutter pt-5",
+          "fixed inset-x-0 top-auto bottom-0 w-full max-w-none translate-x-0 translate-y-0 rounded-t-sheet rounded-b-none px-gutter pt-5",
           "pb-[max(env(safe-area-inset-bottom,0px),1rem)] [html[data-keyboard=open]_&]:pb-4",
-          "data-[state=open]:slide-in-from-bottom-10 data-[state=closed]:slide-out-to-bottom-10",
-          "md:bottom-auto md:left-1/2 md:top-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:px-6 md:pb-6",
+          "duration-250 data-open:zoom-in-100 data-open:slide-in-from-bottom-full data-closed:zoom-out-100 data-closed:slide-out-to-bottom-full",
+          "md:top-1/2 md:bottom-auto md:left-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:px-6 md:pb-6",
+          "md:duration-150 md:data-open:zoom-in-95 md:data-open:slide-in-from-bottom-0 md:data-closed:zoom-out-95 md:data-closed:slide-out-to-bottom-0",
           className,
         )}
       >

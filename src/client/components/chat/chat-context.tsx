@@ -30,6 +30,7 @@ export interface ChatContextValue {
   cancelEdit: () => void;
   focusComposer: () => void;
   autoFollow: { engaged: boolean; engage: () => void };
+  scenarioPanel: boolean;
 }
 
 export const ChatContext = createContext<ChatContextValue | null>(null);

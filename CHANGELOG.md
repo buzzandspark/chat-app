@@ -4,6 +4,9 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-07
 
+- Fix: after the first message in a new chat the URL was swapped with `history.replaceState`, which Next's router ignores; a later "New chat" was then a no-op that left the old thread on screen. The view now navigates with `router.replace`.
+- Modals: a central `ModalProvider` mounts every dialog (search, feedback, rename, delete, scenarios) and keeps it mounted through its exit animation, so closing animates instead of vanishing; on phones every dialog is a bottom sheet that slides in and out, and the sidebar takes the whole screen and closes when a chat is chosen; on desktop the sidebar stays docked.
+- UI fixes from review: sends are blocked while a reply streams; `tailwind-merge` is back (the small merger dropped `left-1/2` and `inset-*` classes, which put dialogs off screen and misshaped sheets), size gate 200 kB; the desktop sidebar stays docked when following a link; the composer is focused on a new chat on desktop; the chat title in the header opens rename; the scenario panel is an icon in the composer toolbar; every icon-only button has a CSS hover tooltip (`IconButton`); the model picker no longer flashes an outline on open.
 - Fix: "Cannot update a component (ChatShell) while rendering a different component (ChatView)". The chat store is now one instance per shell provided through context (fresh per server render, long-lived on the client) and render-time seeding notifies subscribers in a microtask. The server no longer accumulates rendered chats in a module singleton.
 
 ## 2026-10-06

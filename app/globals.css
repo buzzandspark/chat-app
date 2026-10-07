@@ -252,3 +252,50 @@
     visibility: hidden;
   }
 }
+
+/* Hover tooltip for icon-only buttons (pointer devices only); the aria-label is the accessible name. */
+@media (hover: hover) {
+  .tip {
+    position: relative;
+  }
+  .tip::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 6px);
+    transform: translateX(-50%);
+    z-index: 60;
+    white-space: nowrap;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    background: var(--foreground);
+    color: var(--background);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 400;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease 450ms;
+  }
+  .tip[data-tip-side="top"]::after {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+  .tip[data-tip-align="end"]::after {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+  .tip[data-tip-align="start"]::after {
+    left: 0;
+    transform: none;
+  }
+  .tip:hover::after,
+  .tip:focus-visible::after {
+    opacity: 1;
+  }
+  .tip[aria-expanded="true"]::after,
+  .tip:disabled::after {
+    opacity: 0;
+  }
+}

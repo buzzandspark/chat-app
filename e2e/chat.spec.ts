@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { assistantText, lastAssistant, openNewChat, runScenario, sendText } from "./helpers";
+import { assistantText, lastAssistant, openNewChat, runScenario, sendText, waitForChatUrl } from "./helpers";
 
 test.describe("streaming", () => {
   test("send, stream, and finish a normal reply", async ({ page }) => {
@@ -15,7 +15,7 @@ test.describe("streaming", () => {
   test("typing a message sends it and the reply streams", async ({ page }) => {
     await openNewChat(page);
     await sendText(page, "hello from the e2e test");
-    await expect(page.locator('[data-role="user"]').last()).toContainText("hello from the e2e test");
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("hello from the e2e test");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
   });
 
@@ -51,6 +51,7 @@ test.describe("reliability", () => {
     await runScenario(page, "slow_tokens");
     const row = lastAssistant(page);
     await expect(row.locator(".markdown")).not.toHaveText("", { timeout: 20_000 });
+    await waitForChatUrl(page);
     await page.reload();
     const after = lastAssistant(page);
     await expect(after).toHaveAttribute("data-status", "streaming", { timeout: 10_000 });
