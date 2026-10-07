@@ -10,7 +10,7 @@ import { ThreadSkeleton } from "./thread-skeleton";
 export function ComposerSkeleton() {
   return (
     <div
-      className="shrink-0 border-t border-border bg-background px-gutter pt-2"
+      className="shrink-0 border-t border-border bg-background safe-x pt-2"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
       aria-hidden
       data-testid="composer-skeleton"

@@ -12,10 +12,12 @@ interface AssistantActionsProps {
   text: string;
   canRegenerate: boolean;
   onRegenerate: () => void;
+  /** Which stand-in the user pressed before this chunk had loaded. */
+  defaultOpen?: "menu" | "latency" | null;
 }
 
 /** Loaded after first paint (D21): the menu and popover pull in Radix, which the first frame does not need. */
-export function AssistantActions({ message, text, canRegenerate, onRegenerate }: AssistantActionsProps) {
+export function AssistantActions({ message, text, canRegenerate, onRegenerate, defaultOpen = null }: AssistantActionsProps) {
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
     try {
@@ -29,8 +31,8 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate }:
   return (
     <div className="flex items-center gap-1">
       <ServedBy message={message} />
-      <LatencyPopover timings={message.timings} usage={message.usage} />
-      <DropdownMenu>
+      <LatencyPopover timings={message.timings} usage={message.usage} defaultOpen={defaultOpen === "latency"} />
+      <DropdownMenu defaultOpen={defaultOpen === "menu"}>
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Message actions"

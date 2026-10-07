@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { useBackGesture } from "@client/hooks/use-back-gesture";
 import { useIsDesktop } from "@client/hooks/use-media-query";
 import { MODEL_IDS, MODELS, type ModelId } from "@shared/models";
 import type { ThinkingOptions } from "@shared/types";
@@ -21,12 +22,15 @@ interface ModelPickerProps {
   model: ModelId;
   thinking: ThinkingOptions;
   onChange: (patch: { model?: ModelId; thinking?: ThinkingOptions }) => void;
+  /** True when the user pressed the stand-in before this chunk had loaded. */
+  defaultOpen?: boolean;
 }
 
 /** One picker (D0): a bottom sheet on phones, a popover at `md`. */
-export function ModelPicker({ model, thinking, onChange }: ModelPickerProps) {
+export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: ModelPickerProps) {
   const desktop = useIsDesktop();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  useBackGesture(open && !desktop, () => setOpen(false));
   const info = MODELS[model];
   const thinkingLabel = info.thinking === "adaptive" ? "Think harder" : "Extended thinking";
 

@@ -3,9 +3,20 @@ import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { IconButton } from "../ui/icon-button";
 
-export function ChatItemMenu({ title, onRename, onDelete }: { title: string; onRename: () => void; onDelete: () => void }) {
+export function ChatItemMenu({
+  title,
+  onRename,
+  onDelete,
+  defaultOpen,
+}: {
+  title: string;
+  onRename: () => void;
+  onDelete: () => void;
+  /** True when the user pressed the stand-in before this chunk had loaded. */
+  defaultOpen?: boolean;
+}) {
   return (
-    <DropdownMenu>
+    <DropdownMenu defaultOpen={defaultOpen}>
       <DropdownMenuTrigger asChild>
         <IconButton
           label={`Actions for ${title}`}

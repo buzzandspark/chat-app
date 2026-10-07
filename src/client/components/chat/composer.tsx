@@ -6,14 +6,17 @@ import { clearDraft, draftKey, readDraft, useDraft } from "@client/hooks/use-dra
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
 import { textOf } from "@client/store/chat-store";
 import { useChat, useChatStore, useMessage } from "@client/store/hooks";
-import { useChatContext } from "./chat-context";
+import { useChatContext, type ChatSettings } from "./chat-context";
+import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
+import { DEFAULT_MODEL, MODELS, type ModelId } from "@shared/models";
 import dynamic from "next/dynamic";
+import type { ThinkingOptions } from "@shared/types";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
 
-// D21: the picker's sheet/popover (Radix) loads after first paint.
+// D21: the panel's chunk (a Radix dialog) loads on intent; the stand-in is the same button.
 const ScenarioPanel = dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
   ssr: false,
   loading: () => (
@@ -23,15 +26,46 @@ const ScenarioPanel = dynamic(() => import("./scenario-panel").then((m) => m.Sce
   ),
 });
 
-const ModelPicker = dynamic(() => import("./model-picker").then((m) => m.ModelPicker), {
-  ssr: false,
-  loading: () => (
-    <Button variant="ghost" size="sm" className="touch-target gap-1 text-muted-foreground" disabled aria-label="Choose model">
-      <span className="truncate">Sonnet 5.5</span>
+function ScenarioPanelOnIntent() {
+  const { armed, wanted, start, press } = useIntent();
+  if (armed) return <ScenarioPanel autoOpen={wanted === "panel"} />;
+  return (
+    <IconButton label="Scenarios" tipSide="top" className="text-muted-foreground" data-testid="scenario-panel-trigger" {...intentProps(start)} onClick={() => press("panel")}>
+      <FlaskConical />
+    </IconButton>
+  );
+}
+
+/** The picker's trigger as the stand-in: the chunk (Radix popover, sheet, switch) loads on intent. */
+function PickerStandIn({ model, thinking, start, onPress }: { model: ModelId; thinking: ThinkingOptions; start?: () => void; onPress?: () => void }) {
+  const info = MODELS[model];
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="touch-target max-w-[55vw] gap-1 text-muted-foreground"
+      aria-label="Choose model"
+      aria-haspopup="listbox"
+      disabled={!onPress}
+      {...(start ? intentProps(start) : {})}
+      onClick={onPress}
+    >
+      <span className="truncate">{info.short}</span>
+      {thinking.harder ? <span className="rounded-md bg-accent px-1.5 text-caption text-accent-foreground">harder</span> : null}
       <ChevronDown data-icon="inline-end" className="size-3.5" />
     </Button>
-  ),
+  );
+}
+const ModelPicker = dynamic(() => import("./model-picker").then((m) => m.ModelPicker), {
+  ssr: false,
+  loading: () => <PickerStandIn model={DEFAULT_MODEL} thinking={{ harder: false }} />,
 });
+
+function ModelPickerOnIntent(props: { model: ModelId; thinking: ThinkingOptions; onChange: (patch: Partial<ChatSettings>) => void }) {
+  const { armed, wanted, start, press } = useIntent();
+  if (armed) return <ModelPicker {...props} defaultOpen={wanted === "picker"} />;
+  return <PickerStandIn model={props.model} thinking={props.thinking} start={start} onPress={() => press("picker")} />;
+}
 
 export interface ComposerHandle {
   focus: () => void;
@@ -53,7 +87,9 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const desktop = useIsDesktop();
   const hasHover = useHasHover();
   const enterSends = desktop && hasHover;
-  useDraft(key, editing ? "" : value);
+  // D10/D18: editing a message must not overwrite the unsent draft; it is stashed and restored.
+  const [stash, setStash] = useState("");
+  useDraft(key, editing ? stash : value);
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
@@ -73,12 +109,20 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
   }, []);
 
-  // Entering edit mode loads the message text (derived state adjusted during render).
+  // Entering edit mode loads the message text (derived state adjusted during render); leaving it,
+  // by cancel or by sending the edit, brings the stashed draft back.
   const [lastEdit, setLastEdit] = useState(editing);
   if (editing !== lastEdit) {
     setLastEdit(editing);
-    if (editing) setValue(editing.text);
-    else if (lastEdit) setValue("");
+    if (editing && !lastEdit) {
+      setStash(value);
+      setValue(editing.text);
+    } else if (editing) {
+      setValue(editing.text);
+    } else if (lastEdit) {
+      setValue(stash);
+      setStash("");
+    }
   }
 
   // The id list does not change when a reply ends; the last message's status decides Stop/Send and ↑.
@@ -104,9 +148,12 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const submit = () => {
     // One generation at a time: while a reply streams, Enter and the button do nothing.
     if (!value.trim() || streamingId) return;
+    const wasEditing = editing !== null;
     send(value, settings.scenario?.name);
-    setValue("");
-    clearDraft(key);
+    if (!wasEditing) {
+      setValue("");
+      clearDraft(key);
+    }
     if (settings.scenario) setSettings({ scenario: null });
   };
 
@@ -136,7 +183,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   return (
     <div
       ref={rootRef}
-      className="shrink-0 border-t border-border bg-background px-gutter pt-2"
+      className="shrink-0 border-t border-border bg-background safe-x pt-2"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
       data-testid="composer"
     >
@@ -172,11 +219,11 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
           <div className="flex items-center justify-between gap-1 px-1.5 pb-1.5">
             <div className="flex min-w-0 items-center gap-0.5">
               <ChunkBoundary label="model picker">
-                <ModelPicker model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
+                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
               </ChunkBoundary>
               {scenarioPanel ? (
                 <ChunkBoundary label="scenario panel">
-                  <ScenarioPanel />
+                  <ScenarioPanelOnIntent />
                 </ChunkBoundary>
               ) : null}
             </div>

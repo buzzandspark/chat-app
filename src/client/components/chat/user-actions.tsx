@@ -4,7 +4,7 @@ import { useState } from "react";
 import { IconButton } from "../ui/icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-export function UserActions({ text, onEdit }: { text: string; onEdit: () => void }) {
+export function UserActions({ text, onEdit, defaultOpen }: { text: string; onEdit: () => void; defaultOpen?: boolean }) {
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
     try {
@@ -16,7 +16,7 @@ export function UserActions({ text, onEdit }: { text: string; onEdit: () => void
     }
   };
   return (
-    <DropdownMenu>
+    <DropdownMenu defaultOpen={defaultOpen}>
       <DropdownMenuTrigger asChild>
         <IconButton
           label="Message actions"

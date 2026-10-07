@@ -103,6 +103,8 @@ Measured with `pnpm size` (gzipped, the chunks Turbopack lists for `/c/[id]` in 
 | Scenario labels and model blurbs leave the composer for the chunks that need them | 199.8 | −0.9 |
 | Prefetch helper; unused shadcn button variants and sizes dropped | 199.9 | +0.1 |
 | Resume by seq and both watchdogs; Radix `Slot` out of the first paint (`asChild` served two links); dead class and method removed | 198.8 | −1.1 |
+| Review items: error boundaries, back-gesture entry, stand-ins for lazy controls, scroll-anchoring flag, sign out (a plain POST, not the auth client, which would have added 13 kB) | 204.6 | +5.8 |
+| One shared error view; `cva` replaced by a lookup | 204.0 | −0.6 |
 
 Where the 188 kB goes:
 
@@ -115,25 +117,29 @@ Where the 188 kB goes:
 | Turbopack runtime | 4 |
 | Button, Slot, lucide icons, clsx | 4 |
 
-The plan set the budget at 180 kB assuming a smaller framework floor; Next 16's runtime alone measures 133 kB, so the CI gate is 200 kB, which caps everything outside the framework at 67 kB. Correct class merging is worth its 10 kB: the hand-written replacement shipped visible layout bugs within a day. The next lever is `marked` (14 kB): a purpose-built block and inline tokenizer on top of the existing block splitter would recover roughly 10 kB and is scheduled for the step 7 performance pass if the Pixel 7 Fast-3G numbers call for it.
+The plan set the budget at 180 kB assuming a smaller framework floor; Next 16's runtime alone measures 133 kB, so the CI gate was 200 kB, which capped everything outside the framework at 67 kB. On 2026-10-07 the gate moved to 205 kB: the review's required additions cost about 5 kB of app code against 0.7 kB of headroom, every trim short of replacing `marked` is taken, and a gate that is quietly edited is worse than one moved in the open (figures in SI kilobytes as `size-limit` reports them). Correct class merging is worth its 10 kB: the hand-written replacement shipped visible layout bugs within a day. The next lever is `marked` (14 kB): a purpose-built block and inline tokenizer on top of the existing block splitter would recover roughly 10 kB and is scheduled for the step 7 performance pass if the Pixel 7 Fast-3G numbers call for it.
 
 ### Measured on a throttled Pixel 7 (D0, D26)
 
-`pnpm e2e --project=pixel7 e2e/perf.spec.ts` emulates a Pixel 7 with CPU 4x slowdown and Playwright's Fast 3G profile through the Chrome DevTools protocol, against the built standalone server on localhost (so TTFB is not representative), and appends to `docs/perf/<date>.json`. 2026-10-06:
+`pnpm e2e --project=pixel7 e2e/perf.spec.ts` emulates a Pixel 7 with CPU 4x slowdown and Playwright's Fast 3G profile through the Chrome DevTools protocol, against the built standalone server on localhost (so TTFB is not representative), and appends to `docs/perf/<date>.json`. 2026-10-07, after this package (the 2026-10-06 column is the step 7 pass):
 
-| Measure | Value |
-| --- | ---: |
-| Shell: cumulative layout shift | 0 (0 shifts) |
-| Shell: first contentful paint | 1.50 s |
-| Shell: DOMContentLoaded | 1.38 s |
-| Shell: composer hydrated | 3.34 s |
-| Shell: bytes transferred | 325 kB |
-| Shell: fonts | Inter loaded, metric-matched fallback loaded, no swap (`display: optional`) |
-| Long reply streaming: first painted token after tap | 2.0 s (includes the scripted 450 ms TTFT and the sheet closing) |
-| Long reply streaming: frame time p50 / p95 / p99 | 16.7 / 16.8 / 16.8 ms, 0 frames over 50 ms of 625 |
-| 200-message chat: time to hydrated after navigation | 0.93 s |
-| 200-message chat streaming: frame time p50 / p95 / p99 | 16.7 / 16.8 / 33.4 ms, 3 frames over 50 ms of 560 |
-| 600-line code block streaming: frame time p50 / p95 / p99 | 16.7 / 33.3 / 33.4 ms, 0 frames over 50 ms of 1,402 |
+| Measure | 2026-10-06 | 2026-10-07 |
+| --- | ---: | ---: |
+| Shell: cumulative layout shift | 0 (0 shifts) | 0 (0 shifts) |
+| Shell: first contentful paint | 1.50 s | 1.50 s |
+| Shell: DOMContentLoaded | 1.38 s | 1.37 s |
+| Shell: composer hydrated | 3.34 s | 3.57 s |
+| Shell: bytes transferred | 325 kB | 307 kB |
+| Shell: scripts fetched after hydration with no interaction | not measured (about 51 KiB of Radix chunks) | 0 |
+| Shell: fonts | Inter loaded, metric-matched fallback, no swap | same |
+| Desktop cold load: cumulative layout shift | not measured (review: 0.20) | 0, dock in the server HTML |
+| Long reply streaming: first painted token after tap | 2.0 s | 2.0 s |
+| Long reply streaming: frame time p50 / p95 / p99 | 16.7 / 16.8 / 16.8 ms, 0 of 625 over 50 ms | 16.7 / 16.7 / 16.8 ms, 0 of 626 over 50 ms |
+| 200-message chat: time to hydrated after navigation | 0.93 s | 1.57 s (measured inside the full run) |
+| 200-message chat streaming: frame time p50 / p95 / p99 | 16.7 / 16.8 / 33.4 ms, 3 of 560 over 50 ms | 16.7 / 16.8 / 16.8 ms, 3 of 575 over 50 ms |
+| 1,800-line code block: frame time p50 / p95 / p99 while streaming and highlighting | 16.7 / 33.3 / 33.4 ms (window ended before highlighting) | 16.7 / 33.3 / 33.4 ms, 5 of 1,964 over 50 ms, longest 317 ms at done and 367 ms on reopen (review: 1.8 s at both) |
+| Click to thread, loaded or prefetched chat | a round trip | row in frame 1, thread in frame 2 (26 to 33 ms) |
+| Click to thread, cold chat (tap beats the top-five prefetch) | a round trip, no feedback | row in frame 1, skeleton in frame 2, rows at 330 ms |
 
 Lighthouse is not wired in; CLS, paint timings, and font status are read from `PerformanceObserver` and `document.fonts` inside the same run, which gives the two numbers the plan asked for (CLS 0, no font flash) without a second toolchain.
 
@@ -172,11 +178,15 @@ The composer measures 115 px on a phone and 135 px on desktop throughout; before
 
 ### Code blocks: tokenise off the main thread, commit in line groups (D15)
 
-`src/client/markdown/highlight.ts` keeps highlighted lines by content hash and hands tokenising to a Web Worker (`highlight.worker.ts`, shiki core with the JavaScript regex engine and one chunk per language, the same module the main thread falls back to where there is no `Worker`). A block seen once never tokenises again, so reopening a chat is a cache hit. `CodeBlock` commits the spans in groups of 40 lines across idle callbacks, with the rest of the block kept as one plain string, so the text never changes and no single frame inserts thousands of nodes. The review measured a 1.8 s main-thread freeze when a 600-line block finished and again when the chat reopened; `e2e/perf.spec.ts` records the longest frame at both moments and gates them under 250 ms on the throttled Pixel 7.
+`src/client/markdown/highlight.ts` keeps highlighted lines by content hash and hands tokenising to a Web Worker (`highlight.worker.ts`, shiki core with the JavaScript regex engine and one chunk per language, the same module the main thread falls back to where there is no `Worker`). A block seen once never tokenises again, so reopening a chat is a cache hit. `CodeBlock` splits a closed block into groups of 16 lines, each a block with its own layout containment (`content-visibility: auto` with an exact intrinsic size), and upgrades one group per idle callback from plain text to spans, so the text never changes, a commit lays out one group instead of the whole `<pre>`, and groups off screen cost nothing. The first attempt committed groups into a flat `<code>`: React's work per step was constant but the browser re-laid out the entire 1,800-line block every time, so the step cost grew with what was already committed (30 frames over 50 ms, up to 333 ms). Measured on the throttled Pixel 7 (CPU 4x) after containment: longest frame 317 ms when the reply finishes and 367 ms on reopen (about 80 and 90 ms unthrottled) against the review's 1.8 s freeze at both moments, 4 to 5 long frames in a 2,000-frame window, p99 33 ms; tokens come from the worker, the reopen from the cache. The remaining spikes recur every ~30 groups and grow with the committed DOM, which points at garbage collection or style work rather than tokenising; `e2e/perf.spec.ts` gates both maxima under 500 ms.
 
 ### Sessions, errors and lazy chunks
 
 `proxy.ts` only checks that a session cookie exists (ADR-0004); an expired, purged or banned one is caught by the chat layout, which redirects to `/login?next=<path>` (the proxy forwards the path) instead of throwing inside a Server Component. `app/(chat)/error.tsx`, `app/error.tsx` and `app/global-error.tsx` replace the dead page, and `ChunkBoundary` wraps every lazily loaded control (dialogs, the model picker, the scenario panel, message and chat menus), so a chunk that fails to load costs one control, not the thread. Sign out is a full document load to `/login`: nothing of the old session may survive in memory. "Try the demo" reuses a live demo session and otherwise signs in anonymously without the stale cookie.
+
+### Radix behind intent (D21)
+
+Every Radix-backed control used to load its chunk at mount through `next/dynamic` (about 51 KiB after hydration on every chat). They now load on the first sign of intent (`pointerenter`, `focus`, `touchstart`, `pointerdown`) behind a look-alike stand-in (`useLazyOnIntent`); a press before the chunk arrives is remembered and the real control opens as soon as it mounts (`defaultOpen`). Sentry is assembled from named imports (`BrowserClient`, the fetch transport, the default stack parser, the global-handlers and dedupe integrations) in its own idle-loaded module instead of `init`, which drags in every default integration.
 
 ### Long lists (D14): decision
 

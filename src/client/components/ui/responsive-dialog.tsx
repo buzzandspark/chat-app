@@ -1,7 +1,8 @@
 "use client";
-import type { ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useBackGesture } from "@client/hooks/use-back-gesture";
 
 interface ResponsiveDialogProps {
   open: boolean;
@@ -14,6 +15,8 @@ interface ResponsiveDialogProps {
 
 /** D19: a bottom sheet on phones (slides from the bottom, follows the keyboard), a centred modal at `md`. */
 export function ResponsiveDialog({ open, onOpenChange, title, description, children, className }: ResponsiveDialogProps) {
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+  useBackGesture(open, close);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent

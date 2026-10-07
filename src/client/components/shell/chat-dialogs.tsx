@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
@@ -74,6 +75,7 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
       if (res.ok) {
         getSidebarStore().remove(chat.id);
+        if (currentChatId === chat.id) markNavigationClose();
         onOpenChange(false);
         if (currentChatId === chat.id) newChat();
       }

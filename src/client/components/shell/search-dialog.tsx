@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface Hit {
@@ -59,7 +60,10 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <li key={h.chatId}>
             <Link
               href={`/c/${h.chatId}`}
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                markNavigationClose();
+                onOpenChange(false);
+              }}
               className="flex min-h-11 flex-col justify-center rounded-lg px-3 py-2 hover:bg-muted active:bg-muted"
             >
               <span className="truncate text-body font-medium">{h.title}</span>

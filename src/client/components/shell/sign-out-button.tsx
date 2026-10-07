@@ -1,17 +1,20 @@
 "use client";
 import { LogOut } from "lucide-react";
-import { authClient } from "@auth/client";
 import { IconButton } from "../ui/icon-button";
 
-/** A full navigation afterwards: the client store, drafts in memory and the router cache all belong to the old session. */
+/**
+ * A plain POST to better-auth's endpoint, not the auth client: the client library (with its store
+ * dependency) is 13 kB gzipped and belongs to the login and invite pages, not the chat route (D21).
+ * A full navigation afterwards: the client store, drafts in memory and the router cache all belong
+ * to the old session.
+ */
 export function SignOutButton() {
   const signOut = async () => {
     try {
-      await authClient.signOut();
+      await fetch("/api/auth/sign-out", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     } catch {
       // The cookie may already be gone; the login page is the right place either way.
     }
-    // A full document load, not router.push: nothing of the old session may survive in memory.
     window.location.assign(new URL("/login", window.location.origin).href);
   };
   return (

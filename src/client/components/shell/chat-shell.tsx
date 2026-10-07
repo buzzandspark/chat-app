@@ -9,6 +9,7 @@ import { setPendingChat, usePendingChat, useSidebarChats } from "@client/store/s
 import { useChat } from "@client/store/hooks";
 import { ChatStoreProvider } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
+import { markNavigationClose, useBackGesture } from "@client/hooks/use-back-gesture";
 import { useIsDesktop } from "@client/hooks/use-media-query";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useScrollAnchoringFlag } from "@client/hooks/use-scroll-anchoring";
@@ -59,6 +60,7 @@ function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellPro
   useScrollAnchoringFlag();
 
   const open = desktop ? desktopOpen : phoneOpen;
+  useBackGesture(!desktop && phoneOpen, () => setPhoneOpen(false));
   const close = useCallback(() => (desktop ? setDesktopOpen(false) : setPhoneOpen(false)), [desktop]);
   const toggle = useCallback(() => (desktop ? setDesktopOpen((v) => !v) : setPhoneOpen((v) => !v)), [desktop]);
 
@@ -150,13 +152,16 @@ function ChatShellInner({ initialChats, userLabel, children }: Omit<ChatShellPro
         desktopOpen={desktopOpen}
         open={open}
         onClose={close}
-        onNavigate={() => setPhoneOpen(false)}
+        onNavigate={() => {
+          markNavigationClose();
+          setPhoneOpen(false);
+        }}
         onSearch={openSearch}
         userLabel={userLabel}
       />
       {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold. */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border px-2 md:px-3">
+        <header className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
           <IconButton label={open ? "Hide sidebar" : "Show sidebar"} tipAlign="start" aria-expanded={open} onClick={toggle}>
             {desktop ? <PanelLeft /> : <Menu />}
           </IconButton>

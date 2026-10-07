@@ -1,6 +1,9 @@
 "use client";
-import dynamic from "next/dynamic";
+import { MoreHorizontal, Timer } from "lucide-react";
 import { useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
+import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
+import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@client/markdown/Markdown";
 import { textOf, type MessageState } from "@client/store/chat-store";
@@ -8,14 +11,36 @@ import { useChat, useChatStore } from "@client/store/hooks";
 import { modelDisplayName } from "@shared/models";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { useChatContext } from "./chat-context";
-import { StatusFooter } from "./status-footer";
+import { ServedBy, StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
 
-// D21: menus and popovers (Radix) load after first paint, not in the route bundle.
+// D21: menus and popovers (Radix) load on first intent, not at mount; the stand-ins keep the row's height.
+const ACTION_BUTTON =
+  "text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
+
+function ActionsStandIn({ message, start, onPress }: { message: MessageState; start?: () => void; onPress?: (what: string) => void }) {
+  return (
+    <div className="flex items-center gap-1" {...(start ? intentProps(start) : {})}>
+      <ServedBy message={message} />
+      <IconButton label="Latency breakdown" className="text-muted-foreground" disabled={!onPress} onClick={() => onPress?.("latency")}>
+        <Timer />
+      </IconButton>
+      <IconButton label="Message actions" className={ACTION_BUTTON} disabled={!onPress} onClick={() => onPress?.("menu")}>
+        <MoreHorizontal />
+      </IconButton>
+    </div>
+  );
+}
 const AssistantActions = dynamic(() => import("./assistant-actions").then((m) => m.AssistantActions), {
   ssr: false,
   loading: () => <div className="h-11" aria-hidden />,
 });
+
+function AssistantActionsOnIntent(props: { message: MessageState; text: string; canRegenerate: boolean; onRegenerate: () => void }) {
+  const { armed, wanted, start, press } = useIntent();
+  if (armed) return <AssistantActions {...props} defaultOpen={wanted === "menu" || wanted === "latency" ? wanted : null} />;
+  return <ActionsStandIn message={props.message} start={start} onPress={press} />;
+}
 
 function ModelDivider({ from, to, category }: { from: string; to: string; category: string | null }) {
   return (
@@ -111,7 +136,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
       />
       {!streaming ? (
         <ChunkBoundary label="message actions">
-          <AssistantActions
+          <AssistantActionsOnIntent
             message={message}
             text={text}
             canRegenerate={Boolean(userMessageId) && message.status !== "refused"}

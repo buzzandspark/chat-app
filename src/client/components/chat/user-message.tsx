@@ -1,20 +1,34 @@
 "use client";
 import { MoreHorizontal } from "lucide-react";
 import dynamic from "next/dynamic";
-import { Button } from "@/components/ui/button";
+import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
+import { IconButton } from "../ui/icon-button";
 import type { MessageState } from "@client/store/chat-store";
 import { textOf } from "@client/store/chat-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { useChatContext } from "./chat-context";
 
+const USER_ACTION_BUTTON =
+  "shrink-0 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/user:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
 const UserActions = dynamic(() => import("./user-actions").then((m) => m.UserActions), {
   ssr: false,
   loading: () => (
-    <Button variant="ghost" size="icon" className="touch-target shrink-0 text-muted-foreground opacity-0" aria-hidden disabled>
+    <IconButton label="Message actions" className={USER_ACTION_BUTTON} disabled>
       <MoreHorizontal />
-    </Button>
+    </IconButton>
   ),
 });
+
+/** D21: the menu's chunk loads on intent; the stand-in is the same button. */
+function UserActionsOnIntent(props: { text: string; onEdit: () => void }) {
+  const { armed, wanted, start, press } = useIntent();
+  if (armed) return <UserActions {...props} defaultOpen={wanted === "menu"} />;
+  return (
+    <IconButton label="Message actions" className={USER_ACTION_BUTTON} {...intentProps(start)} onClick={() => press("menu")}>
+      <MoreHorizontal />
+    </IconButton>
+  );
+}
 
 export function UserMessage({ message }: { message: MessageState }) {
   const { editMessage } = useChatContext();
@@ -22,7 +36,7 @@ export function UserMessage({ message }: { message: MessageState }) {
   return (
     <div className="group/user flex items-end justify-end gap-1">
       <ChunkBoundary label="message actions">
-        <UserActions text={text} onEdit={() => editMessage(message.id)} />
+        <UserActionsOnIntent text={text} onEdit={() => editMessage(message.id)} />
       </ChunkBoundary>
       <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-bubble bg-bubble px-4 py-2.5 text-body text-bubble-foreground md:max-w-[75%]">
         {text}

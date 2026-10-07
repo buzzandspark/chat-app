@@ -1,16 +1,16 @@
 "use client";
 import { useEffect } from "react";
 
-/** D25: Sentry's browser SDK loads in idle time after first paint, outside the route bundle. */
+/** D25: the minimal Sentry client loads in idle time after first paint, outside the route bundle. */
 export function Monitoring({ dsn }: { dsn: string | null }) {
   useEffect(() => {
     if (!dsn) return;
     let cancelled = false;
     const start = () => {
       if (cancelled) return;
-      void import("@sentry/browser").then((Sentry) => {
+      void import("@client/monitoring/sentry").then(({ startSentry }) => {
         if (cancelled) return;
-        Sentry.init({ dsn, tracesSampleRate: 0 });
+        startSentry(dsn);
       });
     };
     const hasIdle = "requestIdleCallback" in window;

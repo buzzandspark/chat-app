@@ -2,8 +2,8 @@
 - Local:         http://127.0.0.1:3126
 - Network:       http://127.0.0.1:3126
 ✓ Ready in 0ms
-✓ Running next.config took 1.6ms
-[boot] cadence ready (replay mode, db=/Users/sniffs/claude-app/data/shutdown-test.db)
-[shutdown] SIGTERM received, draining 2 task(s)
+✓ Running next.config took 3ms
+[boot] cadence ready (replay mode, db=/Users/sniffs/claude-app-wt/data/shutdown-test.db)
+[shutdown] SIGTERM received, draining 3 task(s)
 [shutdown] draining 1 generation(s)
-[shutdown] drained in 106ms
+[shutdown] drained in 105ms

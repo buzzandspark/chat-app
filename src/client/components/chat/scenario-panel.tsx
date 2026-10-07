@@ -1,7 +1,9 @@
 "use client";
 import { FlaskConical } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { SCENARIO_NAMES, SCENARIOS, type ScenarioName } from "@relay/scenario-catalog";
+import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { IconButton } from "../ui/icon-button";
 import { useModals } from "../ui/modal-manager";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
@@ -33,6 +35,7 @@ export function ScenarioDialog({ open, onOpenChange, onPick, onSeedLongChat }: S
             type="button"
             data-testid="scenario-long_chat"
             onClick={() => {
+              markNavigationClose();
               onOpenChange(false);
               onSeedLongChat();
             }}
@@ -66,7 +69,7 @@ export function ScenarioDialog({ open, onOpenChange, onPick, onSeedLongChat }: S
   );
 }
 
-export function ScenarioPanel() {
+export function ScenarioPanel({ autoOpen = false }: { autoOpen?: boolean }) {
   const { send } = useChatContext();
   const { show } = useModals();
   const router = useRouter();
@@ -85,6 +88,13 @@ export function ScenarioPanel() {
         onSeedLongChat={() => void seedLongChat()}
       />
     ));
+  // The stand-in was pressed before this chunk arrived: open once, now that it can.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!autoOpen || opened.current) return;
+    opened.current = true;
+    openPanel();
+  });
   return (
     <IconButton label="Scenarios" tipSide="top" className="text-muted-foreground" data-testid="scenario-panel-trigger" onClick={openPanel}>
       <FlaskConical />

@@ -21,7 +21,11 @@ module.exports = [
   {
     name: "chat route JS (gzip)",
     path: paths,
-    limit: "200 kB",
+    // 200 kB until 2026-10-07 with 0.7 kB of headroom; the review's required additions (error
+    // boundaries, back gesture, stand-ins for lazy controls, the scroll-anchoring flag, sign out)
+    // cost about 5 kB of app code, and the only cut left is replacing `marked` (14 kB), the next
+    // lever named in the design doc. Raised to 205 kB, not silently: see CHANGELOG 2026-10-07.
+    limit: "205 kB",
     gzip: true,
   },
 ];

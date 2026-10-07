@@ -85,7 +85,7 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
           className="h-full overflow-y-auto overscroll-contain scroll-pb-4"
           data-testid="message-list"
         >
-          <div className="mx-auto flex w-full max-w-thread flex-col gap-5 px-gutter py-4 md:py-6">
+          <div className="mx-auto flex w-full max-w-thread flex-col gap-5 safe-x py-4 md:py-6">
             {chat.messageIds.length === 0 ? (
               <div className="flex flex-1 items-center justify-center py-16 text-center text-small text-muted-foreground">
                 Ask anything. Replies keep streaming even if you switch apps.

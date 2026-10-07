@@ -10,7 +10,7 @@ function ms(a: number | undefined, b: number | undefined): string {
 }
 
 /** D20: server and client intervals are on different clocks, joined by message id, never compared. */
-export function LatencyPopover({ timings, usage }: { timings: Timings | null; usage: UsageSummary | null }) {
+export function LatencyPopover({ timings, usage, defaultOpen }: { timings: Timings | null; usage: UsageSummary | null; defaultOpen?: boolean }) {
   const s = timings?.server;
   const c = timings?.client;
   const rows: Array<[string, string]> = [
@@ -22,7 +22,7 @@ export function LatencyPopover({ timings, usage }: { timings: Timings | null; us
     ["Server: received → done", ms(s?.received, s?.done)],
   ];
   return (
-    <Popover>
+    <Popover defaultOpen={defaultOpen}>
       <PopoverTrigger asChild>
         <IconButton label="Latency breakdown" className="text-muted-foreground">
           <Timer />

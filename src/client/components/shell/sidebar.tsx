@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useNewChat } from "@client/hooks/use-new-chat";
@@ -13,18 +13,31 @@ import { prefetchChat } from "@client/store/prefetch";
 import { getSidebarStore, setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { useModals } from "../ui/modal-manager";
+import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
 
-// D21: Radix menus and dialogs load after first paint.
+// D21: Radix menus and dialogs load on first intent, not at mount (next/dynamic keeps them out of the gate).
+const MENU_BUTTON =
+  "size-10 shrink-0 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100";
 const ChatItemMenu = dynamic(() => import("./chat-item-menu").then((m) => m.ChatItemMenu), {
   ssr: false,
   loading: () => (
-    <Button variant="ghost" size="icon" className="size-10 shrink-0 text-muted-foreground opacity-0" aria-hidden disabled>
+    <IconButton label="Chat actions" tipAlign="end" className={MENU_BUTTON} disabled>
       <MoreHorizontal />
-    </Button>
+    </IconButton>
   ),
 });
+
+function ChatItemMenuOnIntent(props: { title: string; onRename: () => void; onDelete: () => void }) {
+  const { armed, wanted, start, press } = useIntent();
+  if (armed) return <ChatItemMenu {...props} defaultOpen={wanted === "menu"} />;
+  return (
+    <IconButton label={`Actions for ${props.title}`} tipAlign="end" className={MENU_BUTTON} {...intentProps(start)} onClick={() => press("menu")}>
+      <MoreHorizontal />
+    </IconButton>
+  );
+}
 const RenameDialog = dynamic(() => import("./chat-dialogs").then((m) => m.RenameDialog), { ssr: false });
 const DeleteDialog = dynamic(() => import("./chat-dialogs").then((m) => m.DeleteDialog), { ssr: false });
 
@@ -92,7 +105,7 @@ export function Sidebar({ initialChats, phoneOpen, desktopOpen, open, onClose, o
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-full flex-col bg-sidebar text-sidebar-foreground",
           "border-r border-sidebar-border transition-transform duration-200 ease-out",
-          "safe-top pb-[env(safe-area-inset-bottom,0px)]",
+          "safe-top pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)]",
           phoneOpen ? "translate-x-0" : "-translate-x-full",
           "md:static md:z-0 md:w-72 md:translate-x-0 md:transition-[width,transform]",
           desktopOpen ? "md:flex" : "md:hidden",
@@ -155,7 +168,7 @@ export function Sidebar({ initialChats, phoneOpen, desktopOpen, open, onClose, o
                       <span className="truncate">{chat.title}</span>
                     </Link>
                     <ChunkBoundary label="chat menu">
-                    <ChatItemMenu
+                    <ChatItemMenuOnIntent
                       title={chat.title}
                       onRename={() => show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />)}
                       onDelete={() =>
