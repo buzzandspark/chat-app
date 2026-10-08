@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { costOf, priceIterations, ratesFor, summarize } from "./pricing";
+import { MODEL_IDS } from "@shared/models";
+import { costOf, priceIterations, ratesFor, summarize, worstCaseRates } from "./pricing";
+import { modelParams } from "./thinking-config";
 
 describe("pricing", () => {
   it("prices two iterations at their own models' rates", () => {
@@ -43,5 +45,26 @@ describe("pricing", () => {
     expect(long).toBeCloseTo((90_000 * 0.5 + 1_000 * 2.5 + 20_000 * 0.05) / 1_000_000, 9);
     expect(ratesFor("claude-haiku-5-5").output).toBe(0.5);
     expect(ratesFor("claude-haiku-5-5", 200_000).output).toBe(2.5);
+  });
+
+  it("reserves Claude Haiku 5.5, which is sent without fallbacks, at its own long-context rates", () => {
+    expect(modelParams("claude-haiku-5-5", { harder: false }).fallbacks).toBeUndefined();
+    const haiku = ratesFor("claude-haiku-5-5", 200_000);
+    expect(worstCaseRates("claude-haiku-5-5")).toEqual({ input: haiku.cacheWrite, output: haiku.output });
+  });
+
+  it("reserves every model sent with fallbacks at no less than its dearest fallback target", () => {
+    const opus48 = ratesFor("claude-opus-4-8");
+    for (const model of MODEL_IDS) {
+      if (!modelParams(model, { harder: false }).fallbacks) continue;
+      const worst = worstCaseRates(model);
+      expect(worst.input).toBeGreaterThanOrEqual(opus48.cacheWrite);
+      expect(worst.output).toBeGreaterThanOrEqual(opus48.output);
+    }
+    expect(worstCaseRates("claude-sonnet-5-5")).toEqual({ input: opus48.cacheWrite, output: opus48.output });
+  });
+
+  it("assumes an id outside the catalogue may fall back", () => {
+    expect(worstCaseRates("claude-mystery-9").output).toBe(ratesFor("claude-opus-4-8").output);
   });
 });

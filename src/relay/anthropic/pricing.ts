@@ -1,5 +1,7 @@
 import type { IterationUsage } from "@shared/blocks";
+import { isModelId } from "@shared/models";
 import type { UsageSummary } from "@shared/types";
+import { modelParams } from "./thinking-config";
 
 /** USD per million tokens. Cache writes are 1.25x input on every model here. */
 export interface Rates {
@@ -34,11 +36,25 @@ const FALLBACK_RATES: Rates = RATES["claude-opus-5-5"]!;
 /** Models the API's server-side fallback may serve a request on (D11); a reservation prices for the dearest. */
 const FALLBACK_TARGETS = ["claude-opus-5", "claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6"];
 
-/** The highest output rate and cache-write input rate among the requested model and its possible fallbacks. */
+/**
+ * Whether a request for `model` is sent with server-side fallback, read off the params the request is
+ * built from so the reservation cannot drift from the request. Either "Think harder" setting counts;
+ * an id outside the catalogue is assumed to fall back, which only over-reserves.
+ */
+function mayFallBack(model: string): boolean {
+  if (!isModelId(model)) return true;
+  return [false, true].some((harder) => modelParams(model, { harder }).fallbacks !== undefined);
+}
+
+/**
+ * The highest output rate and cache-write input rate among the requested model and, when its request
+ * can fall back, the fallback targets. Haiku is sent without fallbacks, so it reserves at its own
+ * long-context rates rather than Opus 4.8's, which priced a cents reply at about $0.40.
+ */
 export function worstCaseRates(model: string): { input: number; output: number } {
   let input = 0;
   let output = 0;
-  for (const id of [model, ...FALLBACK_TARGETS]) {
+  for (const id of mayFallBack(model) ? [model, ...FALLBACK_TARGETS] : [model]) {
     const r = baseRatesFor(id);
     input = Math.max(input, r.cacheWrite, r.longContext?.cacheWrite ?? 0);
     output = Math.max(output, r.output, r.longContext?.output ?? 0);
