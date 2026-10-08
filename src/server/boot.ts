@@ -6,6 +6,7 @@ import { runMigrations } from "@db/migrate";
 import { seedDevUser } from "@db/seed";
 import { seedAdmin } from "@auth/admin-seed";
 import { settleOrphan } from "@relay/orphans";
+import { redactInviteTokens } from "@shared/redact";
 import { installSignalHandlers, onShutdown } from "./shutdown";
 
 const g = globalThis as unknown as { __cadenceBooted?: boolean };
@@ -22,7 +23,16 @@ export async function boot(): Promise<void> {
   onShutdown(() => closeDatabase(), "close");
   if (env.SENTRY_DSN) {
     const Sentry = await import("@sentry/node");
-    Sentry.init({ dsn: env.SENTRY_DSN, tracesSampleRate: 0, environment: env.NODE_ENV });
+    // The HTTP integration puts the request URL and headers (a `referer` too) on every event and breadcrumb;
+    // an invite token among them is a password-setting credential.
+    Sentry.init({
+      dsn: env.SENTRY_DSN,
+      tracesSampleRate: 0,
+      environment: env.NODE_ENV,
+      beforeSend: redactInviteTokens,
+      beforeSendTransaction: redactInviteTokens,
+      beforeBreadcrumb: redactInviteTokens,
+    });
     onShutdown(() => Sentry.flush(2000).then(() => undefined));
   }
 

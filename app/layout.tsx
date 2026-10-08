@@ -56,8 +56,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-dvh flex flex-col">
         {children}
         <Monitoring dsn={process.env.NEXT_PUBLIC_SENTRY_DSN ?? null} />
+        {/* An invite link's token sets the account's password, so `/invite/*` must never become a pageview:
+            the exclusions build skips matching paths in the browser, before anything is sent (a dashboard
+            Shield would drop it only after it arrived), and it checks on every client-side navigation too. A
+            static attribute, not a pathname check here, which would stop every route from prerendering. */}
         {process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN ? (
-          <Script defer data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN} src="https://plausible.io/js/script.js" strategy="afterInteractive" />
+          <Script
+            defer
+            data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN}
+            data-exclude="/invite/**"
+            src="https://plausible.io/js/script.exclusions.js"
+            strategy="afterInteractive"
+          />
         ) : null}
       </body>
     </html>

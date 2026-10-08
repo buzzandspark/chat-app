@@ -10,6 +10,7 @@ export async function register(): Promise<void> {
 /** D25: server-side errors go to Sentry when a DSN is configured. */
 export async function onRequestError(err: unknown, request: { path: string; method: string }): Promise<void> {
   if (!process.env.SENTRY_DSN || process.env.NEXT_RUNTIME !== "nodejs") return;
-  const Sentry = await import("@sentry/node");
-  Sentry.captureException(err, { extra: { path: request.path, method: request.method } });
+  const [Sentry, { redactInvitePath }] = await Promise.all([import("@sentry/node"), import("./src/shared/redact")]);
+  // `beforeSend` redacts the event too; the path is the one field set here, so it never leaves unredacted.
+  Sentry.captureException(err, { extra: { path: redactInvitePath(request.path), method: request.method } });
 }
