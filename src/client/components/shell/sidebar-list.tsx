@@ -82,10 +82,12 @@ function ChatItemMenuOnIntent({
   onNewGroup: () => void;
 }) {
   if (intent.armed) {
-    return <ChatItemMenu {...props} defaultOpen={intent.wanted === "menu"} onOpenChange={(o) => !o && intent.disarm()} />;
+    return <ChatItemMenu {...props} defaultOpen={intent.wanted === "menu"} triggerRef={intent.trigger} onCloseAutoFocus={intent.closed} />;
   }
+  // Destructured: the compiler's lint takes an object one of whose fields is a `ref` for a ref itself.
+  const { standIn } = intent;
   return (
-    <IconButton label={`Actions for ${props.title}`} className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
+    <IconButton ref={standIn} label={`Actions for ${props.title}`} className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
       <MoreHorizontal />
     </IconButton>
   );
@@ -198,6 +200,7 @@ function GroupSection({
   show: (render: (api: ModalApi) => React.ReactNode) => () => void;
 }) {
   const intent = useIntent(warmChatItemMenu);
+  const { standIn } = intent; // see ChatItemMenuOnIntent
   const headingId = `sidebar-group-${group.id}`;
   const toggle = () => {
     const collapsed = !group.collapsed;
@@ -244,9 +247,9 @@ function GroupSection({
         </button>
         <ChunkBoundary label="group menu">
           {intent.armed ? (
-            <GroupItemMenu name={group.name} onRename={onRename} onDelete={onDelete} defaultOpen={intent.wanted === "menu"} onOpenChange={(o) => !o && intent.disarm()} />
+            <GroupItemMenu name={group.name} onRename={onRename} onDelete={onDelete} defaultOpen={intent.wanted === "menu"} triggerRef={intent.trigger} onCloseAutoFocus={intent.closed} />
           ) : (
-            <IconButton label={`Actions for group ${group.name}`} className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
+            <IconButton ref={standIn} label={`Actions for group ${group.name}`} className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
               <MoreHorizontal />
             </IconButton>
           )}

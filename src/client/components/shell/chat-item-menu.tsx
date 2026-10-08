@@ -10,6 +10,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { Ref } from "react";
 import type { GroupSummary } from "@client/store/sidebar-store";
 import { IconButton } from "../ui/icon-button";
 
@@ -27,7 +28,8 @@ export function ChatItemMenu({
   onMoveToGroup,
   onNewGroup,
   defaultOpen,
-  onOpenChange,
+  triggerRef,
+  onCloseAutoFocus,
 }: {
   title: string;
   pinned?: boolean;
@@ -40,16 +42,18 @@ export function ChatItemMenu({
   onNewGroup?: () => void;
   /** True when the user pressed the stand-in before this chunk had loaded. */
   defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  /** The row's intent: it swaps back to the stand-in once Radix has returned focus here (useIntent's `closed`). */
+  triggerRef?: Ref<HTMLButtonElement>;
+  onCloseAutoFocus?: () => void;
 }) {
   return (
-    <DropdownMenu defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
+    <DropdownMenu defaultOpen={defaultOpen}>
       <DropdownMenuTrigger asChild>
-        <IconButton label={`Actions for ${title}`} className={BUTTON}>
+        <IconButton ref={triggerRef} label={`Actions for ${title}`} className={BUTTON}>
           <MoreHorizontal />
         </IconButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" onCloseAutoFocus={onCloseAutoFocus}>
         {onTogglePin ? (
           <DropdownMenuItem className="min-h-11" onSelect={onTogglePin}>
             {pinned ? <PinOff /> : <Pin />}
@@ -105,22 +109,24 @@ export function GroupItemMenu({
   onRename,
   onDelete,
   defaultOpen,
-  onOpenChange,
+  triggerRef,
+  onCloseAutoFocus,
 }: {
   name: string;
   onRename: () => void;
   onDelete: () => void;
   defaultOpen?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  triggerRef?: Ref<HTMLButtonElement>;
+  onCloseAutoFocus?: () => void;
 }) {
   return (
-    <DropdownMenu defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
+    <DropdownMenu defaultOpen={defaultOpen}>
       <DropdownMenuTrigger asChild>
-        <IconButton label={`Actions for group ${name}`} className={BUTTON}>
+        <IconButton ref={triggerRef} label={`Actions for group ${name}`} className={BUTTON}>
           <MoreHorizontal />
         </IconButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" onCloseAutoFocus={onCloseAutoFocus}>
         <DropdownMenuItem className="min-h-11" onSelect={onRename}>
           <Pencil />
           Rename group

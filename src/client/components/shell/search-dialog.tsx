@@ -2,7 +2,7 @@
 import { Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent, type RefObject } from "react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
@@ -16,7 +16,16 @@ interface Hit {
 }
 
 /** D19 search (⌘/Ctrl+K): a sheet on phones, a modal at `md`, keyboard-safe. */
-export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function SearchDialog({
+  open,
+  onOpenChange,
+  returnFocus,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Where focus goes on close (on a phone; see ResponsiveDialog). */
+  returnFocus?: RefObject<HTMLElement | null>;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
@@ -66,7 +75,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Search chats" className="md:max-w-lg">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Search chats" className="md:max-w-lg" returnFocus={returnFocus}>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input

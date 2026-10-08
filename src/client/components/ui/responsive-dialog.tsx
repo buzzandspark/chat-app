@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, type ReactNode } from "react";
+import { useCallback, type ReactNode, type RefObject } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useBackGesture } from "@client/hooks/use-back-gesture";
@@ -11,10 +11,12 @@ interface ResponsiveDialogProps {
   description?: string;
   children: ReactNode;
   className?: string;
+  /** Where focus goes on close when it doesn't go to the composer; Radix has no trigger to return to here. */
+  returnFocus?: RefObject<HTMLElement | null>;
 }
 
 /** D19: a bottom sheet on phones (slides from the bottom, follows the keyboard), a centred modal at `md`. */
-export function ResponsiveDialog({ open, onOpenChange, title, description, children, className }: ResponsiveDialogProps) {
+export function ResponsiveDialog({ open, onOpenChange, title, description, children, className, returnFocus }: ResponsiveDialogProps) {
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
   useBackGesture(open, close);
   return (
@@ -27,6 +29,9 @@ export function ResponsiveDialog({ open, onOpenChange, title, description, child
           if (composer && window.matchMedia("(hover: hover) and (min-width: 768px)").matches) {
             e.preventDefault();
             composer.focus();
+          } else if (returnFocus?.current) {
+            e.preventDefault();
+            returnFocus.current.focus();
           }
         }}
         className={cn(

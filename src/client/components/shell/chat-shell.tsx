@@ -81,10 +81,15 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
 
   const openSearch = useCallback(() => {
     // Search from the phone sidebar replaces it: the picked chat must not open underneath the overlay (#33).
+    // The Search button that opened it is then inert, so a dismissed search hands focus to the menu
+    // button, as a dismissed sidebar does; elsewhere the dialog keeps its own close focus.
+    const fromPhoneSidebar = !desktop && phoneOpen;
     if (!desktop) setPhoneOpen(false);
     searchCloser.current?.();
-    searchCloser.current = show(({ open, close }) => <SearchDialog open={open} onOpenChange={(o) => !o && close()} />);
-  }, [show, desktop]);
+    searchCloser.current = show(({ open, close }) => (
+      <SearchDialog open={open} onOpenChange={(o) => !o && close()} returnFocus={fromPhoneSidebar ? menuButtonRef : undefined} />
+    ));
+  }, [show, desktop, phoneOpen]);
 
   // D19 shortcuts: ⌘/Ctrl+Shift+O new chat, ⌘/Ctrl+K search, Esc closes the phone sidebar first.
   useEffect(() => {
