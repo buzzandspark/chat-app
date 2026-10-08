@@ -84,7 +84,8 @@ const SidebarRow = memo(function SidebarRow({
     <li
       className={cn(
         "group/item flex items-center justify-between gap-1 rounded-lg pr-0.5 transition-colors",
-        active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/70 active:bg-sidebar-accent",
+        // The menu is a portal, so the pointer leaving the row for it ended the hover; the open trigger keeps the row lit.
+        active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/70 active:bg-sidebar-accent has-[[aria-expanded=true]]:bg-sidebar-accent/70",
       )}
     >
       <Link
