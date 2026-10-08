@@ -209,11 +209,25 @@ export class GenerationClient {
     return unaccepted?.replaceFromMessageId ?? reply.id;
   }
 
+  /**
+   * D5: ask the server to stop. Never rejects: the composer holds Stop disabled ("Stopping") until
+   * this settles false or the stream ends, so a network error, an unreadable body or a request sent
+   * into a half-open socket (the same headers timeout as the stream's) has to come back as false,
+   * or Stop and Esc stay dead while the reply keeps generating. False is also safe to retry: a
+   * second stop of a generation that did stop answers `stopped: false` and changes nothing.
+   */
   async stop(generationId: string): Promise<boolean> {
-    const res = await this.fetchImpl(`/api/generations/${generationId}/stop`, { method: "POST" });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { stopped: boolean };
-    return data.stopped;
+    const controller = new AbortController();
+    const timer = this.headersMs > 0 ? setTimeout(() => controller.abort(), this.headersMs) : null;
+    try {
+      const res = await this.fetchImpl(`/api/generations/${generationId}/stop`, { method: "POST", signal: controller.signal });
+      if (!res.ok) return false;
+      return (await safeJson(res)).stopped === true;
+    } catch {
+      return false;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /** Resume a generation this client did not start (e.g. after a reload mid-stream). */

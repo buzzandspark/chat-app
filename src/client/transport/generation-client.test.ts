@@ -507,6 +507,18 @@ describe("GenerationClient", () => {
       await vi.runAllTimersAsync();
       expect(sent).toHaveLength(1);
     });
+
+    it("a stop with no headers settles false after headersMs, so Stop is not held disabled", async () => {
+      const client = headersClient((_url, init) => hang(init));
+      let result: boolean | undefined;
+      void client.stop("g1").then((ok) => (result = ok));
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(result).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(result).toBe(false);
+      expect(sent[0]!.signal?.aborted).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   it("resumeAll applies events a hidden tab left queued, so a reply that finished there is not resumed", async () => {
@@ -520,5 +532,28 @@ describe("GenerationClient", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(store.getMessage(assistantMessageId)!.status).toBe("done");
     expect(calls.some((c) => c.url.includes("/events?after="))).toBe(false);
+  });
+
+  describe("stop", () => {
+    it("resolves to the server's answer", async () => {
+      const client = makeClient(() => Response.json({ stopped: true }));
+      await expect(client.stop("g1")).resolves.toBe(true);
+      expect(calls).toEqual([{ url: "/api/generations/g1/stop", method: "POST", body: undefined }]);
+    });
+
+    it("resolves false, never rejects, when the request fails at the network level", async () => {
+      const client = makeClient(() => Promise.reject(new TypeError("Failed to fetch")));
+      await expect(client.stop("g1")).resolves.toBe(false);
+    });
+
+    it("resolves false on a 2xx whose body is not JSON (a proxy's page)", async () => {
+      const client = makeClient(() => new Response("<html>Bad gateway</html>", { status: 200, headers: { "content-type": "text/html" } }));
+      await expect(client.stop("g1")).resolves.toBe(false);
+    });
+
+    it("resolves false on a refusal", async () => {
+      const client = makeClient(() => Response.json({ error: "not_found" }, { status: 404 }));
+      await expect(client.stop("g1")).resolves.toBe(false);
+    });
   });
 });

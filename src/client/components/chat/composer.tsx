@@ -153,12 +153,14 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
   const streamingId = lastMessage?.role === "assistant" && lastMessage.status === "streaming" ? lastMessage.generationId : null;
   // Stop shows a pending state until the stream actually ends (or the request fails) (#68).
+  // client.stop never rejects: a refusal, a network error or a timeout all settle false, which
+  // re-enables Stop and Esc so the user can try again; only that same stop's pending state clears.
   const [stopping, setStopping] = useState<string | null>(null);
   const stop = (id: string) => {
     if (stopping === id) return;
     setStopping(id);
     void client.stop(id).then((ok) => {
-      if (!ok) setStopping(null);
+      if (!ok) setStopping((s) => (s === id ? null : s));
     });
   };
   if (stopping !== null && stopping !== streamingId) setStopping(null);
