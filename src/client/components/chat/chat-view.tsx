@@ -153,10 +153,13 @@ export function ChatView({ children }: { children: ReactNode }) {
       const scenario = replaced.scenario ?? current.scenario?.name;
       // A retry of a rate-limited reply continues its streak, so the next wait doubles; anything else starts at 0.
       const attempt = replaced.status === "error" && replaced.error?.kind === "rate_limited" ? replaced.retryAttempt + 1 : 0;
+      // Usually the reply itself; for a refused Edit or Regenerate, the turns that attempt was to
+      // replace, which the server still has while this view already dropped them.
+      const replaceFrom = client.retryReplaceFrom(replaced);
       store.truncateFrom(fromMessageId);
       // A retry after a refused first send is the chat's first accepted generation: list it then.
       client.retry(
-        { chatId, userMessageId, text, model, thinking: current.thinking, scenario, replaceFrom: fromMessageId, attempt },
+        { chatId, userMessageId, text, model, thinking: current.thinking, scenario, replaceFrom, attempt },
         { onAccepted: announceChat(text ?? "") },
       );
       listRef.current?.engage();

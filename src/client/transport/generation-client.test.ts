@@ -345,6 +345,50 @@ describe("GenerationClient", () => {
     expect(accepted).toBe(1);
   });
 
+  it("a refused Regenerate's retry replaces from the old reply, through any number of refused retries", async () => {
+    let refuse = 2;
+    const client = makeClient((_url, init) => {
+      if (refuse-- > 0) return new Response(JSON.stringify({ error: "rate_limited", retryAfterMs: 1 }), { status: 429 });
+      return sseResponse(eventsFromPost(init, "ok"));
+    });
+    const input = { chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { harder: false } } as const;
+    const first = client.retry({ ...input, replaceFrom: "old-reply" });
+    const failed = await settle(first.assistantMessageId);
+    expect(failed.error?.kind).toBe("rate_limited");
+    // The server never stored the failed reply, so replacing from it would keep the old one.
+    expect(client.retryReplaceFrom(failed)).toBe("old-reply");
+    const second = client.retry({ ...input, replaceFrom: client.retryReplaceFrom(failed) });
+    const failedAgain = await settle(second.assistantMessageId);
+    expect(client.retryReplaceFrom(failedAgain)).toBe("old-reply");
+    const third = client.retry({ ...input, replaceFrom: client.retryReplaceFrom(failedAgain) });
+    expect((await settle(third.assistantMessageId)).status).toBe("done");
+    expect(calls.map((c) => c.body!.replaceFromMessageId)).toEqual(["old-reply", "old-reply", "old-reply"]);
+  });
+
+  it("a refused Edit's retry replaces from the edited message; a refused plain send's from the reply itself", async () => {
+    const client = makeClient(() => new Response(JSON.stringify({ error: "rate_limited", retryAfterMs: 1 }), { status: 429 }));
+    const edit = client.send({ chatId: "c1", text: "edited", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "u-original" });
+    expect(client.retryReplaceFrom(await settle(edit.assistantMessageId))).toBe("u-original");
+    const plain = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    expect(client.retryReplaceFrom(await settle(plain.assistantMessageId))).toBe(plain.assistantMessageId);
+  });
+
+  it("a reply the server accepted is replaced from itself, even when its own request was a Regenerate", async () => {
+    const client = makeClient((_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };
+      const events = makeEvents(body.generationId, body.assistantMessageId, "x").slice(0, 3);
+      events.push({ type: "error", seq: 3, generationId: body.generationId, t: 3, error: { kind: "overloaded", message: "Overloaded", retryable: true } });
+      return sseResponse(events);
+    });
+    // Errored mid-stream: the server applied the replace and keeps this reply's row.
+    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "old-reply" });
+    const failed = await settle(regen.assistantMessageId);
+    expect(failed.status).toBe("error");
+    expect(client.retryReplaceFrom(failed)).toBe(regen.assistantMessageId);
+    // A reply loaded from the server (no body here) is its own target too.
+    expect(client.retryReplaceFrom({ id: "saved", generationId: "g-saved" })).toBe("saved");
+  });
+
   it("resumeAll cuts a backoff sleep short and retries at once", async () => {
     let events: RelayEvent[] = [];
     let gets = 0;

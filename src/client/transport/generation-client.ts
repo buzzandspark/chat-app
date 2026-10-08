@@ -2,7 +2,7 @@ import { isTerminal, type RelayEvent } from "@relay/events";
 import { createSseParser, parseRelayEvent } from "@relay/sse";
 import { uuidv7 } from "@shared/id";
 import { MAX_MESSAGE_CHARS, type ModelId, type ThinkingOptions } from "@shared/types";
-import { createMessageState, type ChatStore } from "../store/chat-store";
+import { createMessageState, type ChatStore, type MessageState } from "../store/chat-store";
 
 export interface SendInput {
   chatId: string;
@@ -27,7 +27,7 @@ export interface RetryInput {
   model: ModelId;
   thinking: ThinkingOptions;
   scenario?: string;
-  /** Regenerate replaces the old reply (and anything after it) in the same request. */
+  /** Regenerate replaces the old reply (and anything after it) in the same request; see retryReplaceFrom. */
   replaceFrom?: string;
   /** Automatic retries after a 429 count up here; the footer's backoff reads it. */
   attempt?: number;
@@ -180,6 +180,20 @@ export class GenerationClient {
     if (hooks.onAccepted) this.accepted.set(generationId, hooks.onAccepted);
     void this.post(body);
     return { generationId, assistantMessageId };
+  }
+
+  /**
+   * What a retry of this reply replaces from. A reply the server accepted is a row there (an error
+   * mid-stream included), so the retry replaces from it. One whose POST was refused, or never got
+   * through, changed nothing on the server: if it was an Edit or a Regenerate, the turns it was to
+   * replace are all still there, and the failed reply's own id matches nothing, so the retry would
+   * be appended after them. It carries that attempt's target instead, which a chain of refused
+   * retries passes along unchanged. A refused plain send had no target, and its own id is harmless.
+   */
+  retryReplaceFrom(reply: Pick<MessageState, "id" | "generationId">): string {
+    const gid = reply.generationId;
+    const unaccepted = gid && !this.acked.has(gid) ? this.bodies.get(gid) : undefined;
+    return unaccepted?.replaceFromMessageId ?? reply.id;
   }
 
   async stop(generationId: string): Promise<boolean> {
