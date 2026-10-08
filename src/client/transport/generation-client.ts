@@ -29,6 +29,8 @@ export interface RetryInput {
   scenario?: string;
   /** Regenerate replaces the old reply (and anything after it) in the same request. */
   replaceFrom?: string;
+  /** Automatic retries after a 429 count up here; the footer's backoff reads it. */
+  attempt?: number;
 }
 
 interface PostBody {
@@ -154,6 +156,7 @@ export class GenerationClient {
         connection: "streaming",
         timings: { client: { sent: now } },
         createdAt: now,
+        retryAttempt: input.attempt ?? 0,
       }),
     );
     const body: PostBody = {

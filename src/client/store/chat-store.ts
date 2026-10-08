@@ -41,6 +41,8 @@ export interface MessageState {
   createdAt: number;
   /** Added by this client and not yet listed by the server (a POST in flight, or one it refused). */
   local: boolean;
+  /** Retries already made for this user message in the current rate-limited streak (0 for a first reply). */
+  retryAttempt: number;
   /** The scripted scenario this reply comes from, so Continue and retries keep it. */
   scenario: string | null;
 }
@@ -131,6 +133,7 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
     lastSeq: -1,
     createdAt: Date.now(),
     local: false,
+    retryAttempt: 0,
     scenario: null,
     ...partial,
   };

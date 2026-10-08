@@ -12,6 +12,7 @@ import { modelDisplayName } from "@shared/models";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { lazyChunk } from "../ui/lazy-chunk";
 import { useChatActions, useChatLiveState } from "./chat-context";
+import { MAX_AUTO_RETRIES, rateLimitDelayMs } from "./rate-limit";
 import { ServedBy, StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
 
@@ -119,6 +120,21 @@ export function AssistantMessage({ message }: { message: MessageState }) {
   const onRetry = () => {
     if (userMessageId) retry(userMessageId, message.id);
   };
+
+  // A 429 retries by itself with exponential backoff, four times at most, and only for a reply this
+  // client asked for (a saved error from an earlier session waits for the user). The timer dies with
+  // the row, so a hidden chat pauses and a manual Try again, which replaces the row, cancels it.
+  const rateLimited = message.status === "error" && message.error?.kind === "rate_limited" && message.local;
+  const attempt = message.retryAttempt;
+  const retryAfterMs = message.error?.retryAfterMs;
+  const createdAt = message.createdAt;
+  const messageId = message.id;
+  useEffect(() => {
+    if (!rateLimited || attempt >= MAX_AUTO_RETRIES || !userMessageId) return;
+    const delay = Math.max(0, createdAt + rateLimitDelayMs(attempt, retryAfterMs) - Date.now());
+    const timer = setTimeout(() => retry(userMessageId, messageId), delay);
+    return () => clearTimeout(timer);
+  }, [rateLimited, attempt, retryAfterMs, createdAt, messageId, userMessageId, retry]);
 
   const discarded = message.discardedText;
   const hasTextBlock = message.blocks.some((b) => b.type === "text");

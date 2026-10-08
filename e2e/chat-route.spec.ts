@@ -38,8 +38,9 @@ test.describe("chat route", () => {
     const path = new URL(page.url()).pathname;
     // Projects share one database within a run: the title must be unique, and the row is found by href.
     const text = `please keep me ${info.project.name}`;
+    // A long retry-after keeps the automatic retry out of this test; the manual one is what it exercises.
     await page.route("**/api/chat", (route) =>
-      route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "rate_limited", retryAfterMs: 500 }) }),
+      route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "rate_limited", retryAfterMs: 60_000 }) }),
     );
     await sendText(page, text);
     const row = lastAssistant(page);
@@ -61,6 +62,26 @@ test.describe("chat route", () => {
     await page.reload();
     await waitForComposer(page);
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText(text);
+  });
+
+  test("a rate-limited send retries by itself with backoff once the server lets it through", async ({ page }) => {
+    await openNewChat(page);
+    let refused = 0;
+    await page.route("**/api/chat", (route) => {
+      refused++;
+      void route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "rate_limited", retryAfterMs: 500 }) });
+    });
+    await sendText(page, "please retry me");
+    const row = lastAssistant(page);
+    await expect(row).toHaveAttribute("data-status", "error", { timeout: 15_000 });
+    await expect(row).toContainText(/Retrying in \d+s \(try 1 of 4\)/);
+    // The second automatic try (2 s, then 4 s) is also refused and the footer counts the streak.
+    await expect(lastAssistant(page)).toContainText(/try 2 of 4/, { timeout: 15_000 });
+    expect(refused).toBeGreaterThanOrEqual(2);
+    await page.unroute("**/api/chat");
+    // Nobody clicks: the next scheduled try goes through.
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(1);
   });
 
   test("a chat opened from the sidebar renders from memory on a revisit", async ({ page }, info) => {

@@ -7,6 +7,7 @@ import { useNewChat } from "@client/hooks/use-new-chat";
 import { useNow } from "@client/hooks/use-now";
 import type { MessageState } from "@client/store/chat-store";
 import { modelDisplayName } from "@shared/models";
+import { MAX_AUTO_RETRIES, rateLimitDelayMs } from "./rate-limit";
 
 interface StatusFooterProps {
   message: MessageState;
@@ -81,18 +82,26 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
   } else if (message.status === "error") {
     const e = message.error;
     switch (e?.kind) {
-      case "rate_limited":
+      case "rate_limited": {
         // Inline, not a button: the row keeps the height of a line of text, so the footer appearing shifts nothing.
-        text = (
+        const tryAgain = (
+          <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={onRetry}>
+            Try again
+          </button>
+        );
+        const auto = message.local && message.retryAttempt < MAX_AUTO_RETRIES;
+        text = auto ? (
           <>
-            Rate limited.{" "}
-            <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={onRetry}>
-              Try again
-            </button>{" "}
-            in <Countdown until={message.createdAt + (e.retryAfterMs ?? 15_000)} />.
+            Rate limited. Retrying in <Countdown until={message.createdAt + rateLimitDelayMs(message.retryAttempt, e.retryAfterMs)} /> (try{" "}
+            {message.retryAttempt + 1} of {MAX_AUTO_RETRIES}), or {tryAgain} now.
+          </>
+        ) : (
+          <>
+            {message.retryAttempt >= MAX_AUTO_RETRIES ? `Still rate limited after ${MAX_AUTO_RETRIES} tries.` : "Rate limited."} {tryAgain}.
           </>
         );
         break;
+      }
       case "overloaded":
         text = "Claude is overloaded right now.";
         offer = retry;

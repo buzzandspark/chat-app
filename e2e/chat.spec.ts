@@ -145,7 +145,7 @@ test.describe("terminal states", () => {
     await runScenario(page, "rate_limited");
     const row = lastAssistant(page);
     await expect(row).toHaveAttribute("data-status", "error", { timeout: 15_000 });
-    await expect(row).toContainText("Rate limited");
+    await expect(row).toContainText(/Rate limited\. Retrying in \d+s \(try 1 of 4\)/);
     await expect(row.getByRole("button", { name: "Try again" })).toBeVisible();
     await expect(row.getByRole("button", { name: "Retry" })).toHaveCount(0);
   });
