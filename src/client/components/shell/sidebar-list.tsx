@@ -1,5 +1,5 @@
 "use client";
-import { ChevronRight, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useChatStore } from "@client/store/context";
 import { prefetchChat } from "@client/store/prefetch";
-import { getSidebarStore, patchChatOptimistic, setPendingChat, usePendingChat, useSidebarChats, useSidebarGroups, type ChatSummary, type GroupSummary } from "@client/store/sidebar-store";
+import { getSidebarStore, patchChatOptimistic, setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
 import { lazyChunk } from "../ui/lazy-chunk";
@@ -40,29 +40,6 @@ const ChatItemMenu = lazyChunk(() =>
 );
 const RenameDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.RenameDialog), { ssr: false }));
 const DeleteDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.DeleteDialog), { ssr: false }));
-const GroupNameDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.GroupNameDialog), { ssr: false }));
-const DeleteGroupDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.DeleteGroupDialog), { ssr: false }));
-const GroupItemMenu = lazyChunk(() =>
-  dynamic(() => import("./chat-item-menu").then((m) => m.GroupItemMenu), {
-    ssr: false,
-    loading: () => (
-      <IconButton label="Group actions" className={MENU_BUTTON} disabled>
-        <MoreHorizontal />
-      </IconButton>
-    ),
-  }),
-);
-
-async function createGroup(name: string): Promise<GroupSummary | null> {
-  try {
-    const res = await fetch("/api/groups", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
-    if (!res.ok) return null;
-    return (await res.json()) as GroupSummary;
-  } catch {
-    return null;
-  }
-}
-
 const warmChatItemMenu = () => import("./chat-item-menu");
 
 /** The row owns the intent so a right-click anywhere on it opens the same menu as the ⋯ button. */
@@ -73,13 +50,9 @@ function ChatItemMenuOnIntent({
   intent: ReturnType<typeof useIntent>;
   title: string;
   pinned: boolean;
-  groupId: string | null;
-  groups: GroupSummary[];
   onRename: () => void;
   onDelete: () => void;
   onTogglePin: () => void;
-  onMoveToGroup: (groupId: string | null) => void;
-  onNewGroup: () => void;
 }) {
   if (intent.armed) {
     return <ChatItemMenu {...props} defaultOpen={intent.wanted === "menu"} triggerRef={intent.trigger} onCloseAutoFocus={intent.closed} />;
@@ -98,7 +71,6 @@ const SidebarRow = memo(function SidebarRow({
   chat,
   active,
   currentChatId,
-  groups,
   onNavigate,
   warm,
   show,
@@ -106,7 +78,6 @@ const SidebarRow = memo(function SidebarRow({
   chat: ChatSummary;
   active: boolean;
   currentChatId: string | null;
-  groups: GroupSummary[];
   onNavigate: () => void;
   warm: (chatId: string) => void;
   show: (render: (api: ModalApi) => React.ReactNode) => () => void;
@@ -121,28 +92,9 @@ const SidebarRow = memo(function SidebarRow({
     () => show(({ open, close }) => <DeleteDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
     [chat, currentChatId, show],
   );
-  // Pin and group membership: the row moves at once; a refused request, or one that never reached the
-  // server (offline), moves it back (patchChatOptimistic).
+  // Pin: the row moves at once; a refused request, or one that never reached the server (offline),
+  // moves it back (patchChatOptimistic).
   const onTogglePin = useCallback(() => void patchChatOptimistic(getSidebarStore(), chat.id, { pinned: !chat.pinned }), [chat.id, chat.pinned]);
-  const onMoveToGroup = useCallback((groupId: string | null) => void patchChatOptimistic(getSidebarStore(), chat.id, { groupId }), [chat.id]);
-  const onNewGroup = useCallback(
-    () =>
-      show(({ open, close }) => (
-        <GroupNameDialog
-          title="New group"
-          open={open}
-          onOpenChange={(o) => !o && close()}
-          onSubmit={async (name) => {
-            const group = await createGroup(name);
-            if (!group) return false;
-            getSidebarStore().addGroup(group);
-            onMoveToGroup(group.id);
-            return true;
-          }}
-        />
-      )),
-    [show, onMoveToGroup],
-  );
   return (
     <li
       // The browser's own context menu gives way to the row's: a right-click opens the ⋯ menu.
@@ -174,100 +126,18 @@ const SidebarRow = memo(function SidebarRow({
           intent={intent}
           title={chat.title}
           pinned={Boolean(chat.pinned)}
-          groupId={chat.groupId ?? null}
-          groups={groups}
           onRename={onRename}
           onDelete={onDelete}
           onTogglePin={onTogglePin}
-          onMoveToGroup={onMoveToGroup}
-          onNewGroup={onNewGroup}
         />
       </ChunkBoundary>
     </li>
   );
 });
 
-/** A group: a heading that collapses, its own ⋯ menu, and the rows inside. */
-function GroupSection({
-  group,
-  chats,
-  row,
-  show,
-}: {
-  group: GroupSummary;
-  chats: ChatSummary[];
-  row: (chat: ChatSummary) => React.ReactNode;
-  show: (render: (api: ModalApi) => React.ReactNode) => () => void;
-}) {
-  const intent = useIntent(warmChatItemMenu);
-  const { standIn } = intent; // see ChatItemMenuOnIntent
-  const headingId = `sidebar-group-${group.id}`;
-  const toggle = () => {
-    const collapsed = !group.collapsed;
-    getSidebarStore().patchGroup(group.id, { collapsed });
-    void fetch(`/api/groups/${group.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ collapsed }) }).catch(() => {});
-  };
-  const onRename = () =>
-    show(({ open, close }) => (
-      <GroupNameDialog
-        title="Rename group"
-        initial={group.name}
-        open={open}
-        onOpenChange={(o) => !o && close()}
-        onSubmit={async (name) => {
-          const res = await fetch(`/api/groups/${group.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) }).catch(() => null);
-          if (!res?.ok) return false;
-          getSidebarStore().patchGroup(group.id, { name });
-          return true;
-        }}
-      />
-    ));
-  const onDelete = () => show(({ open, close }) => <DeleteGroupDialog group={group} open={open} onOpenChange={(o) => !o && close()} />);
-  return (
-    <section aria-labelledby={headingId}>
-      <div
-        className="group/item flex items-center justify-between gap-1 rounded-lg pr-0.5 hover:bg-sidebar-accent/70 has-[[aria-expanded=true]]:bg-sidebar-accent/70"
-        onContextMenu={(e) => {
-          e.preventDefault();
-          intent.press("menu");
-        }}
-      >
-        <button
-          type="button"
-          className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-lg pl-2 text-caption font-medium uppercase tracking-wide text-muted-foreground"
-          aria-expanded={!group.collapsed}
-          aria-controls={`${headingId}-chats`}
-          onClick={toggle}
-        >
-          <ChevronRight className={cn("size-4 shrink-0 transition-transform", !group.collapsed && "rotate-90")} />
-          <h2 id={headingId} className="truncate">
-            {group.name}
-          </h2>
-          <span className="ml-1 tabular-nums">{chats.length}</span>
-        </button>
-        <ChunkBoundary label="group menu">
-          {intent.armed ? (
-            <GroupItemMenu name={group.name} onRename={onRename} onDelete={onDelete} defaultOpen={intent.wanted === "menu"} triggerRef={intent.trigger} onCloseAutoFocus={intent.closed} />
-          ) : (
-            <IconButton ref={standIn} label={`Actions for group ${group.name}`} className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
-              <MoreHorizontal />
-            </IconButton>
-          )}
-        </ChunkBoundary>
-      </div>
-      {group.collapsed ? null : (
-        <ul id={`${headingId}-chats`} className="space-y-0.5">
-          {chats.length > 0 ? chats.map(row) : <li className="px-3 py-2 text-caption text-muted-foreground">Empty</li>}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-/** The chat list, server-rendered from the user's rows and groups (the layout streams it into the sidebar's slot). */
-export function SidebarList({ initialChats, initialGroups }: { initialChats: ChatSummary[]; initialGroups: GroupSummary[] }) {
+/** The chat list, server-rendered from the user's rows (the layout streams it into the sidebar's slot). */
+export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
   const chats = useSidebarChats(initialChats);
-  const groups = useSidebarGroups(initialGroups);
   const { open, onNavigate } = useContext(SidebarListContext);
   const pathname = usePathname();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
@@ -292,39 +162,26 @@ export function SidebarList({ initialChats, initialGroups }: { initialChats: Cha
     for (const chat of chats.slice(0, 5)) warm(chat.id);
   }, [open, chats, warm]);
 
-  if (chats.length === 0 && groups.length === 0) return <p className="px-2 py-3 text-small text-muted-foreground">No chats yet.</p>;
-  const groupIds = new Set(groups.map((g) => g.id));
+  if (chats.length === 0) return <p className="px-2 py-3 text-small text-muted-foreground">No chats yet.</p>;
   const pinned = chats.filter((c) => c.pinned);
-  const inGroup = new Map<string, ChatSummary[]>();
-  const rest: ChatSummary[] = [];
-  for (const c of chats) {
-    if (c.pinned) continue;
-    if (c.groupId && groupIds.has(c.groupId)) {
-      const list = inGroup.get(c.groupId) ?? [];
-      list.push(c);
-      inGroup.set(c.groupId, list);
-    } else rest.push(c);
-  }
+  const rest = chats.filter((c) => !c.pinned);
   const row = (chat: ChatSummary) => (
-    <SidebarRow key={chat.id} chat={chat} active={chat.id === activeChatId} currentChatId={currentChatId} groups={groups} onNavigate={onNavigate} warm={warm} show={show} />
+    <SidebarRow key={chat.id} chat={chat} active={chat.id === activeChatId} currentChatId={currentChatId} onNavigate={onNavigate} warm={warm} show={show} />
   );
   const heading = (id: string, text: string) => (
     <h2 id={id} className="px-3 pb-1 text-caption font-medium uppercase tracking-wide text-muted-foreground">
       {text}
     </h2>
   );
-  const sectioned = pinned.length > 0 || groups.length > 0;
+  const sectioned = pinned.length > 0;
   return (
     <div className="space-y-3">
-      {pinned.length > 0 ? (
+      {sectioned ? (
         <section aria-labelledby="sidebar-pinned">
           {heading("sidebar-pinned", "Pinned")}
           <ul className="space-y-0.5">{pinned.map(row)}</ul>
         </section>
       ) : null}
-      {groups.map((g) => (
-        <GroupSection key={g.id} group={g} chats={inGroup.get(g.id) ?? []} row={row} show={show} />
-      ))}
       {rest.length > 0 ? (
         <section aria-labelledby={sectioned ? "sidebar-chats" : undefined}>
           {sectioned ? heading("sidebar-chats", "Chats") : null}

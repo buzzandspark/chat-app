@@ -6,14 +6,6 @@ export interface ChatSummary {
   title: string;
   updatedAt: number;
   pinned?: boolean;
-  groupId?: string | null;
-}
-
-export interface GroupSummary {
-  id: string;
-  name: string;
-  position: number;
-  collapsed: boolean;
 }
 
 type Listener = () => void;
@@ -21,38 +13,10 @@ type Listener = () => void;
 /** Chat list store so a first send updates the sidebar without a server round trip. */
 export class SidebarStore {
   private chats: ChatSummary[] = [];
-  private groups: GroupSummary[] = [];
   private listeners = new Set<Listener>();
 
   get(): ChatSummary[] {
     return this.chats;
-  }
-
-  getGroups(): GroupSummary[] {
-    return this.groups;
-  }
-
-  hydrateGroups(groups: GroupSummary[]): void {
-    this.groups = [...groups].sort((a, b) => a.position - b.position);
-    this.emit();
-  }
-
-  addGroup(group: GroupSummary): void {
-    if (this.groups.some((g) => g.id === group.id)) return;
-    this.groups = [...this.groups, group].sort((a, b) => a.position - b.position);
-    this.emit();
-  }
-
-  patchGroup(id: string, fields: Partial<GroupSummary>): void {
-    this.groups = this.groups.map((g) => (g.id === id ? { ...g, ...fields } : g)).sort((a, b) => a.position - b.position);
-    this.emit();
-  }
-
-  /** The group goes; its chats stay and become ungrouped, as the server's foreign key does. */
-  removeGroup(id: string): void {
-    this.groups = this.groups.filter((g) => g.id !== id);
-    this.chats = this.chats.map((c) => (c.groupId === id ? { ...c, groupId: null } : c));
-    this.emit();
   }
 
   subscribe(listener: Listener): () => void {
@@ -89,8 +53,8 @@ export class SidebarStore {
 
   /**
    * Inserts a new chat, or merges into the known one: a send names only id, title and updatedAt, and
-   * replacing the entry would drop `pinned` and `groupId`, moving the row out of its section until a
-   * reload. Clearing either field goes through `patch` (or `removeGroup`), never through here.
+   * replacing the entry would drop `pinned`, moving the row out of its section until a reload.
+   * Clearing it goes through `patch`, never through here.
    */
   upsert(chat: ChatSummary): void {
     const existing = this.chats.find((c) => c.id === chat.id);
@@ -120,24 +84,17 @@ async function patchChat(id: string, body: Record<string, unknown>): Promise<boo
 }
 
 /**
- * Pin and group membership: the row moves at once and the server is told; a refused or failed request
- * (offline included) puts the field back. A field the user has changed again since is left alone, so a
- * late failure cannot undo a newer move that the server did take.
+ * Pin: the row moves at once and the server is told; a refused or failed request (offline included)
+ * puts the flag back, unless the user has changed it again since, so a late failure cannot undo a
+ * newer change that the server did take.
  */
-export async function patchChatOptimistic(store: SidebarStore, id: string, fields: { pinned: boolean } | { groupId: string | null }): Promise<boolean> {
-  // An absent `pinned` or `groupId` reads as unpinned and ungrouped, as the sidebar renders it.
-  const read = () => {
-    const c = store.get().find((x) => x.id === id);
-    return { pinned: Boolean(c?.pinned), groupId: c?.groupId ?? null };
-  };
+export async function patchChatOptimistic(store: SidebarStore, id: string, fields: { pinned: boolean }): Promise<boolean> {
+  // An absent `pinned` reads as unpinned, as the sidebar renders it.
+  const read = () => Boolean(store.get().find((x) => x.id === id)?.pinned);
   const before = read();
   store.patch(id, fields);
   const ok = await patchChat(id, fields);
-  if (!ok) {
-    const now = read();
-    if ("pinned" in fields && now.pinned === fields.pinned) store.patch(id, { pinned: before.pinned });
-    if ("groupId" in fields && now.groupId === fields.groupId) store.patch(id, { groupId: before.groupId });
-  }
+  if (!ok && read() === fields.pinned) store.patch(id, { pinned: before });
   return ok;
 }
 
@@ -152,21 +109,6 @@ export function getSidebarStore(): SidebarStore {
  * `initial` is the server's list: it is the server snapshot, so SSR and hydration render the real rows
  * (no "No chats yet." flash, no shift), and it seeds the store on the first client render.
  */
-const EMPTY_GROUPS: GroupSummary[] = [];
-export function useSidebarGroups(initial?: GroupSummary[]): GroupSummary[] {
-  const store = getSidebarStore();
-  const [seededWith, setSeededWith] = useState<GroupSummary[] | null>(null);
-  if (initial && seededWith !== initial) {
-    store.hydrateGroups(initial);
-    setSeededWith(initial);
-  }
-  return useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.getGroups(),
-    () => initial ?? EMPTY_GROUPS,
-  );
-}
-
 export function useSidebarChats(initial?: ChatSummary[]): ChatSummary[] {
   const store = getSidebarStore();
   const [seededWith, setSeededWith] = useState<ChatSummary[] | null>(null);

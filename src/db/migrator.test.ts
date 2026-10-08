@@ -16,14 +16,12 @@ const REBUILD_CHATS = [
 	\`user_id\` text NOT NULL,
 	\`title\` text DEFAULT 'New chat' NOT NULL,
 	\`pinned\` integer DEFAULT false NOT NULL,
-	\`group_id\` text,
 	\`created_at\` integer NOT NULL,
 	\`updated_at\` integer NOT NULL,
 	\`last_message_at\` integer,
-	FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (\`group_id\`) REFERENCES \`chat_groups\`(\`id\`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON UPDATE no action ON DELETE cascade
 );`,
-  `INSERT INTO \`__new_chats\`("id", "user_id", "title", "pinned", "group_id", "created_at", "updated_at", "last_message_at") SELECT "id", "user_id", "title", "pinned", "group_id", "created_at", "updated_at", "last_message_at" FROM \`chats\`;`,
+  `INSERT INTO \`__new_chats\`("id", "user_id", "title", "pinned", "created_at", "updated_at", "last_message_at") SELECT "id", "user_id", "title", "pinned", "created_at", "updated_at", "last_message_at" FROM \`chats\`;`,
   "DROP TABLE `chats`;",
   "ALTER TABLE `__new_chats` RENAME TO `chats`;",
   "PRAGMA foreign_keys=ON;",
@@ -130,8 +128,10 @@ describe("applyMigrations", () => {
   });
 });
 
-// 0008 as first committed (d1f1728): `group_id` with a bare REFERENCES. It was later edited in place to add
-// ON DELETE SET NULL, which no database that had already run it ever saw; 0009 rebuilds `chats` to converge.
+// Chat groups came in with 0008 and left with 0010. 0008 as first committed (d1f1728) had `group_id` with a
+// bare REFERENCES; it was later edited in place to add ON DELETE SET NULL, which 0009 converged on by
+// rebuilding `chats`. 0010 drops the table and the column; every path through those migrations must
+// arrive at the same schema with every chat, message and generation kept.
 const ORIGINAL_0008 = `CREATE TABLE \`chat_groups\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`user_id\` text NOT NULL,
@@ -145,34 +145,28 @@ const ORIGINAL_0008 = `CREATE TABLE \`chat_groups\` (
 CREATE INDEX \`chat_groups_user_idx\` ON \`chat_groups\` (\`user_id\`,\`position\`);--> statement-breakpoint
 ALTER TABLE \`chats\` ADD \`group_id\` text REFERENCES chat_groups(id);`;
 
-/** The real migrations up to and including 0008, with 0008 as it was first committed. */
-function driftedThrough0008(): string {
-  const folder = path.join(dir, "migrations-0008");
+/** The real migrations up to and including `last`, optionally with 0008 as it was first committed. */
+function migrationsThrough(last: number, original0008 = false): string {
+  const folder = path.join(dir, `migrations-${last}${original0008 ? "-original" : ""}`);
   fs.cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
   const journalPath = path.join(folder, "meta/_journal.json");
   const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as { entries: { idx: number; tag: string }[] };
-  journal.entries = journal.entries.filter((e) => e.idx <= 8);
+  journal.entries = journal.entries.filter((e) => e.idx <= last);
   expect(journal.entries[8]!.tag).toBe("0008_brave_mister_fear");
   fs.writeFileSync(journalPath, JSON.stringify(journal));
-  fs.writeFileSync(path.join(folder, "0008_brave_mister_fear.sql"), ORIGINAL_0008);
+  if (original0008) fs.writeFileSync(path.join(folder, "0008_brave_mister_fear.sql"), ORIGINAL_0008);
   return folder;
 }
-
-interface ForeignKeyRow {
-  table: string;
-  from: string;
-  to: string;
-  on_delete: string;
-}
-
-const groupFk = (db: Database.Database) =>
-  (db.pragma("foreign_key_list(chats)") as ForeignKeyRow[]).find((fk) => fk.from === "group_id");
 
 /** Every schema object except drizzle's own journal, for comparing two databases. */
 const schemaObjects = (db: Database.Database) =>
   db
     .prepare(`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name <> '__drizzle_migrations' ORDER BY type, name`)
     .all();
+
+const hasTable = (name: string) =>
+  sqlite.prepare("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?").pluck().get(name) === 1;
+const chatColumns = () => (sqlite.pragma("table_info(chats)") as { name: string }[]).map((c) => c.name);
 
 function seedGrouped(): void {
   const t = Date.now();
@@ -199,52 +193,59 @@ function seedGrouped(): void {
     .run("g1", "c1", "u1", "m3", "m1", "test-model", t);
 }
 
-describe("migration 0009 (chats.group_id ON DELETE SET NULL)", () => {
-  it("repairs a database that ran the original 0008, keeping every row", () => {
-    applyMigrations(sqlite, driftedThrough0008());
-    expect(groupFk(sqlite)?.on_delete).toBe("NO ACTION");
+const CHAT_FIELDS = "id, user_id, title, pinned, created_at, updated_at, last_message_at";
+
+/** After 0010: no groups anywhere, every row kept, search and FKs working, the schema of a fresh database. */
+function expectGroupsGoneRowsKept(chatsBefore: unknown[]): void {
+  expect(journalRows()).toBe(11);
+  expect(hasTable("chat_groups")).toBe(false);
+  expect(chatColumns()).not.toContain("group_id");
+  expect(sqlite.prepare(`SELECT ${CHAT_FIELDS} FROM chats ORDER BY id`).all()).toEqual(chatsBefore);
+  expect(count("messages")).toBe(2);
+  expect(count("generations")).toBe(1);
+  expect(
+    sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'chats' ORDER BY name").pluck().all(),
+  ).toEqual(["chats_user_updated_idx", "sqlite_autoindex_chats_1"]);
+  // Search (FTS5 over messages, kept by triggers) is untouched by the rebuilds.
+  expect(sqlite.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'quokka'").all()).toHaveLength(1);
+  expect(sqlite.pragma("foreign_keys", { simple: true })).toBe(1);
+  // Deleting a chat still cascades into its messages: the rebuilt table kept its FKs.
+  sqlite.prepare("DELETE FROM chats WHERE id = 'c1'").run();
+  expect(count("messages")).toBe(1);
+
+  const fresh = new Database(path.join(dir, "fresh.db"));
+  try {
+    applyMigrations(fresh);
+    expect(schemaObjects(sqlite)).toEqual(schemaObjects(fresh));
+  } finally {
+    fresh.close();
+  }
+}
+
+describe("migrations 0009 and 0010 (chat groups repaired, then removed)", () => {
+  it("a database that ran the original 0008 loses its groups and keeps every row", () => {
+    applyMigrations(sqlite, migrationsThrough(8, true));
     seedGrouped();
-    const chatsBefore = sqlite.prepare("SELECT * FROM chats ORDER BY id").all();
+    const chatsBefore = sqlite.prepare(`SELECT ${CHAT_FIELDS} FROM chats ORDER BY id`).all();
 
     applyMigrations(sqlite);
-
-    expect(journalRows()).toBe(10);
-    expect(groupFk(sqlite)).toMatchObject({ table: "chat_groups", to: "id", on_delete: "SET NULL" });
-    expect(sqlite.prepare("SELECT * FROM chats ORDER BY id").all()).toEqual(chatsBefore);
-    expect(count("messages")).toBe(2);
-    expect(count("generations")).toBe(1);
-    expect(count("chat_groups")).toBe(1);
-    expect(
-      sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'chats' ORDER BY name").pluck().all(),
-    ).toEqual(["chats_user_updated_idx", "sqlite_autoindex_chats_1"]);
-    // Search (FTS5 over messages, kept by triggers) is untouched by the rebuild.
-    expect(sqlite.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'quokka'").all()).toHaveLength(1);
-    expect(sqlite.pragma("foreign_keys", { simple: true })).toBe(1);
-
-    // The repaired FK ungroups a chat when its group goes, instead of refusing the delete.
-    sqlite.prepare("DELETE FROM chat_groups WHERE id = 'grp1'").run();
-    expect(sqlite.prepare("SELECT group_id FROM chats WHERE id = 'c1'").pluck().get()).toBeNull();
-    expect(count("chats")).toBe(2);
-    expect(count("messages")).toBe(2);
-
-    // And the repaired database has exactly the schema of a freshly migrated one.
-    const fresh = new Database(path.join(dir, "fresh.db"));
-    try {
-      applyMigrations(fresh);
-      expect(schemaObjects(sqlite)).toEqual(schemaObjects(fresh));
-    } finally {
-      fresh.close();
-    }
+    expectGroupsGoneRowsKept(chatsBefore);
   });
 
-  it("applies cleanly to a fresh database", () => {
+  it("a database at 0009 loses its groups and keeps every row", () => {
+    applyMigrations(sqlite, migrationsThrough(9));
+    seedGrouped();
+    const chatsBefore = sqlite.prepare(`SELECT ${CHAT_FIELDS} FROM chats ORDER BY id`).all();
+
+    applyMigrations(sqlite);
+    expectGroupsGoneRowsKept(chatsBefore);
+  });
+
+  it("a fresh database ends without groups", () => {
     applyMigrations(sqlite);
 
-    expect(journalRows()).toBe(10);
-    expect(groupFk(sqlite)).toMatchObject({ table: "chat_groups", to: "id", on_delete: "SET NULL" });
-    seedGrouped();
-    sqlite.prepare("DELETE FROM chat_groups WHERE id = 'grp1'").run();
-    expect(sqlite.prepare("SELECT group_id FROM chats WHERE id = 'c1'").pluck().get()).toBeNull();
-    expect(count("messages")).toBe(2);
+    expect(journalRows()).toBe(11);
+    expect(hasTable("chat_groups")).toBe(false);
+    expect(chatColumns()).not.toContain("group_id");
   });
 });

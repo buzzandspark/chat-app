@@ -9,23 +9,6 @@ export interface ChatSummary {
   title: string;
   updatedAt: number;
   pinned: boolean;
-  groupId: string | null;
-}
-
-export interface GroupSummary {
-  id: string;
-  name: string;
-  position: number;
-  collapsed: boolean;
-}
-
-export function listGroups(userId: string): GroupSummary[] {
-  return getDb()
-    .select({ id: schema.chatGroups.id, name: schema.chatGroups.name, position: schema.chatGroups.position, collapsed: schema.chatGroups.collapsed })
-    .from(schema.chatGroups)
-    .where(eq(schema.chatGroups.userId, userId))
-    .orderBy(asc(schema.chatGroups.position), asc(schema.chatGroups.createdAt))
-    .all();
 }
 
 export interface MessageRow {
@@ -50,13 +33,13 @@ export interface MessageRow {
 export function listChats(userId: string, limit = 200): ChatSummary[] {
   const db = getDb();
   return db
-    .select({ id: schema.chats.id, title: schema.chats.title, updatedAt: schema.chats.updatedAt, pinned: schema.chats.pinned, groupId: schema.chats.groupId })
+    .select({ id: schema.chats.id, title: schema.chats.title, updatedAt: schema.chats.updatedAt, pinned: schema.chats.pinned })
     .from(schema.chats)
     .where(eq(schema.chats.userId, userId))
     .orderBy(desc(schema.chats.updatedAt))
     .limit(limit)
     .all()
-    .map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt.getTime(), pinned: c.pinned, groupId: c.groupId ?? null }));
+    .map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt.getTime(), pinned: c.pinned }));
 }
 
 /** The newest messages the page ships; the rest load on request (#47). */
@@ -101,7 +84,7 @@ export function getChatWithMessages(
       .map((g) => [g.id, g.scenario] as const),
   );
   return {
-    chat: { id: chat.id, title: chat.title, updatedAt: chat.updatedAt.getTime(), pinned: chat.pinned, groupId: chat.groupId ?? null },
+    chat: { id: chat.id, title: chat.title, updatedAt: chat.updatedAt.getTime(), pinned: chat.pinned },
     older,
     messages: rows.map((r) => ({
       id: r.id,

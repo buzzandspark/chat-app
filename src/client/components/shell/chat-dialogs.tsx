@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
-import { getSidebarStore, type ChatSummary, type GroupSummary } from "@client/store/sidebar-store";
+import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface DialogProps {
@@ -117,100 +117,6 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
         </Button>
         <Button type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
           Delete
-        </Button>
-      </div>
-    </ResponsiveDialog>
-  );
-}
-
-/** Name for a new group, or a new name for an existing one. */
-export function GroupNameDialog({
-  initial = "",
-  title,
-  open,
-  onOpenChange,
-  onSubmit,
-}: DialogProps & { initial?: string; title: string; onSubmit: (name: string) => Promise<boolean> }) {
-  const [value, setValue] = useState(initial);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.select(), 50);
-    return () => clearTimeout(t);
-  }, []);
-  const submit = async () => {
-    if (!value.trim() || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (await onSubmit(value.trim())) onOpenChange(false);
-      else setError("That did not save. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title={title}>
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
-        <Input ref={inputRef} value={value} onChange={(e) => setValue(e.target.value)} aria-label="Group name" maxLength={60} className="h-11 text-body" />
-        {error ? (
-          <p role="alert" className="text-small text-destructive">
-            {error}
-          </p>
-        ) : null}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="submit" className="touch-target" disabled={!value.trim() || busy}>
-            Save
-          </Button>
-        </div>
-      </form>
-    </ResponsiveDialog>
-  );
-}
-
-/** Deleting a group keeps its chats; they return to the main list. */
-export function DeleteGroupDialog({ group, open, onOpenChange }: DialogProps & { group: GroupSummary }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const confirm = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/groups/${group.id}`, { method: "DELETE" });
-      if (res.ok || res.status === 404) {
-        getSidebarStore().removeGroup(group.id);
-        onOpenChange(false);
-      } else setError(`Delete failed (${res.status}). Try again.`);
-    } catch {
-      setError("Delete failed: you seem to be offline.");
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Delete group" description={`"${group.name}" goes away; its chats stay and return to the main list.`}>
-      {error ? (
-        <p role="alert" className="text-small text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
-          Delete group
         </Button>
       </div>
     </ResponsiveDialog>

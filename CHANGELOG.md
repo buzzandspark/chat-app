@@ -4,6 +4,8 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-08
 
+- Chat groups are removed. The sidebar is Pinned, then Chats again; a chat row's ⋯ menu has Pin, Rename and Delete (no Move to); `/api/groups` and `groupId` on `PATCH /api/chats/:id` are gone. Migration 0010 drops `chat_groups` and rebuilds `chats` without `group_id` (SQLite cannot drop a column that carries a foreign key); chats that sat in a group stay, ungrouped. Migration tests take a database that ran the original 0008, one at 0009 and a fresh one to the same schema with every chat, message and generation kept. The chat route measures 196.67 kB against the 205 kB gate.
+
 Fixes from the 2026-10-08 codebase review, one commit per finding.
 
 - Data integrity: a failed reply offers Try again (and its 429 countdown) only while it is the chat's last turn, so retrying it can no longer wipe a later message that never reached the server; retrying a refused Edit or Regenerate sends the attempt's original `replaceFromMessageId`, so the server replaces what the view already dropped instead of appending; sending in a pinned or grouped chat keeps it in its section (`upsert` merges); a pin or move that fails or is refused moves back, and a late failure never undoes a newer accepted change.

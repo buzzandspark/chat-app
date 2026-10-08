@@ -7,9 +7,7 @@ import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 import { isUuid } from "@shared/id";
 
-const Patch = z
-  .object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional(), groupId: z.string().uuid().nullable().optional() })
-  .refine((p) => p.title !== undefined || p.pinned !== undefined || p.groupId !== undefined);
+const Patch = z.object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional() }).refine((p) => p.title !== undefined || p.pinned !== undefined);
 
 /** ADR-0005: the same rows the page seeds with, for prefetch on intent and the second-tab case; `?all=1` lifts the window (#47). */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
@@ -26,7 +24,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[i
 }
 
 
-/** Rename, pin or regroup a chat (D19 rename sheet; the ⋯ menu's Pin and Move to). */
+/** Rename or pin a chat (D19 rename sheet; the ⋯ menu's Pin). */
 export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
   try {
     const user = await requireUser();
@@ -34,20 +32,11 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/
     const parsed = Patch.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request" });
     const db = getDb();
-    if (parsed.data.groupId) {
-      const owned = db
-        .select({ id: schema.chatGroups.id })
-        .from(schema.chatGroups)
-        .where(and(eq(schema.chatGroups.id, parsed.data.groupId), eq(schema.chatGroups.userId, user.id)))
-        .get();
-      if (!owned) return jsonError(404, { error: "group_not_found" });
-    }
     const result = db
       .update(schema.chats)
       .set({
         ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
         ...(parsed.data.pinned !== undefined ? { pinned: parsed.data.pinned } : {}),
-        ...(parsed.data.groupId !== undefined ? { groupId: parsed.data.groupId } : {}),
       })
       .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, user.id)))
       .run();

@@ -88,38 +88,6 @@ test.describe("chat management", () => {
     await expect(aside.getByRole("region", { name: "Pinned" })).toHaveCount(0);
   });
 
-  test("a chat moves into a new group, the group collapses, and the chat can leave it", async ({ page }, info) => {
-    const title = `group me ${info.project.name}`;
-    const groupName = `Project ${info.project.name}`;
-    await openNewChat(page);
-    await sendText(page, title);
-    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    await ensureSidebarOpen(page);
-    const aside = sidebar(page);
-    const rowMenu = () => aside.getByRole("listitem").filter({ has: page.getByRole("link", { name: title }) }).getByRole("button", { name: `Actions for ${title}` });
-    await rowMenu().click();
-    await page.getByRole("menuitem", { name: "Move to" }).click();
-    await page.getByRole("menuitem", { name: "New group…" }).click();
-    await page.getByRole("textbox", { name: "Group name" }).fill(groupName);
-    await page.getByRole("button", { name: "Save" }).click();
-    const group = aside.getByRole("region", { name: groupName });
-    await expect(group.getByRole("link", { name: title })).toBeVisible();
-    // Collapse hides the rows and the choice survives a reload.
-    await group.getByRole("button", { name: new RegExp(groupName) }).click();
-    await expect(group.getByRole("link", { name: title })).toHaveCount(0);
-    await page.reload();
-    await ensureSidebarOpen(page);
-    await expect(aside.getByRole("region", { name: groupName }).getByRole("link", { name: title })).toHaveCount(0);
-    await aside.getByRole("region", { name: groupName }).getByRole("button", { name: new RegExp(groupName) }).click();
-    await expect(aside.getByRole("region", { name: groupName }).getByRole("link", { name: title })).toBeVisible();
-    // Out again: the chat returns to the main list; the empty group stays.
-    await rowMenu().click();
-    await page.getByRole("menuitem", { name: "Move to" }).click();
-    await page.getByRole("menuitem", { name: "Remove from group" }).click();
-    await expect(aside.getByRole("region", { name: groupName }).getByRole("link", { name: title })).toHaveCount(0);
-    await expect(aside.getByRole("region", { name: "Chats" }).getByRole("link", { name: title })).toBeVisible();
-  });
-
   test("rename, search, and delete a chat", async ({ page }) => {
     await openNewChat(page);
     const firstUrl = page.url();

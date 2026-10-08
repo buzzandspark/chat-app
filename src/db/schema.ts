@@ -109,23 +109,6 @@ export const invites = sqliteTable(
   (t) => [index("invites_user_idx").on(t.userId)],
 );
 
-/** User-made groups of chats in the sidebar (folders); deleting one ungroups its chats. */
-export const chatGroups = sqliteTable(
-  "chat_groups",
-  {
-    id: text("id").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    position: integer("position").notNull().default(0),
-    collapsed: integer("collapsed", { mode: "boolean" }).notNull().default(false),
-    createdAt: timestamp("created_at").notNull().$defaultFn(now),
-  },
-  (t) => [index("chat_groups_user_idx").on(t.userId, t.position)],
-);
-export type ChatGroup = typeof chatGroups.$inferSelect;
-
 export const chats = sqliteTable(
   "chats",
   {
@@ -136,8 +119,6 @@ export const chats = sqliteTable(
     title: text("title").notNull().default("New chat"),
     /** Pinned chats sit in their own section at the top of the sidebar. */
     pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
-    /** The sidebar group this chat sits in, if any. */
-    groupId: text("group_id").references(() => chatGroups.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at").notNull().$defaultFn(now),
     lastMessageAt: timestamp("last_message_at"),

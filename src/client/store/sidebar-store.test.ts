@@ -12,17 +12,14 @@ function makeStore(chats: ChatSummary[] = []) {
 const ids = (store: SidebarStore) => store.get().map((c) => c.id);
 
 describe("SidebarStore.upsert", () => {
-  it("keeps pinned and groupId when a send names only id, title and updatedAt", () => {
+  it("keeps pinned when a send names only id, title and updatedAt", () => {
     const { store } = makeStore([
       { id: "a", title: "A", updatedAt: 300 },
       { id: "p", title: "Pinned", updatedAt: 200, pinned: true },
-      { id: "g", title: "Grouped", updatedAt: 100, groupId: "grp1" },
     ]);
-    store.upsert({ id: "p", title: "Pinned", updatedAt: 400 });
-    store.upsert({ id: "g", title: "Grouped, renamed", updatedAt: 500 });
+    store.upsert({ id: "p", title: "Pinned, renamed", updatedAt: 400 });
     expect(store.get()).toEqual([
-      { id: "g", title: "Grouped, renamed", updatedAt: 500, groupId: "grp1" },
-      { id: "p", title: "Pinned", updatedAt: 400, pinned: true },
+      { id: "p", title: "Pinned, renamed", updatedAt: 400, pinned: true },
       { id: "a", title: "A", updatedAt: 300 },
     ]);
   });
@@ -43,13 +40,13 @@ describe("SidebarStore.patch and remove", () => {
   it("patch merges fields and re-sorts only on updatedAt; remove drops the row", () => {
     const { store } = makeStore([
       { id: "a", title: "A", updatedAt: 300 },
-      { id: "b", title: "B", updatedAt: 200, groupId: "grp1" },
+      { id: "b", title: "B", updatedAt: 200 },
     ]);
     store.patch("b", { pinned: true });
     expect(ids(store)).toEqual(["a", "b"]);
-    expect(store.get()[1]).toEqual({ id: "b", title: "B", updatedAt: 200, groupId: "grp1", pinned: true });
-    store.patch("b", { groupId: null });
-    expect(store.get()[1]?.groupId).toBeNull();
+    expect(store.get()[1]).toEqual({ id: "b", title: "B", updatedAt: 200, pinned: true });
+    store.patch("b", { pinned: false });
+    expect(store.get()[1]?.pinned).toBe(false);
     store.remove("a");
     expect(ids(store)).toEqual(["b"]);
   });
@@ -62,7 +59,7 @@ describe("patchChatOptimistic", () => {
 
   const chats = (): ChatSummary[] => [
     { id: "a", title: "A", updatedAt: 300 },
-    { id: "b", title: "B", updatedAt: 200, groupId: "grp1" },
+    { id: "b", title: "B", updatedAt: 200 },
   ];
 
   it("keeps the pin when the server takes it, and sends it as a PATCH", async () => {
@@ -83,16 +80,14 @@ describe("patchChatOptimistic", () => {
     expect(store.get()[0]?.pinned).toBe(false);
   });
 
-  it("rolls an unpin and a group move back when the server refuses", async () => {
+  it("rolls an unpin back when the server refuses", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
     const { store } = makeStore([{ id: "p", title: "P", updatedAt: 100, pinned: true }, ...chats()]);
     await expect(patchChatOptimistic(store, "p", { pinned: false })).resolves.toBe(false);
     expect(store.get().find((c) => c.id === "p")?.pinned).toBe(true);
-    await patchChatOptimistic(store, "b", { groupId: null });
-    expect(store.get().find((c) => c.id === "b")?.groupId).toBe("grp1");
   });
 
-  it("a late failure leaves alone a newer move the server did take", async () => {
+  it("a late failure leaves alone a newer change the server did take", async () => {
     let failFirst!: () => void;
     const fetchMock = vi
       .fn()
@@ -100,10 +95,11 @@ describe("patchChatOptimistic", () => {
       .mockResolvedValueOnce(new Response(null, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const { store } = makeStore(chats());
-    const first = patchChatOptimistic(store, "a", { groupId: "g1" });
-    await patchChatOptimistic(store, "a", { groupId: "g2" });
+    // Pin (fails late), then unpin (taken): the late failure must not restore the pre-pin state over it.
+    const first = patchChatOptimistic(store, "a", { pinned: true });
+    await patchChatOptimistic(store, "a", { pinned: false });
     failFirst();
     await first;
-    expect(store.get()[0]?.groupId).toBe("g2");
+    expect(store.get()[0]?.pinned).toBe(false);
   });
 });
