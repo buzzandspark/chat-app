@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { RelayError } from "@shared/types";
 
-const CONTEXT_FULL_RE =
+/** Shared with the replay provider's classifier (engine.ts) so a fixture and the live API agree on what "context full" reads as. */
+export const CONTEXT_FULL_RE =
   /prompt is too long|context window|too many tokens|exceeds? the (?:maximum )?context|maximum context length|input length and `?max_tokens`? exceed/i;
 
 function retryAfterMs(headers: unknown): number | undefined {
@@ -57,6 +58,17 @@ export function toRelayError(err: unknown): RelayError {
     return { kind: "network", message: "Lost the connection to the model provider", retryable: true };
   }
   if (err instanceof Anthropic.APIError) {
+    // No status means the SDK threw an SSE `event: error` from inside an HTTP 200 stream (core/streaming.js):
+    // `err.error` is the whole `{ type: "error", error: { type, message } }` body, `err.message` its raw JSON, and
+    // `err.type` the inner type. Classify by that type exactly as a fixture's error event is, or a mid-stream
+    // rate_limit_error / api_error lands as a non-retryable api_error with JSON for a message. Data that isn't JSON
+    // arrives as the bare string, which makeMessage would quote.
+    if (err.status === undefined) {
+      const body = err.error as { error?: { type?: string; message?: string } } | string | undefined;
+      const type = err.type ?? undefined;
+      const inner = typeof body === "string" ? { type, message: body } : body?.error;
+      return errorEventToRelayError(inner ?? { type, message: err.message }, undefined, err.headers);
+    }
     const status = err.status;
     const type = (err as { type?: string }).type;
     if (status === 413) {
@@ -85,13 +97,19 @@ export function toRelayError(err: unknown): RelayError {
   return { kind: "unknown", message: String(err), retryable: false };
 }
 
-/** Mid-stream `error` events carried as data (replay fixtures, raw SSE). */
-export function errorEventToRelayError(error: { type?: string; message?: string }, status?: number): RelayError {
+/**
+ * Mid-stream `error` events: carried as data (replay fixtures, raw SSE) or thrown by the SDK with no status (toRelayError).
+ * `headers` are the stream's response headers; a 200 rarely carries retry-after, but honour it when it does.
+ */
+export function errorEventToRelayError(error: { type?: string; message?: string }, status?: number, headers?: unknown): RelayError {
   switch (error.type) {
     case "overloaded_error":
-      return { kind: "overloaded", message: error.message ?? "Overloaded", retryable: true, retryAfterMs: 10_000, status: status ?? 529 };
+      return { kind: "overloaded", message: error.message ?? "Overloaded", retryable: true, retryAfterMs: retryAfterMs(headers) ?? 10_000, status: status ?? 529 };
     case "rate_limit_error":
-      return { kind: "rate_limited", message: error.message ?? "Rate limited", retryable: true, retryAfterMs: 15_000, status: status ?? 429 };
+      return { kind: "rate_limited", message: error.message ?? "Rate limited", retryable: true, retryAfterMs: retryAfterMs(headers) ?? 15_000, status: status ?? 429 };
+    case "request_too_large":
+      // toRelayError's 413 branch, so the same overflow reads the same before and after the first byte.
+      return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: status ?? 413 };
     case "authentication_error":
     case "permission_error":
       return { kind: "auth", message: error.message ?? "Unauthorized", retryable: false, status };

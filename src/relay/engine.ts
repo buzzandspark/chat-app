@@ -13,7 +13,7 @@ import type {
   UserRole,
 } from "@shared/types";
 import { toContentBlocks } from "./anthropic/accumulate";
-import { isAbortError, toRelayError } from "./anthropic/errors";
+import { CONTEXT_FULL_RE, isAbortError, toRelayError } from "./anthropic/errors";
 import type { HistoryMessage } from "./anthropic/history";
 import {
   createAccumulator,
@@ -824,8 +824,10 @@ function statusErrorToRelay(err: ProviderStatusError): RelayError {
     case 401:
     case 403:
       return { kind: "auth", message: err.message, retryable: false, status: err.status };
+    case 413:
+      return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 };
     case 400:
-      if (/too long|context/i.test(err.message)) {
+      if (CONTEXT_FULL_RE.test(err.message)) {
         return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 400 };
       }
       return { kind: "bad_request", message: err.message, retryable: false, status: 400 };
