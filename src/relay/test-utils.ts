@@ -1,9 +1,8 @@
-import path from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "@db/schema";
 import type { Db } from "@db/client";
+import { applyMigrations } from "@db/migrator";
 import type { RelayEvent } from "./events";
 import type { EventStore } from "./store";
 
@@ -11,9 +10,8 @@ import type { EventStore } from "./store";
 export function createTestDb(): Db {
   const sqlite = new Database(":memory:");
   sqlite.pragma("foreign_keys = ON");
-  const db = drizzle(sqlite, { schema });
-  migrate(db, { migrationsFolder: path.resolve(process.cwd(), "src/db/migrations") });
-  return db;
+  applyMigrations(sqlite);
+  return drizzle(sqlite, { schema });
 }
 
 export function seedUser(db: Db, id: string, extra: Partial<typeof schema.users.$inferInsert> = {}): void {
