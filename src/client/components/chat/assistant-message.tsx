@@ -6,7 +6,7 @@ import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useMarkdownComponent } from "@client/markdown/ready";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
-import { textOf, type MessageState } from "@client/store/chat-store";
+import { canRetryReply, textOf, type MessageState } from "@client/store/chat-store";
 import { useChat, useChatStore } from "@client/store/hooks";
 import { modelDisplayName } from "@shared/models";
 import { ChunkBoundary } from "../ui/chunk-boundary";
@@ -117,14 +117,17 @@ export function AssistantMessage({ message }: { message: MessageState }) {
     return null;
   })();
 
+  // A failed reply with a newer turn after it keeps its error but offers no retry (canRetryReply).
+  const retryable = canRetryReply(chat, message);
   const onRetry = () => {
     if (userMessageId) retry(userMessageId, message.id);
   };
 
   // A 429 retries by itself with exponential backoff, four times at most, and only for a reply this
   // client asked for (a saved error from an earlier session waits for the user). The timer dies with
-  // the row, so a hidden chat pauses and a manual Try again, which replaces the row, cancels it.
-  const rateLimited = message.status === "error" && message.error?.kind === "rate_limited" && message.local;
+  // the row, so a hidden chat pauses and a manual Try again, which replaces the row, cancels it; a
+  // send after the error stops it too, since the reply is then no longer the last turn.
+  const rateLimited = message.status === "error" && message.error?.kind === "rate_limited" && message.local && retryable;
   const attempt = message.retryAttempt;
   const retryAfterMs = message.error?.retryAfterMs;
   const createdAt = message.createdAt;
@@ -181,7 +184,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
       {discarded ? <span className="text-caption text-muted-foreground">Incomplete and not saved.</span> : null}
       <StatusFooter
         message={message}
-        onRetry={onRetry}
+        onRetry={retryable ? onRetry : undefined}
         onContinue={() => send("Continue.", message.scenario ?? undefined)}
         onResume={() => client.resumeAll()}
       />
@@ -192,7 +195,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
             <AssistantActionsOnIntent
               message={message}
               text={text}
-              canRegenerate={Boolean(userMessageId) && message.status !== "refused"}
+              canRegenerate={Boolean(userMessageId) && retryable && message.status !== "refused"}
               onRegenerate={onRetry}
             />
           </ChunkBoundary>

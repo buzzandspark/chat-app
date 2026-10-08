@@ -11,7 +11,8 @@ import { MAX_AUTO_RETRIES, rateLimitDelayMs } from "./rate-limit";
 
 interface StatusFooterProps {
   message: MessageState;
-  onRetry: () => void;
+  /** Absent for a failed reply that a newer turn follows: it keeps its error but offers no retry. */
+  onRetry?: () => void;
   onContinue: () => void;
   onResume: () => void;
 }
@@ -30,13 +31,15 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
       {label}
     </Button>
   );
-  const retry = action(
-    <>
-      <RefreshCw data-icon="inline-start" />
-      Retry
-    </>,
-    onRetry,
-  );
+  const retry = onRetry
+    ? action(
+        <>
+          <RefreshCw data-icon="inline-start" />
+          Retry
+        </>,
+        onRetry,
+      )
+    : null;
   const link = (href: string, label: string) => (
     <Link className="underline" href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer">
       {label}
@@ -84,21 +87,25 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
     switch (e?.kind) {
       case "rate_limited": {
         // Inline, not a button: the row keeps the height of a line of text, so the footer appearing shifts nothing.
-        const tryAgain = (
+        const tryAgain = onRetry ? (
           <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={onRetry}>
             Try again
           </button>
-        );
-        const auto = message.local && message.retryAttempt < MAX_AUTO_RETRIES;
+        ) : null;
+        const headline = message.retryAttempt >= MAX_AUTO_RETRIES ? `Still rate limited after ${MAX_AUTO_RETRIES} tries.` : "Rate limited.";
+        // No retry offered means no countdown either: the automatic retry stops along with Try again.
+        const auto = tryAgain !== null && message.local && message.retryAttempt < MAX_AUTO_RETRIES;
         text = auto ? (
           <>
             Rate limited. Retrying in <Countdown until={message.createdAt + rateLimitDelayMs(message.retryAttempt, e.retryAfterMs)} /> (try{" "}
             {message.retryAttempt + 1} of {MAX_AUTO_RETRIES}), or {tryAgain} now.
           </>
-        ) : (
+        ) : tryAgain ? (
           <>
-            {message.retryAttempt >= MAX_AUTO_RETRIES ? `Still rate limited after ${MAX_AUTO_RETRIES} tries.` : "Rate limited."} {tryAgain}.
+            {headline} {tryAgain}.
           </>
+        ) : (
+          headline
         );
         break;
       }
@@ -122,10 +129,12 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
         offer = action("New chat", newChat);
         break;
       case "unavailable":
-        text = (
+        text = onRetry ? (
           <>
             The server is restarting. Try again in <Countdown until={message.createdAt + (e.retryAfterMs ?? 5_000)} />.
           </>
+        ) : (
+          "The server was restarting."
         );
         offer = retry;
         break;

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type
 import { Button } from "@/components/ui/button";
 import { saveLastChoice } from "@client/hooks/use-last-choice";
 import { useNewChat } from "@client/hooks/use-new-chat";
-import { textOf, type ChatSettings } from "@client/store/chat-store";
+import { canRetryReply, textOf, type ChatSettings } from "@client/store/chat-store";
 import { ensureMarkdown, useMarkdownReady } from "@client/markdown/ready";
 import { useChat, useChatSeeded, useChatStore, useMessage } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
@@ -141,15 +141,18 @@ export function ChatView({ children }: { children: ReactNode }) {
 
   const retry = useCallback(
     (userMessageId: string, fromMessageId: string) => {
+      const replaced = store.getMessage(fromMessageId);
+      // Checked against the store, not the render that scheduled it: a 429 timer can fire after a send
+      // has already put a newer turn behind the reply, and a reply that is gone was retried already.
+      if (!replaced || !canRetryReply(store.getChat(chatId), replaced)) return;
       // The text travels with the retry: after a refused first POST the server has no user row to retry from.
       const text = textOf(store.getMessage(userMessageId)?.blocks ?? []) || undefined;
       // The replaced reply's own model and scenario, not whatever the picker shows now.
-      const replaced = store.getMessage(fromMessageId);
       const current = settingsRef.current;
-      const model = isModelId(replaced?.requestedModel) ? replaced.requestedModel : current.model;
-      const scenario = replaced?.scenario ?? current.scenario?.name;
+      const model = isModelId(replaced.requestedModel) ? replaced.requestedModel : current.model;
+      const scenario = replaced.scenario ?? current.scenario?.name;
       // A retry of a rate-limited reply continues its streak, so the next wait doubles; anything else starts at 0.
-      const attempt = replaced?.status === "error" && replaced.error?.kind === "rate_limited" ? replaced.retryAttempt + 1 : 0;
+      const attempt = replaced.status === "error" && replaced.error?.kind === "rate_limited" ? replaced.retryAttempt + 1 : 0;
       store.truncateFrom(fromMessageId);
       // A retry after a refused first send is the chat's first accepted generation: list it then.
       client.retry(

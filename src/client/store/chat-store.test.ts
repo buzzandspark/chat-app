@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RelayEvent, RelayEventBody } from "@relay/events";
 import type { StoredContentBlock } from "@shared/blocks";
-import { ChatStore, createMessageState, textOf, type SeedRow } from "./chat-store";
+import { canRetryReply, ChatStore, createMessageState, textOf, type SeedRow } from "./chat-store";
 
 function makeStore() {
   const scheduled: Array<() => void> = [];
@@ -375,5 +375,25 @@ describe("ChatStore", () => {
     expect(store.takeQueued("q")?.id).toBe("c");
     expect(store.takeQueued("q")).toBeUndefined();
     expect(store.removeQueued("q", "zzz")).toBeUndefined();
+  });
+
+  it("offers a retry of a failed reply only while it is the chat's last message", () => {
+    const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
+    const rateLimited = { kind: "rate_limited", message: "Rate limited", retryable: true, retryAfterMs: 1000 } as const;
+    store.addMessage(createMessageState({ id: "u1", chatId: "r", role: "user", blocks: [{ type: "text", text: "one" }] }));
+    store.addMessage(createMessageState({ id: "a1", chatId: "r", role: "assistant", status: "error", error: rateLimited }));
+    const retryable = (id: string) => canRetryReply(store.getChat("r"), store.getMessage(id)!);
+    expect(retryable("a1")).toBe(true);
+    // The user sends anyway and that POST is refused too: the first reply's retry would truncate the second turn away.
+    store.addMessage(createMessageState({ id: "u2", chatId: "r", role: "user", blocks: [{ type: "text", text: "two" }] }));
+    store.addMessage(createMessageState({ id: "a2", chatId: "r", role: "assistant", status: "error", error: rateLimited }));
+    expect(retryable("a1")).toBe(false);
+    expect(retryable("a2")).toBe(true);
+    // Mid-stream counts as a newer turn as well.
+    store.updateMessage("a2", { status: "streaming", error: null });
+    expect(retryable("a1")).toBe(false);
+    // A reply that did not fail keeps Retry and Regenerate wherever it sits.
+    store.updateMessage("a1", { status: "stopped", error: null });
+    expect(retryable("a1")).toBe(true);
   });
 });

@@ -159,6 +159,17 @@ export function textOf(blocks: readonly ClientBlock[]): string {
   return s;
 }
 
+/**
+ * A failed reply can be retried (Try again, the 429 countdown, Regenerate) only while it is the chat's
+ * last message. A retry drops the reply and everything after it here, but a reply whose POST was refused
+ * never reached the server, so the server's `replaceFrom` matches nothing and keeps the later turns,
+ * appending the retry after them; a later user message that was itself refused would be gone everywhere.
+ * Once a newer turn exists, the failed reply keeps its error and offers nothing.
+ */
+export function canRetryReply(chat: Pick<ChatState, "messageIds">, message: Pick<MessageState, "id" | "status">): boolean {
+  return message.status !== "error" || chat.messageIds.at(-1) === message.id;
+}
+
 /** D10: per-message subscribers; producer events batch per frame, dedupe by seq; control events always apply. */
 export class ChatStore {
   /** Model and effort for chats that have no reply to inherit from (#22): the user's last choice, set by the shell. */
