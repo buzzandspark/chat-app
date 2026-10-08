@@ -59,20 +59,23 @@ Measured on the scripted `normal` scenario through the built server: 62 events, 
 
 Checked against the bundled Claude API reference on 2026-10-06; the per-model request shape lives in one place, `src/relay/anthropic/thinking-config.ts`, and `request.ts` is the only request builder, used by the live provider, the recorder, and the cache test alike.
 
-| | Sonnet 5.5 (default), Opus 5.5 | Haiku 4.5 |
+| | Sonnet 5.5 (default), Opus 5.5 | Haiku 5.5 |
 | --- | --- | --- |
-| Thinking | `adaptive`, `display: "summarized"` | `enabled`, `budget_tokens: 2048` when "Extended thinking" is on, else none |
-| "Think harder" | `output_config.effort: "high"` (default `"low"`) | the toggle above |
-| Fallbacks | `fallbacks: "default"` under beta `server-side-fallback-2026-07-01` | none |
-| Binding | `thinking.block_binding.prefix_mismatch_behavior: "drop_block"` under beta `thinking-binding-controls-2026-08-01` | none |
+| Thinking | `adaptive`, `display: "summarized"` | the same |
+| "Think harder" | `output_config.effort: "high"` (default `"low"`) | the same |
+| Fallbacks | `fallbacks: "default"` under beta `server-side-fallback-2026-07-01` | none (none is documented for it) |
+| Binding | `thinking.block_binding.prefix_mismatch_behavior: "drop_block"` under beta `thinking-binding-controls-2026-08-01` | the same |
 | `max_tokens` | 16,000 | 16,000 |
+| Pricing | flat per model | two tiers, the dearer one once the prompt (input plus cached tokens) passes 100k tokens |
+
+Haiku 4.5 was removed on 2026-10-07 when Haiku 5.5 arrived: nothing had been saved with it, and 5.5 is cheaper on every line with a 1M window and effort-steered thinking, so no `budget_tokens` path remains.
 
 - **Why `drop_block`.** The binding check covers the system prompt and tools as well as every earlier message, and is enforced by default for API accounts created on or after 2026-08-31. Without it, a deploy that edits the system prompt would turn every existing chat with thinking blocks into a 400. `input_transformations` from `message_start` is logged with the generation so prefix mismatches are visible; a `model_binding_mismatch` after a model switch is expected, not a bug.
 - **Model per message, not per chat.** Sticky routing can serve later turns on the fallback model for about an hour and the requested model may be retried at any time, so `messages.requested_model` and `messages.serving_model` are stored per assistant message. The picker value only chooses the next turn. The serving model is the last `fallback` block's `to.model`, else `message_start.message.model`, cross-checked with a `fallback_message` entry in `usage.iterations` for sticky-routed turns that carry no block.
 - **Fallback in the stream.** A `fallback` block arrives as an ordinary `content_block_start`. Before any text it is invisible except in timing (the latency popover labels the first-token interval "includes a declined attempt") and in `iterations`; after text, the open block closes, the relay emits `fallback_boundary`, the partial is kept, and the UI shows a divider ("Served by Claude Opus 4.8 after a safety fallback"). `history.ts` omits thinking and tool use before a message's final fallback block when echoing it back.
 - **Refusal without fallback** (`stop_reason: "refusal"`, possible on Haiku, on `bio`/`reasoning_extraction`/`general_harms` categories on Sonnet 5.5, or when the whole chain declines) is its own message status. Painted partial text is dimmed, labelled "incomplete and not saved", excluded from later history, and has no retry affordance. Three wordings: category and explanation, category only, neither.
-- **Caching.** The fixed system prompt carries the first `cache_control` breakpoint; the moving breakpoint is the newest user message's last text block. Minimum cacheable prefix is 512 tokens on Sonnet 5.5 and Opus 5.5 and 4096 on Haiku 4.5, so `pnpm test:cache` (opt-in, spends money) sends a fixture above 4096 tokens twice per model and asserts non-zero `cache_read_input_tokens` on the second request. Cache fields are stored per iteration in `usage_events` and shown in the latency popover.
-- **Context.** History is sent whole; Sonnet 5.5 and Opus 5.5 have 1M-token windows and Haiku 4.5 200K. A context-length 400 maps to `kind: "context_full"` and the UI says "This chat is too long to continue. Start a new chat."
+- **Caching.** The fixed system prompt carries the first `cache_control` breakpoint; the moving breakpoint is the newest user message's last text block. Minimum cacheable prefix is 512 tokens on Sonnet 5.5 and Opus 5.5, so `pnpm test:cache` (opt-in, spends money) sends a fixture above 4096 tokens twice per model and asserts non-zero `cache_read_input_tokens` on the second request. Cache fields are stored per iteration in `usage_events` and shown in the latency popover.
+- **Context.** History is sent whole; all three models have 1M-token windows. A context-length 400 maps to `kind: "context_full"` and the UI says "This chat is too long to continue. Start a new chat."
 - **Cost (D22).** Only the live provider (and its recorder) is billable: a scripted or replayed run reserves nothing, settles its usage rows at zero cost and never feeds the tokens-per-second estimator, so scenarios cannot consume or skew a cap. Each `usage.iterations` entry is priced at its own model's rates (a declined attempt is a `message` entry for the declined model; the serving hop is `fallback_message`). Stopped or interrupted generations are settled as estimates: exact input from `message_start`, output from elapsed streaming time times a rolling tokens-per-second per model, because billed output includes full thinking while only its summary is visible.
 
 ## 6a. Identity (ADR-0004, amended)

@@ -79,11 +79,13 @@ describe("history", () => {
     const harder = buildRequest({ model: "claude-opus-5-5", thinking: { harder: true }, messages });
     expect(harder.output_config).toEqual({ effort: "high" });
 
-    const haiku = buildRequest({ model: "claude-haiku-4-5", thinking: { harder: true }, messages });
-    expect(haiku.betas).toEqual([]);
+    // Haiku 5.5 thinks adaptively with effort like the others, binds its thinking blocks, and has no server-side fallback.
+    const haiku = buildRequest({ model: "claude-haiku-5-5", thinking: { harder: true }, messages });
+    expect(haiku.betas).toEqual(["thinking-binding-controls-2026-08-01"]);
     expect(haiku.fallbacks).toBeUndefined();
-    expect(haiku.thinking).toEqual({ type: "enabled", budget_tokens: 2048 });
-    const haikuPlain = buildRequest({ model: "claude-haiku-4-5", thinking: { harder: false }, messages });
-    expect(haikuPlain.thinking).toBeUndefined();
+    expect(haiku.thinking).toEqual({ type: "adaptive", display: "summarized", block_binding: { prefix_mismatch_behavior: "drop_block" } });
+    expect(haiku.output_config).toEqual({ effort: "high" });
+    const haikuPlain = buildRequest({ model: "claude-haiku-5-5", thinking: { harder: false }, messages });
+    expect(haikuPlain.output_config).toEqual({ effort: "low" });
   });
 });

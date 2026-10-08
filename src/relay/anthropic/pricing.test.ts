@@ -24,16 +24,16 @@ describe("pricing", () => {
   });
 
   it("charges cache reads and writes at their own rates", () => {
-    const cost = costOf("claude-haiku-4-5", { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1e6, cacheWriteTokens: 1e6 });
-    expect(cost).toBeCloseTo(0.1 + 1.25, 9);
+    const cost = costOf("claude-sonnet-5-5", { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1e6, cacheWriteTokens: 1e6 });
+    expect(cost).toBeCloseTo(0.2 + 2.5, 9);
   });
 
   it("uses the default model when an iteration has no model", () => {
     const rows = priceIterations(
       [{ type: "message", model: null as unknown as "claude-opus-5-5", input_tokens: 10, output_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cache_creation: null }],
-      "claude-haiku-4-5",
+      "claude-haiku-5-5",
     );
-    expect(rows[0]!.model).toBe("claude-haiku-4-5");
+    expect(rows[0]!.model).toBe("claude-haiku-5-5");
   });
 
   it("prices Claude Haiku 5.5 at its long-context tier once the prompt passes 100k tokens", () => {

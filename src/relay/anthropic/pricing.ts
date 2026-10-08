@@ -22,7 +22,6 @@ const RATES: Record<string, Rates> = {
     cacheWrite: 0.125,
     longContext: { threshold: 100_000, input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 },
   },
-  "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
   // Fallback targets the API may route to (D11).
   "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -140,7 +139,6 @@ export const SEED_OUTPUT_TPS: Record<string, number> = {
   "claude-sonnet-5-5": 80,
   "claude-opus-5-5": 50,
   "claude-haiku-5-5": 150,
-  "claude-haiku-4-5": 140,
 };
 
 export function seedOutputTps(model: string): number {

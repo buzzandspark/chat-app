@@ -40,10 +40,5 @@ export function modelParams(model: ModelId, opts: ThinkingOptions): ModelParams 
         output_config: { effort: opts.harder ? "high" : "low" },
         betas: [BINDING_BETA],
       };
-    case "claude-haiku-4-5":
-      return {
-        thinking: opts.harder ? { type: "enabled", budget_tokens: 2048 } : undefined,
-        betas: [],
-      };
   }
 }

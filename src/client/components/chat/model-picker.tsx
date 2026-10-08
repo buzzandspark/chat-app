@@ -15,8 +15,7 @@ import type { ThinkingOptions } from "@shared/types";
 const MODEL_BLURBS: Record<ModelId, string> = {
   "claude-sonnet-5-5": "Fast and capable for everyday work",
   "claude-opus-5-5": "Deepest reasoning for hard problems",
-  "claude-haiku-5-5": "Fastest replies at the lowest cost, with effort levels",
-  "claude-haiku-4-5": "Quick replies, previous generation",
+  "claude-haiku-5-5": "Fastest replies at the lowest cost",
 };
 
 interface ModelPickerProps {
@@ -33,7 +32,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: 
   const [open, setOpen] = useState(defaultOpen);
   useBackGesture(open && !desktop, () => setOpen(false));
   const info = MODELS[model];
-  const thinkingLabel = info.thinking === "adaptive" ? "Think harder" : "Extended thinking";
+  const thinkingLabel = "Think harder";
 
   const trigger = (
     <Button variant="ghost" size="sm" className="touch-target max-w-[55vw] gap-1 text-muted-foreground" aria-label="Choose model">
@@ -74,9 +73,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: 
       <label className="mt-1 flex min-h-12 items-center justify-between gap-3 rounded-lg px-3">
         <span className="flex flex-col">
           <span className="text-body font-medium">{thinkingLabel}</span>
-          <span className="text-caption text-muted-foreground">
-            {info.thinking === "adaptive" ? "Effort high instead of low" : "A 2,048-token thinking budget"}
-          </span>
+          <span className="text-caption text-muted-foreground">Effort high instead of low</span>
         </span>
         <Switch checked={thinking.harder} onCheckedChange={(harder) => onChange({ thinking: { harder } })} aria-label={thinkingLabel} />
       </label>

@@ -188,12 +188,12 @@ describe("ChatStore", () => {
   describe("seedChat (ADR-0005)", () => {
     it("marks the chat seeded and keeps settings and a local title across seeds", () => {
       const { store } = makeStore();
-      store.setSettings("c1", { model: "claude-haiku-4-5" });
+      store.setSettings("c1", { model: "claude-haiku-5-5" });
       store.setChatTitle("c1", "typed first");
       store.seedChat("c1", null, []);
       const chat = store.getChat("c1");
       expect(chat.seeded).toBe(true);
-      expect(chat.settings.model).toBe("claude-haiku-4-5");
+      expect(chat.settings.model).toBe("claude-haiku-5-5");
       expect(chat.title).toBe("typed first");
       store.seedChat("c1", "From server", []);
       expect(store.getChat("c1").title).toBe("From server");
@@ -242,12 +242,12 @@ describe("ChatStore", () => {
         row({ id: "a1", role: "assistant", content: [text("a")], requestedModel: "claude-opus-5-5" }),
       ]);
       expect(store.getChat("c1").settings.model).toBe("claude-opus-5-5");
-      store.setSettings("c1", { model: "claude-haiku-4-5" });
+      store.setSettings("c1", { model: "claude-haiku-5-5" });
       store.seedChat("c1", "T", [
         row({ id: "u1", role: "user", content: [text("q")] }),
         row({ id: "a1", role: "assistant", content: [text("a")], requestedModel: "claude-opus-5-5" }),
       ]);
-      expect(store.getChat("c1").settings.model).toBe("claude-haiku-4-5");
+      expect(store.getChat("c1").settings.model).toBe("claude-haiku-5-5");
       // An unknown or missing model leaves the default alone.
       store.seedChat("c2", "T", [row({ id: "a2", chatId: "c2", role: "assistant", content: [text("a")], requestedModel: "claude-opus-4-8" })]);
       expect(store.getChat("c2").settings.model).toBe("claude-sonnet-5-5");
@@ -338,11 +338,11 @@ describe("ChatStore", () => {
     const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
     store.createChat("fresh");
     store.createChat("touched");
-    store.setSettings("touched", { model: "claude-haiku-4-5" });
+    store.setSettings("touched", { model: "claude-haiku-5-5" });
     store.setDefaultSettings({ model: "claude-opus-5-5", thinking: { harder: true } });
     expect(store.getChat("fresh").settings.model).toBe("claude-opus-5-5");
     expect(store.getChat("fresh").settings.thinking.harder).toBe(true);
-    expect(store.getChat("touched").settings.model).toBe("claude-haiku-4-5");
+    expect(store.getChat("touched").settings.model).toBe("claude-haiku-5-5");
     store.createChat("later");
     expect(store.getChat("later").settings.model).toBe("claude-opus-5-5");
     // An existing chat still inherits from its own last reply.

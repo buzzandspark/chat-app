@@ -19,8 +19,8 @@ test.describe("chat route", () => {
     await sendText(page, title);
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await page.getByRole("button", { name: "Choose model" }).click();
-    await page.getByRole("option", { name: /Claude Haiku 4.5/ }).click();
-    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 4.5");
+    await page.getByRole("option", { name: /Claude Haiku 5.5/ }).click();
+    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 5.5");
     const settingsUrl = page.url();
     await ensureSidebarOpen(page);
     await page.getByRole("link", { name: "New chat" }).click();
@@ -30,7 +30,7 @@ test.describe("chat route", () => {
     await ensureSidebarOpen(page);
     await page.getByRole("complementary", { name: "Chats" }).getByRole("link", { name: title }).click();
     await expect(page).toHaveURL(settingsUrl);
-    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 4.5");
+    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 5.5");
   });
 
   test("a refused first send keeps the typed message and the page usable", async ({ page }, info) => {

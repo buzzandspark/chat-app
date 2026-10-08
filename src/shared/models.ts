@@ -1,5 +1,5 @@
 // Client-safe model catalogue (D11); request params live in thinking-config.ts, prices in pricing.ts.
-export const MODEL_IDS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-haiku-4-5"] as const;
+export const MODEL_IDS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"] as const;
 export type ModelId = (typeof MODEL_IDS)[number];
 export const DEFAULT_MODEL: ModelId = "claude-sonnet-5-5";
 
@@ -9,8 +9,8 @@ export interface ModelInfo {
   short: string;
   /** Context window in tokens (D12). */
   contextWindow: number;
-  /** Whether "Think harder" maps to effort (adaptive thinking) or a toggle (budget). */
-  thinking: "adaptive" | "budget";
+  /** Every current model thinks adaptively; "Think harder" maps to effort. */
+  thinking: "adaptive";
 }
 
 export const MODELS: Record<ModelId, ModelInfo> = {
@@ -34,13 +34,6 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     short: "Haiku 5.5",
     contextWindow: 1_000_000,
     thinking: "adaptive",
-  },
-  "claude-haiku-4-5": {
-    id: "claude-haiku-4-5",
-    name: "Claude Haiku 4.5",
-    short: "Haiku 4.5",
-    contextWindow: 200_000,
-    thinking: "budget",
   },
 };
 

@@ -1,5 +1,5 @@
 // D13, opt-in because it spends money: pnpm test:cache. Uses the production request builder and a
-// fixture above Haiku 4.5's 4096-token minimum; asserts cache_read_input_tokens > 0 on the second request.
+// fixture above every model's minimum cacheable prefix; asserts cache_read_input_tokens > 0 on the second request.
 import { describe, expect, it } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL_IDS } from "@shared/models";
