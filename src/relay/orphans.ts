@@ -3,6 +3,7 @@ import type { Db } from "@db/client";
 import { generations, messages, usageEvents, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import { costOf } from "./anthropic/pricing";
+import { isBillableProvider } from "./providers/types";
 
 export interface OrphanRow {
   id: string;
@@ -10,6 +11,8 @@ export interface OrphanRow {
   chatId: string;
   userId: string;
   requestedModel: string;
+  /** `generations.provider`: a scripted or replayed run settles at zero, as it would have finished. */
+  provider: string;
 }
 
 /**
@@ -17,7 +20,9 @@ export interface OrphanRow {
  * the saved text at four characters per token (no usage was written). Shared by the boot backstop and
  * by `Engine.resume`, which used to mark without settling (cap review, finding 3). The serving model is
  * read from the message, which the partial writer keeps current, and thinking text counts as output
- * (finding 5).
+ * (finding 5). A run that spends nothing (D22) still gets its estimated usage row, with its tokens
+ * kept and cost zero as `Engine.free` writes them, and never touches the user's spend, so a restart
+ * mid-scenario cannot eat a cap.
  */
 export function settleOrphan(tx: Db, row: OrphanRow, now: Date): number {
   tx.update(generations).set({ status: "interrupted", interruptedReason: "crash", endedAt: now }).where(eq(generations.id, row.id)).run();
@@ -40,7 +45,7 @@ export function settleOrphan(tx: Db, row: OrphanRow, now: Date): number {
   }
   const model = servingModel ?? row.requestedModel;
   const tokens = { inputTokens: Math.ceil(inputChars / 4), outputTokens: Math.ceil(outputChars / 4), cacheReadTokens: 0, cacheWriteTokens: 0 };
-  const costUsd = costOf(model, tokens);
+  const costUsd = isBillableProvider(row.provider) ? costOf(model, tokens) : 0;
   tx.insert(usageEvents)
     .values({ id: uuidv7(), generationId: row.id, userId: row.userId, model, iterationType: "message", ...tokens, costUsd, estimated: true, createdAt: now })
     .run();

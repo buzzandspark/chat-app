@@ -26,7 +26,7 @@ import {
 import { priceIterations, summarize, type UsageRow } from "./anthropic/pricing";
 import type { MessageSnapshot, RelayEvent, RelayEventBody, ServerTimings } from "./events";
 import { ProviderStatusError } from "./providers/replay";
-import type { Provider } from "./providers/types";
+import { isBillableProvider, type Provider } from "./providers/types";
 import { QuotaManager } from "./quota";
 import type { EventStore } from "./store";
 import { TpsStats } from "./tps";
@@ -52,11 +52,6 @@ export interface ProviderContext {
   scenario?: string;
 }
 export type ProviderResolver = (ctx: ProviderContext) => Provider;
-
-/** D22: only the live provider (and its recorder) spends money; scripted and replayed runs cost nothing. */
-export function isBillable(provider: Provider): boolean {
-  return provider.name === "anthropic" || provider.name === "recording";
-}
 
 export interface EngineFaults {
   /** D24 producer restart: abort this generation after N relayed events and emit `interrupted`. */
@@ -193,7 +188,7 @@ export class Engine {
       model: input.model,
       scenario: input.scenario,
     });
-    const billable = isBillable(provider);
+    const billable = isBillableProvider(provider.name);
     // A scripted or replayed run spends nothing, so it neither reserves against the cap nor can be refused by it.
     if (billable) {
       // A retry's text is already in the chat; count it once.
@@ -393,10 +388,11 @@ export class Engine {
     if (!row) return { kind: "not_found" };
     if (row.status === "running") {
       // The process restarted while this was running: nothing can finish it. Settle its estimated
-      // cost as the boot backstop does (cap review, finding 3).
+      // cost as the boot backstop does (cap review, finding 3); the provider column keeps a crashed
+      // scenario run free (D22).
       const now = new Date(this.now());
       this.db.transaction((tx) => {
-        settleOrphan(tx as unknown as Db, { id: row.id, messageId: row.messageId, chatId: row.chatId, userId: row.userId, requestedModel: row.requestedModel }, now);
+        settleOrphan(tx as unknown as Db, { id: row.id, messageId: row.messageId, chatId: row.chatId, userId: row.userId, requestedModel: row.requestedModel, provider: row.provider }, now);
       });
     }
     const message = this.db.select().from(messages).where(eq(messages.id, row.messageId)).get();

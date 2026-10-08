@@ -215,11 +215,35 @@ describe("Engine", () => {
     db.update(generations).set({ status: "running" }).where(eq(generations.id, inp.generationId)).run();
     db.update(messages).set({ status: "streaming" }).where(eq(messages.id, inp.assistantMessageId)).run();
     store.evict(inp.generationId);
+    const spentBefore = db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd;
     const outcome = engine.resume(inp.generationId, USER);
     if (outcome.kind !== "snapshot" || outcome.event.type !== "snapshot") throw new Error("expected snapshot");
     expect(outcome.event.status).toBe("interrupted");
     expect(db.select().from(generations).where(eq(generations.id, inp.generationId)).get()!.interruptedReason).toBe("crash");
+    // A live run's orphan is charged its estimate from the saved text.
+    const orphanRow = db.select().from(usageEvents).where(eq(usageEvents.generationId, inp.generationId)).all().find((u) => u.estimated)!;
+    expect(orphanRow.costUsd).toBeGreaterThan(0);
+    expect(db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd).toBeCloseTo(spentBefore + orphanRow.costUsd, 10);
     expect(engine.resume(uuidv7(), USER)).toEqual({ kind: "not_found" });
+  });
+
+  it.each(["scripted", "replay"])("resume: a restarted %s run settles at zero cost and leaves spend alone (D22)", async (provider) => {
+    const inp = input();
+    engine.start(inp);
+    await collectUntilTerminal(store, inp.generationId);
+    // The same restart as above, but the column says the run came from a free provider.
+    db.update(generations).set({ status: "running", provider }).where(eq(generations.id, inp.generationId)).run();
+    db.update(messages).set({ status: "streaming" }).where(eq(messages.id, inp.assistantMessageId)).run();
+    store.evict(inp.generationId);
+    const spentBefore = db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd;
+    const outcome = engine.resume(inp.generationId, USER);
+    if (outcome.kind !== "snapshot" || outcome.event.type !== "snapshot") throw new Error("expected snapshot");
+    expect(outcome.event.status).toBe("interrupted");
+    expect(db.select().from(generations).where(eq(generations.id, inp.generationId)).get()!.interruptedReason).toBe("crash");
+    const orphanRow = db.select().from(usageEvents).where(eq(usageEvents.generationId, inp.generationId)).all().find((u) => u.estimated)!;
+    expect(orphanRow.outputTokens).toBeGreaterThan(0);
+    expect(orphanRow.costUsd).toBe(0);
+    expect(db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd).toBe(spentBefore);
   });
 
   it("refusal with partial text ends refused and is excluded from later history", async () => {

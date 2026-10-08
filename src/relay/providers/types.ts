@@ -21,6 +21,15 @@ export interface Provider {
   stream(request: ProviderRequest, options: ProviderStreamOptions): AsyncIterable<NormalizableEvent>;
 }
 
+/**
+ * D22: only the live provider (and its recorder) spends money; scripted and replayed runs cost nothing.
+ * Keyed by name rather than by instance so an orphan settled from its `generations.provider` column,
+ * long after the provider object is gone, applies the same rule as `Engine.start`.
+ */
+export function isBillableProvider(name: string): boolean {
+  return name === "anthropic" || name === "recording";
+}
+
 /** A thrown provider error expressed as data, as the SDK would throw it. */
 export interface FixtureThrow {
   status: number;
