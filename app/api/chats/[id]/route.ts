@@ -7,7 +7,7 @@ import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 import { isUuid } from "@shared/id";
 
-const Patch = z.object({ title: z.string().trim().min(1).max(120) });
+const Patch = z.object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional() }).refine((p) => p.title !== undefined || p.pinned !== undefined);
 
 /** ADR-0005: the same rows the page seeds with, for prefetch on intent and the second-tab case; `?all=1` lifts the window (#47). */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[i
 }
 
 
-/** Rename a chat (D19 rename sheet). */
+/** Rename or pin a chat (D19 rename sheet; the ⋯ menu's Pin). */
 export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
   try {
     const user = await requireUser();
@@ -34,11 +34,14 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/
     const db = getDb();
     const result = db
       .update(schema.chats)
-      .set({ title: parsed.data.title })
+      .set({
+        ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+        ...(parsed.data.pinned !== undefined ? { pinned: parsed.data.pinned } : {}),
+      })
       .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, user.id)))
       .run();
     if (result.changes === 0) return jsonError(404, { error: "not_found" });
-    return Response.json({ id, title: parsed.data.title }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ id, ...parsed.data }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

@@ -68,6 +68,26 @@ test.describe("edit, regenerate, drafts", () => {
 });
 
 test.describe("chat management", () => {
+  test("pin moves a chat under a Pinned heading and unpin moves it back", async ({ page }, info) => {
+    const title = `pin me ${info.project.name}`;
+    await openNewChat(page);
+    await sendText(page, title);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await ensureSidebarOpen(page);
+    const aside = page.getByRole("complementary", { name: "Chats" });
+    const row = aside.getByRole("listitem").filter({ has: page.getByRole("link", { name: title }) });
+    await row.getByRole("button", { name: `Actions for ${title}` }).click();
+    await page.getByRole("menuitem", { name: "Pin" }).click();
+    const pinnedSection = aside.getByRole("region", { name: "Pinned" });
+    await expect(pinnedSection.getByRole("link", { name: title })).toBeVisible();
+    await page.reload();
+    await ensureSidebarOpen(page);
+    await expect(aside.getByRole("region", { name: "Pinned" }).getByRole("link", { name: title })).toBeVisible();
+    await aside.getByRole("listitem").filter({ has: page.getByRole("link", { name: title }) }).getByRole("button", { name: `Actions for ${title}` }).click();
+    await page.getByRole("menuitem", { name: "Unpin" }).click();
+    await expect(aside.getByRole("region", { name: "Pinned" })).toHaveCount(0);
+  });
+
   test("rename, search, and delete a chat", async ({ page }) => {
     await openNewChat(page);
     const firstUrl = page.url();

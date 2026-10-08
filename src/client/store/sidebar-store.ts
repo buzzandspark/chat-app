@@ -5,6 +5,7 @@ export interface ChatSummary {
   id: string;
   title: string;
   updatedAt: number;
+  pinned?: boolean;
 }
 
 type Listener = () => void;

@@ -117,6 +117,8 @@ export const chats = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull().default("New chat"),
+    /** Pinned chats sit in their own section at the top of the sidebar. */
+    pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at").notNull().$defaultFn(now),
     lastMessageAt: timestamp("last_message_at"),

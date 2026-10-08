@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useChatStore } from "@client/store/context";
 import { prefetchChat } from "@client/store/prefetch";
-import { setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
+import { getSidebarStore, setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
 import { lazyChunk } from "../ui/lazy-chunk";
@@ -32,7 +32,7 @@ const ChatItemMenu = lazyChunk(() =>
   dynamic(() => import("./chat-item-menu").then((m) => m.ChatItemMenu), {
     ssr: false,
     loading: () => (
-      <IconButton label="Chat actions" tipAlign="end" className={MENU_BUTTON} disabled>
+      <IconButton label="Chat actions" className={MENU_BUTTON} disabled>
         <MoreHorizontal />
       </IconButton>
     ),
@@ -43,13 +43,23 @@ const DeleteDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) 
 
 const warmChatItemMenu = () => import("./chat-item-menu");
 
-function ChatItemMenuOnIntent(props: { title: string; onRename: () => void; onDelete: () => void }) {
-  const intent = useIntent(warmChatItemMenu);
+/** The row owns the intent so a right-click anywhere on it opens the same menu as the ⋯ button. */
+function ChatItemMenuOnIntent({
+  intent,
+  ...props
+}: {
+  intent: ReturnType<typeof useIntent>;
+  title: string;
+  pinned: boolean;
+  onRename: () => void;
+  onDelete: () => void;
+  onTogglePin: () => void;
+}) {
   if (intent.armed) {
     return <ChatItemMenu {...props} defaultOpen={intent.wanted === "menu"} onOpenChange={(o) => !o && intent.disarm()} />;
   }
   return (
-    <IconButton label={`Actions for ${props.title}`} tipAlign="end" className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
+    <IconButton label={`Actions for ${props.title}`} className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
       <MoreHorizontal />
     </IconButton>
   );
@@ -72,6 +82,7 @@ const SidebarRow = memo(function SidebarRow({
   show: (render: (api: ModalApi) => React.ReactNode) => () => void;
 }) {
   const href = `/c/${chat.id}`;
+  const intent = useIntent(warmChatItemMenu);
   const onRename = useCallback(
     () => show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />),
     [chat, show],
@@ -80,8 +91,21 @@ const SidebarRow = memo(function SidebarRow({
     () => show(({ open, close }) => <DeleteDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
     [chat, currentChatId, show],
   );
+  // Pin and unpin: the row moves at once; the server is told, and told again on failure by the next load.
+  const onTogglePin = useCallback(() => {
+    const pinned = !chat.pinned;
+    getSidebarStore().patch(chat.id, { pinned });
+    void fetch(`/api/chats/${chat.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ pinned }) }).then((res) => {
+      if (!res.ok) getSidebarStore().patch(chat.id, { pinned: !pinned });
+    });
+  }, [chat.id, chat.pinned]);
   return (
     <li
+      // The browser's own context menu gives way to the row's: a right-click opens the ⋯ menu.
+      onContextMenu={(e) => {
+        e.preventDefault();
+        intent.press("menu");
+      }}
       className={cn(
         "group/item flex items-center justify-between gap-1 rounded-lg pr-0.5 transition-colors",
         // The menu is a portal, so the pointer leaving the row for it ended the hover; the open trigger keeps the row lit.
@@ -102,7 +126,7 @@ const SidebarRow = memo(function SidebarRow({
         <span className="truncate">{chat.title}</span>
       </Link>
       <ChunkBoundary label="chat menu">
-        <ChatItemMenuOnIntent title={chat.title} onRename={onRename} onDelete={onDelete} />
+        <ChatItemMenuOnIntent intent={intent} title={chat.title} pinned={Boolean(chat.pinned)} onRename={onRename} onDelete={onDelete} onTogglePin={onTogglePin} />
       </ChunkBoundary>
     </li>
   );
@@ -136,12 +160,32 @@ export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
   }, [open, chats, warm]);
 
   if (chats.length === 0) return <p className="px-2 py-3 text-small text-muted-foreground">No chats yet.</p>;
+  const pinned = chats.filter((c) => c.pinned);
+  const rest = chats.filter((c) => !c.pinned);
+  const row = (chat: ChatSummary) => (
+    <SidebarRow key={chat.id} chat={chat} active={chat.id === activeChatId} currentChatId={currentChatId} onNavigate={onNavigate} warm={warm} show={show} />
+  );
   return (
-    <ul className="space-y-0.5">
-      {chats.map((chat) => (
-        <SidebarRow key={chat.id} chat={chat} active={chat.id === activeChatId} currentChatId={currentChatId} onNavigate={onNavigate} warm={warm} show={show} />
-      ))}
-    </ul>
+    <div className="space-y-3">
+      {pinned.length > 0 ? (
+        <section aria-labelledby="sidebar-pinned">
+          <h2 id="sidebar-pinned" className="px-3 pb-1 text-caption font-medium uppercase tracking-wide text-muted-foreground">
+            Pinned
+          </h2>
+          <ul className="space-y-0.5">{pinned.map(row)}</ul>
+        </section>
+      ) : null}
+      {rest.length > 0 ? (
+        <section aria-labelledby={pinned.length > 0 ? "sidebar-chats" : undefined}>
+          {pinned.length > 0 ? (
+            <h2 id="sidebar-chats" className="px-3 pb-1 text-caption font-medium uppercase tracking-wide text-muted-foreground">
+              Chats
+            </h2>
+          ) : null}
+          <ul className="space-y-0.5">{rest.map(row)}</ul>
+        </section>
+      ) : null}
+    </div>
   );
 }
 

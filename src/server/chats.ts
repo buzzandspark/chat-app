@@ -8,6 +8,7 @@ export interface ChatSummary {
   id: string;
   title: string;
   updatedAt: number;
+  pinned: boolean;
 }
 
 export interface MessageRow {
@@ -32,13 +33,13 @@ export interface MessageRow {
 export function listChats(userId: string, limit = 200): ChatSummary[] {
   const db = getDb();
   return db
-    .select({ id: schema.chats.id, title: schema.chats.title, updatedAt: schema.chats.updatedAt })
+    .select({ id: schema.chats.id, title: schema.chats.title, updatedAt: schema.chats.updatedAt, pinned: schema.chats.pinned })
     .from(schema.chats)
     .where(eq(schema.chats.userId, userId))
     .orderBy(desc(schema.chats.updatedAt))
     .limit(limit)
     .all()
-    .map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt.getTime() }));
+    .map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt.getTime(), pinned: c.pinned }));
 }
 
 /** The newest messages the page ships; the rest load on request (#47). */
@@ -83,7 +84,7 @@ export function getChatWithMessages(
       .map((g) => [g.id, g.scenario] as const),
   );
   return {
-    chat: { id: chat.id, title: chat.title, updatedAt: chat.updatedAt.getTime() },
+    chat: { id: chat.id, title: chat.title, updatedAt: chat.updatedAt.getTime(), pinned: chat.pinned },
     older,
     messages: rows.map((r) => ({
       id: r.id,
