@@ -57,6 +57,13 @@
       "when": 1791429505983,
       "tag": "0007_faulty_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791429785483,
+      "tag": "0008_brave_mister_fear",
+      "breakpoints": true
     }
   ]
 }

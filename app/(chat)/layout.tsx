@@ -6,7 +6,7 @@ import { ChatShell } from "@client/components/shell/chat-shell";
 import { SettingsDefaults } from "@client/components/shell/settings-defaults";
 import { ShellUserProvider } from "@client/components/shell/shell-user";
 import { SidebarList, SidebarListSkeleton } from "@client/components/shell/sidebar-list";
-import { listChats } from "@server/chats";
+import { listChats, listGroups } from "@server/chats";
 import { getCurrentUser } from "@server/current-user";
 
 /**
@@ -47,7 +47,7 @@ export default function ChatLayout({ children }: LayoutProps<"/">) {
 
 async function SidebarListData() {
   const user = await currentUser();
-  return <SidebarList initialChats={listChats(user.id)} />;
+  return <SidebarList initialChats={listChats(user.id)} initialGroups={listGroups(user.id)} />;
 }
 
 async function UserLabel() {

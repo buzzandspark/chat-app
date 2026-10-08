@@ -6,6 +6,14 @@ export interface ChatSummary {
   title: string;
   updatedAt: number;
   pinned?: boolean;
+  groupId?: string | null;
+}
+
+export interface GroupSummary {
+  id: string;
+  name: string;
+  position: number;
+  collapsed: boolean;
 }
 
 type Listener = () => void;
@@ -13,10 +21,38 @@ type Listener = () => void;
 /** Chat list store so a first send updates the sidebar without a server round trip. */
 class SidebarStore {
   private chats: ChatSummary[] = [];
+  private groups: GroupSummary[] = [];
   private listeners = new Set<Listener>();
 
   get(): ChatSummary[] {
     return this.chats;
+  }
+
+  getGroups(): GroupSummary[] {
+    return this.groups;
+  }
+
+  hydrateGroups(groups: GroupSummary[]): void {
+    this.groups = [...groups].sort((a, b) => a.position - b.position);
+    this.emit();
+  }
+
+  addGroup(group: GroupSummary): void {
+    if (this.groups.some((g) => g.id === group.id)) return;
+    this.groups = [...this.groups, group].sort((a, b) => a.position - b.position);
+    this.emit();
+  }
+
+  patchGroup(id: string, fields: Partial<GroupSummary>): void {
+    this.groups = this.groups.map((g) => (g.id === id ? { ...g, ...fields } : g)).sort((a, b) => a.position - b.position);
+    this.emit();
+  }
+
+  /** The group goes; its chats stay and become ungrouped, as the server's foreign key does. */
+  removeGroup(id: string): void {
+    this.groups = this.groups.filter((g) => g.id !== id);
+    this.chats = this.chats.map((c) => (c.groupId === id ? { ...c, groupId: null } : c));
+    this.emit();
   }
 
   subscribe(listener: Listener): () => void {
@@ -78,6 +114,21 @@ export function getSidebarStore(): SidebarStore {
  * `initial` is the server's list: it is the server snapshot, so SSR and hydration render the real rows
  * (no "No chats yet." flash, no shift), and it seeds the store on the first client render.
  */
+const EMPTY_GROUPS: GroupSummary[] = [];
+export function useSidebarGroups(initial?: GroupSummary[]): GroupSummary[] {
+  const store = getSidebarStore();
+  const [seededWith, setSeededWith] = useState<GroupSummary[] | null>(null);
+  if (initial && seededWith !== initial) {
+    store.hydrateGroups(initial);
+    setSeededWith(initial);
+  }
+  return useSyncExternalStore(
+    (cb) => store.subscribe(cb),
+    () => store.getGroups(),
+    () => initial ?? EMPTY_GROUPS,
+  );
+}
+
 export function useSidebarChats(initial?: ChatSummary[]): ChatSummary[] {
   const store = getSidebarStore();
   const [seededWith, setSeededWith] = useState<ChatSummary[] | null>(null);
