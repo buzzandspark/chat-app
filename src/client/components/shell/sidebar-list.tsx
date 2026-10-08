@@ -24,9 +24,10 @@ export const SidebarListContext = createContext<SidebarListContextValue>({ open:
 
 // D21: Radix menus and dialogs load on first intent, not at mount (next/dynamic keeps them out of the gate).
 // The row's hover tint and the ghost button's hover tint are the same colour, so the button's own hover
-// was invisible: it now darkens with the foreground and takes the full foreground colour.
+// was invisible: it now takes a wash of the foreground and the full foreground colour. The dark variants
+// are needed because the ghost variant's own `dark:hover:bg-muted/50` outranks a plain `hover:` class.
 const MENU_BUTTON =
-  "size-10 shrink-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100";
+  "size-10 shrink-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100";
 const ChatItemMenu = lazyChunk(() =>
   dynamic(() => import("./chat-item-menu").then((m) => m.ChatItemMenu), {
     ssr: false,
