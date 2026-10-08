@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useChatStore } from "@client/store/context";
 import { prefetchChat } from "@client/store/prefetch";
-import { getSidebarStore, setPendingChat, usePendingChat, useSidebarChats, useSidebarGroups, type ChatSummary, type GroupSummary } from "@client/store/sidebar-store";
+import { getSidebarStore, patchChatOptimistic, setPendingChat, usePendingChat, useSidebarChats, useSidebarGroups, type ChatSummary, type GroupSummary } from "@client/store/sidebar-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
 import { lazyChunk } from "../ui/lazy-chunk";
@@ -52,15 +52,6 @@ const GroupItemMenu = lazyChunk(() =>
     ),
   }),
 );
-
-async function patchChat(id: string, body: Record<string, unknown>): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/chats/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 async function createGroup(name: string): Promise<GroupSummary | null> {
   try {
@@ -128,25 +119,10 @@ const SidebarRow = memo(function SidebarRow({
     () => show(({ open, close }) => <DeleteDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
     [chat, currentChatId, show],
   );
-  // Pin and unpin: the row moves at once; the server is told, and told again on failure by the next load.
-  const onTogglePin = useCallback(() => {
-    const pinned = !chat.pinned;
-    getSidebarStore().patch(chat.id, { pinned });
-    void fetch(`/api/chats/${chat.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ pinned }) }).then((res) => {
-      if (!res.ok) getSidebarStore().patch(chat.id, { pinned: !pinned });
-    });
-  }, [chat.id, chat.pinned]);
-  // Group membership: the row moves at once; a refused request moves it back.
-  const onMoveToGroup = useCallback(
-    (groupId: string | null) => {
-      const before = chat.groupId ?? null;
-      getSidebarStore().patch(chat.id, { groupId });
-      void patchChat(chat.id, { groupId }).then((ok) => {
-        if (!ok) getSidebarStore().patch(chat.id, { groupId: before });
-      });
-    },
-    [chat.id, chat.groupId],
-  );
+  // Pin and group membership: the row moves at once; a refused request, or one that never reached the
+  // server (offline), moves it back (patchChatOptimistic).
+  const onTogglePin = useCallback(() => void patchChatOptimistic(getSidebarStore(), chat.id, { pinned: !chat.pinned }), [chat.id, chat.pinned]);
+  const onMoveToGroup = useCallback((groupId: string | null) => void patchChatOptimistic(getSidebarStore(), chat.id, { groupId }), [chat.id]);
   const onNewGroup = useCallback(
     () =>
       show(({ open, close }) => (

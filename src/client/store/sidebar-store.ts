@@ -109,6 +109,38 @@ export class SidebarStore {
   }
 }
 
+/** PATCHes a chat; a refusal and a network failure both come back as false, never as a rejection. */
+async function patchChat(id: string, body: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/chats/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pin and group membership: the row moves at once and the server is told; a refused or failed request
+ * (offline included) puts the field back. A field the user has changed again since is left alone, so a
+ * late failure cannot undo a newer move that the server did take.
+ */
+export async function patchChatOptimistic(store: SidebarStore, id: string, fields: { pinned: boolean } | { groupId: string | null }): Promise<boolean> {
+  // An absent `pinned` or `groupId` reads as unpinned and ungrouped, as the sidebar renders it.
+  const read = () => {
+    const c = store.get().find((x) => x.id === id);
+    return { pinned: Boolean(c?.pinned), groupId: c?.groupId ?? null };
+  };
+  const before = read();
+  store.patch(id, fields);
+  const ok = await patchChat(id, fields);
+  if (!ok) {
+    const now = read();
+    if ("pinned" in fields && now.pinned === fields.pinned) store.patch(id, { pinned: before.pinned });
+    if ("groupId" in fields && now.groupId === fields.groupId) store.patch(id, { groupId: before.groupId });
+  }
+  return ok;
+}
+
 const EMPTY: ChatSummary[] = [];
 let singleton: SidebarStore | null = null;
 export function getSidebarStore(): SidebarStore {
