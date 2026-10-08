@@ -30,16 +30,21 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/groups
   }
 }
 
-/** Delete a group; its chats stay and become ungrouped (the foreign key sets their group to null). */
+/** Delete a group; its chats stay and become ungrouped, done explicitly here as well as by the foreign key. */
 export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/groups/[id]">): Promise<Response> {
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
-    const result = getDb()
-      .delete(schema.chatGroups)
-      .where(and(eq(schema.chatGroups.id, id), eq(schema.chatGroups.userId, user.id)))
-      .run();
-    if (result.changes === 0) return jsonError(404, { error: "not_found" });
+    const db = getDb();
+    let changes = 0;
+    db.transaction((tx) => {
+      tx.update(schema.chats).set({ groupId: null }).where(and(eq(schema.chats.groupId, id), eq(schema.chats.userId, user.id))).run();
+      changes = tx
+        .delete(schema.chatGroups)
+        .where(and(eq(schema.chatGroups.id, id), eq(schema.chatGroups.userId, user.id)))
+        .run().changes;
+    });
+    if (changes === 0) return jsonError(404, { error: "not_found" });
     return Response.json({ id, deleted: true }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);

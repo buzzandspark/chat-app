@@ -9,4 +9,4 @@ CREATE TABLE `chat_groups` (
 );
 --> statement-breakpoint
 CREATE INDEX `chat_groups_user_idx` ON `chat_groups` (`user_id`,`position`);--> statement-breakpoint
-ALTER TABLE `chats` ADD `group_id` text REFERENCES chat_groups(id);
+ALTER TABLE `chats` ADD `group_id` text REFERENCES chat_groups(id) ON DELETE SET NULL;
