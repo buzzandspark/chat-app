@@ -82,12 +82,16 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
     const e = message.error;
     switch (e?.kind) {
       case "rate_limited":
+        // Inline, not a button: the row keeps the height of a line of text, so the footer appearing shifts nothing.
         text = (
           <>
-            Rate limited. Try again in <Countdown until={message.createdAt + (e.retryAfterMs ?? 15_000)} />.
+            Rate limited.{" "}
+            <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={onRetry}>
+              Try again
+            </button>{" "}
+            in <Countdown until={message.createdAt + (e.retryAfterMs ?? 15_000)} />.
           </>
         );
-        offer = retry;
         break;
       case "overloaded":
         text = "Claude is overloaded right now.";

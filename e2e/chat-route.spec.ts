@@ -53,7 +53,7 @@ test.describe("chat route", () => {
     const closeSidebar = page.getByRole("button", { name: "Close sidebar" });
     if (await closeSidebar.isVisible()) await closeSidebar.click();
     await page.unroute("**/api/chat");
-    await row.getByRole("button", { name: "Retry" }).click();
+    await row.getByRole("button", { name: "Try again" }).click();
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     expect(new URL(page.url()).pathname).toBe(path);
     await ensureSidebarOpen(page);
