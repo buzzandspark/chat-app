@@ -6,12 +6,19 @@ import { admin } from "better-auth/plugins";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
 
+/** Production never falls through to better-auth's own fallbacks, which include a public default secret. */
+function authSecret(): string {
+  if (env.BETTER_AUTH_SECRET) return env.BETTER_AUTH_SECRET;
+  if (env.isProd) throw new Error("BETTER_AUTH_SECRET is not set");
+  return "dev-secret-not-for-production-0123456789";
+}
+
 /** ADR-0004 (amended 2026-10-07): email + password with sign-up disabled, admin plugin for roles and bans; no anonymous path. */
 function createAuth() {
   return betterAuth({
     appName: "Cadence",
     baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
-    secret: env.BETTER_AUTH_SECRET ?? (env.isProd ? undefined : "dev-secret-not-for-production-0123456789"),
+    secret: authSecret(),
     database: drizzleAdapter(getDb(), {
       provider: "sqlite",
       usePlural: true,

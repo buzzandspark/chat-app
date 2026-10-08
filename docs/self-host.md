@@ -19,13 +19,17 @@ docker build -t cadence .
 docker run -p 3000:3000 -v cadence-data:/data --env-file .env cadence
 ```
 
-The container expects a volume at `/data` and listens on `PORT` (default 3000). It drains in-flight generations on `SIGTERM`; give it a stop grace period of at least 30 s.
+The container expects a volume at `/data` and keeps its database at `/data/app.db`. Leave `DATABASE_PATH` unset (it is commented out in `.env.example`); if you set it, it must point under `/data`. A relative path such as `data/app.db` resolves inside the container's `/app`, off the volume, and the database is lost when the container is recreated. Docker's `--env-file` takes everything after `=` as the value, including a trailing `# comment`, so keep comments in `.env` on lines of their own.
+
+`BETTER_AUTH_SECRET` is required: in production the server refuses to start without it. Generate one with `openssl rand -base64 32`. Set `BETTER_AUTH_URL` to the URL users reach the app at.
+
+The container listens on `PORT` (default 3000). It drains in-flight generations on `SIGTERM`; give it a stop grace period of at least 30 s.
 
 The server runs as the unprivileged `node` user (uid 1000). The container starts as root only long enough to make the database directory (the directory of `DATABASE_PATH`, `/data` by default) and the database files owned by `node`, then drops to `node`. So a volume or bind mount owned by root works as is. If you start the container with `--user` instead, it skips that step and the volume must already be writable by that user.
 
 ## Railway
 
-`railway.json` points at the Dockerfile and `/api/health`. Add a volume mounted at `/data`, set the environment variables from `.env.example`, and set the service's stop grace period to 30 s.
+`railway.json` points at the Dockerfile and `/api/health`. Add a volume mounted at `/data`, set the environment variables from `.env.example` (not `DATABASE_PATH`: the image already points it at `/data/app.db`), and set the service's stop grace period to 30 s.
 
 Railway mounts volumes owned by root; the entrypoint hands `/data` to `node` at boot, so you don't need `RAILWAY_RUN_UID=0`.
 

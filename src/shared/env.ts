@@ -24,10 +24,10 @@ function flag(v: string | undefined): boolean {
   return v === "1" || v === "true";
 }
 
+// No checks with side effects here: `next build` evaluates this module while collecting page data, with
+// NODE_ENV=production and none of the runtime's variables, so a warning here fires in every build log.
+// Runtime requirements are enforced by boot().
 const parsed = schema.parse(process.env);
-if (parsed.NODE_ENV === "production" && !parsed.BETTER_AUTH_SECRET) {
-  console.warn("[env] BETTER_AUTH_SECRET is not set; sign-in will fail. Set it to a long random string.");
-}
 
 export const env = {
   ...parsed,

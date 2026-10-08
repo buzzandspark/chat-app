@@ -15,6 +15,12 @@ export async function boot(): Promise<void> {
   if (g.__cadenceBooted) return;
   g.__cadenceBooted = true;
 
+  if (env.isProd && !env.BETTER_AUTH_SECRET) {
+    // Without it better-auth fails every auth call while /api/health stays green, and with TEST set
+    // it signs sessions with its public default secret instead. Fail the deploy rather than either.
+    console.error("[boot] BETTER_AUTH_SECRET is not set; refusing to start. Set it to a long random string (openssl rand -base64 32).");
+    process.exit(1);
+  }
   runMigrations(env.DATABASE_PATH);
   if (!env.isProd || env.e2e) seedDevUser(env.DEV_USER_ID);
   await seedAdmin(env.ADMIN_EMAIL, env.ADMIN_PASSWORD);
