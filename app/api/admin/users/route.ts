@@ -5,13 +5,16 @@ import { issueInvite } from "@auth/invites";
 import { getDb, schema } from "@db/client";
 import { uuidv7 } from "@shared/id";
 import { env } from "@shared/env";
+import { newUserCap } from "@shared/cost-cap";
+import { CapFieldSchema } from "@shared/cost-cap-schema";
 import { errorResponse, jsonError, requireAdmin } from "@server/current-user";
 import { listUsersForAdmin } from "@server/admin";
 
 const Body = z.object({
   email: z.string().email().max(200),
   name: z.string().trim().max(100).optional(),
-  costCapUsd: z.number().min(0).max(100_000).nullable().optional(),
+  // Omitted means DEFAULT_COST_CAP_USD; only "none" stores no cap (ADR-0004: every invited user is capped).
+  costCapUsd: CapFieldSchema.optional(),
 });
 
 export async function GET(): Promise<Response> {
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         name: parsed.data.name || (email.split("@")[0] ?? "user"),
         emailVerified: false,
         role: "user",
-        costCapUsd: parsed.data.costCapUsd ?? null,
+        costCapUsd: newUserCap(parsed.data.costCapUsd, env.DEFAULT_COST_CAP_USD),
         createdAt: now,
         updatedAt: now,
       })

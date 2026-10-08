@@ -21,5 +21,5 @@ async function AdminBody({ params }: { params: PageProps<"/[adminSlug]">["params
   if (adminSlug !== env.ADMIN_PATH_SLUG) notFound();
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") notFound();
-  return <AdminConsole initialUsers={listUsersForAdmin()} selfId={user.id} />;
+  return <AdminConsole initialUsers={listUsersForAdmin()} selfId={user.id} defaultCapUsd={env.DEFAULT_COST_CAP_USD} />;
 }

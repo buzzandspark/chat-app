@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useNow } from "@client/hooks/use-now";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NO_CAP, parseCapText } from "@shared/cost-cap";
 import type { AdminUserRow } from "@server/admin";
 
 function fmtDate(ms: number | null): string {
@@ -17,10 +18,11 @@ function money(n: number | null): string {
 }
 
 /** D7: phone-first (cards) and a table at md; every action is a 44 px target. */
-export function AdminConsole({ initialUsers, selfId }: { initialUsers: AdminUserRow[]; selfId: string }) {
+export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialUsers: AdminUserRow[]; selfId: string; defaultCapUsd: number }) {
   const [users, setUsers] = useState(initialUsers);
   const [email, setEmail] = useState("");
   const [cap, setCap] = useState("");
+  const [noCap, setNoCap] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
@@ -33,12 +35,19 @@ export function AdminConsole({ initialUsers, selfId }: { initialUsers: AdminUser
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Blank leaves costCapUsd out and the server applies the default shown as the placeholder; no cap
+    // is only ever the box, so clearing the field cannot uncap anyone.
+    const parsed = noCap ? ({ ok: true, cap: NO_CAP } as const) : parseCapText(cap);
+    if (!parsed.ok) {
+      setNotice(`"${cap.trim()}" is not a cap. Enter a number of dollars, or leave it blank for the default.`);
+      return;
+    }
     setBusy(true);
     setNotice(null);
     const res = await fetch("/api/admin/users", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, costCapUsd: cap === "" ? null : Number(cap) }),
+      body: JSON.stringify({ email, costCapUsd: parsed.cap }),
     });
     const body = (await res.json().catch(() => ({}))) as { inviteUrl?: string; error?: string };
     setBusy(false);
@@ -49,6 +58,7 @@ export function AdminConsole({ initialUsers, selfId }: { initialUsers: AdminUser
     setInviteUrl(body.inviteUrl ?? null);
     setEmail("");
     setCap("");
+    setNoCap(false);
     await refresh();
   };
 
@@ -75,15 +85,30 @@ export function AdminConsole({ initialUsers, selfId }: { initialUsers: AdminUser
         <h1 className="text-title font-semibold">Admin</h1>
       </header>
 
-      <form onSubmit={(e) => void create(e)} className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_10rem_auto] md:items-end" aria-label="Create user">
+      <form onSubmit={(e) => void create(e)} className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_10rem_auto_auto] md:items-end" aria-label="Create user">
         <div className="space-y-1.5">
           <Label htmlFor="new-email">Email</Label>
           <Input id="new-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 text-body" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="new-cap">Cost cap (USD, optional)</Label>
-          <Input id="new-cap" type="number" min={0} step="0.5" inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} className="h-11 text-body" />
+          <Label htmlFor="new-cap">Cost cap (USD)</Label>
+          <Input
+            id="new-cap"
+            type="number"
+            min={0}
+            step="0.5"
+            inputMode="decimal"
+            placeholder={`${defaultCapUsd} (default)`}
+            disabled={noCap}
+            value={noCap ? "" : cap}
+            onChange={(e) => setCap(e.target.value)}
+            className="h-11 text-body"
+          />
         </div>
+        <label className="touch-target flex items-center gap-2 text-small">
+          <input type="checkbox" className="size-4" checked={noCap} onChange={(e) => setNoCap(e.target.checked)} />
+          No cap
+        </label>
         <Button type="submit" className="touch-target" disabled={busy || !email}>
           Create and invite
         </Button>
@@ -155,16 +180,15 @@ export function AdminConsole({ initialUsers, selfId }: { initialUsers: AdminUser
                   className="touch-target"
                   disabled={busy}
                   onClick={() => {
-                    const next = window.prompt("Cost cap in USD (empty for no cap)", u.costCapUsd === null ? "" : String(u.costCapUsd));
+                    const next = window.prompt(`Cost cap in USD, or "${NO_CAP}" for no cap`, u.costCapUsd === null ? NO_CAP : String(u.costCapUsd));
                     if (next === null) return;
-                    const trimmed = next.trim();
-                    const cap = trimmed === "" ? null : Number(trimmed);
-                    // A typo must not become "no cap": only an empty answer removes the cap (#64).
-                    if (cap !== null && (!Number.isFinite(cap) || cap < 0)) {
-                      setNotice(`"${trimmed}" is not a cap. Enter a number of dollars, or leave it empty for no cap.`);
+                    // Neither a typo nor an emptied answer becomes "no cap": only the word removes the cap (#64).
+                    const parsed = parseCapText(next);
+                    if (!parsed.ok || parsed.cap === undefined) {
+                      setNotice(`"${next.trim()}" is not a cap. Enter a number of dollars, or ${NO_CAP} for no cap.`);
                       return;
                     }
-                    void patch(u.id, { costCapUsd: cap }, "Cap");
+                    void patch(u.id, { costCapUsd: parsed.cap }, "Cap");
                   }}
                 >
                   Edit cap

@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { DefaultCapEnvSchema } from "./cost-cap-schema";
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -10,6 +11,8 @@ const schema = z.object({
   ADMIN_EMAIL: z.string().email().optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
   ADMIN_PATH_SLUG: z.string().regex(/^[a-z0-9-]+$/).default("admin"),
+  /** USD cap for an invited user when the admin leaves the field blank (ADR-0004). */
+  DEFAULT_COST_CAP_USD: DefaultCapEnvSchema,
   DEV_USER_ID: z.string().default("dev-user"),
   REPLAY_MODE: z.string().optional(),
   RECORD: z.string().optional(),

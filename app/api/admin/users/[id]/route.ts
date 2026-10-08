@@ -5,9 +5,12 @@ import { getDb, schema } from "@db/client";
 import { errorResponse, jsonError, requireAdmin } from "@server/current-user";
 import { findUser } from "@server/admin";
 import { getRelay } from "@server/relay";
+import { capColumn } from "@shared/cost-cap";
+import { CapFieldSchema } from "@shared/cost-cap-schema";
 
 const Patch = z.object({
-  costCapUsd: z.number().min(0).max(100_000).nullable().optional(),
+  // Omitted leaves the cap alone; "none" clears it, and `null` is refused like on create.
+  costCapUsd: CapFieldSchema.optional(),
   banned: z.boolean().optional(),
   role: z.enum(["admin", "user"]).optional(),
 });
@@ -30,7 +33,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
     const now = new Date();
     db.update(schema.users)
       .set({
-        ...(parsed.data.costCapUsd !== undefined ? { costCapUsd: parsed.data.costCapUsd } : {}),
+        ...(parsed.data.costCapUsd !== undefined ? { costCapUsd: capColumn(parsed.data.costCapUsd) } : {}),
         ...(parsed.data.banned !== undefined ? { banned: parsed.data.banned, banReason: parsed.data.banned ? "Disabled by admin" : null } : {}),
         ...(parsed.data.role !== undefined ? { role: parsed.data.role } : {}),
         updatedAt: now,
