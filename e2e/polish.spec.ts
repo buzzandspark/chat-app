@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHAT_URL, assistantText, ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText, waitForChatUrl } from "./helpers";
+import { CHAT_URL, assistantText, ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText, sidebar, waitForChatUrl } from "./helpers";
 
 test.describe("edit, regenerate, drafts", () => {
   test("editing the last message replaces it and regenerates", async ({ page }) => {
@@ -74,7 +74,7 @@ test.describe("chat management", () => {
     await sendText(page, title);
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await ensureSidebarOpen(page);
-    const aside = page.getByRole("complementary", { name: "Chats" });
+    const aside = sidebar(page);
     const row = aside.getByRole("listitem").filter({ has: page.getByRole("link", { name: title }) });
     await row.getByRole("button", { name: `Actions for ${title}` }).click();
     await page.getByRole("menuitem", { name: "Pin" }).click();
@@ -95,7 +95,7 @@ test.describe("chat management", () => {
     await sendText(page, title);
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await ensureSidebarOpen(page);
-    const aside = page.getByRole("complementary", { name: "Chats" });
+    const aside = sidebar(page);
     const rowMenu = () => aside.getByRole("listitem").filter({ has: page.getByRole("link", { name: title }) }).getByRole("button", { name: `Actions for ${title}` });
     await rowMenu().click();
     await page.getByRole("menuitem", { name: "Move to" }).click();
@@ -126,7 +126,7 @@ test.describe("chat management", () => {
     await sendText(page, "pineapple pizza debate");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await ensureSidebarOpen(page);
-    const item = page.getByRole("complementary", { name: "Chats" }).getByRole("button", { name: /Actions for pineapple/ }).first();
+    const item = sidebar(page).getByRole("button", { name: /Actions for pineapple/ }).first();
     await item.click();
     await page.getByRole("menuitem", { name: "Rename" }).click();
     await page.getByRole("textbox", { name: "Chat title" }).fill("Renamed chat");
@@ -139,7 +139,7 @@ test.describe("chat management", () => {
     await page.keyboard.press("Escape");
 
     await ensureSidebarOpen(page);
-    await page.getByRole("complementary", { name: "Chats" }).getByRole("button", { name: /Actions for Renamed chat/ }).first().click();
+    await sidebar(page).getByRole("button", { name: /Actions for Renamed chat/ }).first().click();
     await page.getByRole("menuitem", { name: "Delete" }).click();
     await page.getByRole("button", { name: "Delete" }).click();
     await expect(page).not.toHaveURL(firstUrl);

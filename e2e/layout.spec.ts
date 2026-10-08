@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { lastAssistant, openNewChat, runScenario } from "./helpers";
+import { lastAssistant, openNewChat, runScenario, sidebar } from "./helpers";
 
 async function noHorizontalScroll(page: import("@playwright/test").Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -31,7 +31,7 @@ test.describe("phone layout", () => {
   test("the sidebar opens from the menu button and closes with Escape", async ({ page }) => {
     await openNewChat(page);
     await page.getByRole("button", { name: "Show sidebar" }).click();
-    const aside = page.getByRole("complementary", { name: "Chats" });
+    const aside = sidebar(page);
     await expect(aside).toHaveAttribute("data-open", "true");
     await page.keyboard.press("Escape");
     await expect(aside).toHaveAttribute("data-open", "false");

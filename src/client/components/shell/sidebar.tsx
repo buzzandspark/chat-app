@@ -1,11 +1,12 @@
 "use client";
 import { Plus, Search, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useNewChat } from "@client/hooks/use-new-chat";
+import { sidebarAria } from "./sidebar-aria";
 import { SidebarListContext } from "./sidebar-list";
 import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
@@ -13,6 +14,8 @@ import { ThemeToggle } from "./theme-toggle";
 interface SidebarProps {
   /** The chat list, streamed in by the layout once the session is known (#20). */
   list: ReactNode;
+  /** Which mode the viewport is in: the dock or the phone overlay; null where it is not known yet (server, hydration render). */
+  desktop: boolean | null;
   /** The phone overlay (below md). */
   phoneOpen: boolean;
   /** The desktop dock (md and up); true on the server so the first paint is already docked (no CLS). */
@@ -28,9 +31,17 @@ interface SidebarProps {
 }
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
-export function Sidebar({ list, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel }: SidebarProps) {
+export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel }: SidebarProps) {
   const newChat = useNewChat();
   const listContext = useMemo(() => ({ open, onNavigate }), [open, onNavigate]);
+  const asideRef = useRef<HTMLElement>(null);
+  const modal = desktop === false && phoneOpen;
+  // Opening the phone modal makes the column behind it inert, which would drop focus on <body>: it moves
+  // onto the dialog instead (announced by its name, no tooltip popping on the first button), and the
+  // next Tab reaches Search. The shell puts it back on the menu button when the modal is dismissed.
+  useEffect(() => {
+    if (modal) asideRef.current?.focus({ preventScroll: true });
+  }, [modal]);
 
   return (
     <>
@@ -43,15 +54,16 @@ export function Sidebar({ list, phoneOpen, desktopOpen, open, onClose, onNavigat
         )}
       />
       <aside
+        ref={asideRef}
         data-tip-boundary
         aria-label="Chats"
         data-open={open}
-        // Off-screen on a phone it is also out of the tab order and the accessibility tree; open, it is the modal (#56).
-        inert={!phoneOpen && !desktopOpen ? true : undefined}
-        role={phoneOpen && !desktopOpen ? "dialog" : undefined}
-        aria-modal={phoneOpen && !desktopOpen ? true : undefined}
+        // Hidden in the current mode it is inert; the phone overlay open is the modal (#56). Keyed off the
+        // mode: desktopOpen stays true on a phone, so the open flags alone cannot tell which one applies.
+        {...sidebarAria(desktop, phoneOpen, desktopOpen)}
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-full flex-col bg-sidebar text-sidebar-foreground",
+          // outline-none: it is focused only programmatically, as the dialog, never by Tab.
+          "fixed inset-y-0 left-0 z-40 flex w-full flex-col bg-sidebar text-sidebar-foreground outline-none",
           "border-r border-sidebar-border transition-transform duration-200 ease-out",
           // Full width on a phone, so both insets apply in landscape (#30); docked, only the left one.
           "safe-top pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] dock:pr-0",

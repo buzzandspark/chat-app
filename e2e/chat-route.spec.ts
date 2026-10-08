@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHAT_URL, ensureSidebarOpen, lastAssistant, openNewChat, sendText, visible, waitForComposer } from "./helpers";
+import { CHAT_URL, ensureSidebarOpen, lastAssistant, openNewChat, sendText, sidebar, visible, waitForComposer } from "./helpers";
 
 // ADR-0005: the chat route renders from the client store; the server seeds it.
 test.describe("chat route", () => {
@@ -28,7 +28,7 @@ test.describe("chat route", () => {
     await waitForComposer(page);
     await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Sonnet 5.5");
     await ensureSidebarOpen(page);
-    await page.getByRole("complementary", { name: "Chats" }).getByRole("link", { name: title }).click();
+    await sidebar(page).getByRole("link", { name: title }).click();
     await expect(page).toHaveURL(settingsUrl);
     await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 5.5");
   });
@@ -49,7 +49,7 @@ test.describe("chat route", () => {
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText(text);
     // The server refused the chat's only generation, so the sidebar must not list it yet.
     await ensureSidebarOpen(page);
-    await expect(page.getByRole("complementary", { name: "Chats" }).locator(`a[href="${path}"]`)).toHaveCount(0);
+    await expect(sidebar(page).locator(`a[href="${path}"]`)).toHaveCount(0);
     // On a phone the open sidebar covers the thread; put it away before pressing Retry.
     const closeSidebar = page.getByRole("button", { name: "Close sidebar" });
     if (await closeSidebar.isVisible()) await closeSidebar.click();
@@ -58,7 +58,7 @@ test.describe("chat route", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     expect(new URL(page.url()).pathname).toBe(path);
     await ensureSidebarOpen(page);
-    await expect(page.getByRole("complementary", { name: "Chats" }).locator(`a[href="${path}"]`)).toHaveCount(1);
+    await expect(sidebar(page).locator(`a[href="${path}"]`)).toHaveCount(1);
     await page.reload();
     await waitForComposer(page);
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText(text);
@@ -99,7 +99,7 @@ test.describe("chat route", () => {
       if (r.url().includes("/api/chats/")) seeds.push(r.url());
     });
     await ensureSidebarOpen(page);
-    await page.getByRole("complementary", { name: "Chats" }).getByRole("link", { name: title }).click();
+    await sidebar(page).getByRole("link", { name: title }).click();
     await expect(page).toHaveURL(url);
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText(title);
     await expect(page.getByTestId("thread-skeleton")).toHaveCount(0);

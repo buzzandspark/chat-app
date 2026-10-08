@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHAT_URL, ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, waitForComposer } from "./helpers";
+import { CHAT_URL, ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, sidebar, waitForComposer } from "./helpers";
 
 // Reproduces the review's critical bug: send in a new chat, click New chat, send again. The second
 // thread went blank, the URL stayed /c/new and the reply streamed where nothing displayed it.
@@ -36,7 +36,7 @@ test.describe("new chat", () => {
     await expect(page.getByTestId("chat-title").locator("visible=true").first()).toHaveText(second);
 
     await ensureSidebarOpen(page);
-    const aside = page.getByRole("complementary", { name: "Chats" });
+    const aside = sidebar(page);
     await expect(aside.getByRole("link", { name: first })).toBeVisible();
     await expect(aside.getByRole("link", { name: second })).toBeVisible();
 

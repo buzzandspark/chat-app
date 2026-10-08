@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
-import { ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, runScenario, sendText, visible } from "./helpers";
+import { ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, runScenario, sendText, sidebar, visible } from "./helpers";
 
 // D0, D26: budgets run only on Pixel 7, where CPU 4x and Fast 3G throttling go through CDP;
 // results append to docs/perf/ so the design doc quotes measured numbers.
@@ -198,7 +198,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     const clickRow = async (title: string) => {
       await ensureSidebarOpen(page);
       await instrument(title);
-      await page.getByRole("complementary", { name: "Chats" }).getByRole("link", { name: title }).click();
+      await sidebar(page).getByRole("link", { name: title }).click();
       await page.waitForFunction(() => (window as Window & { __nav?: { threadFrame: number | null } }).__nav?.threadFrame !== null, null, { timeout: 30_000 });
       return page.evaluate(() => (window as Window & { __nav?: { click: number | null; frames: number; activeFrame: number | null; skeletonFrame: number | null; threadFrame: number | null; threadMs: number | null } }).__nav!);
     };
@@ -208,7 +208,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     const warmedByOpen = await clickRow("bravo nav");
     const loaded = await clickRow("alpha nav");
     await ensureSidebarOpen(page);
-    await page.getByRole("complementary", { name: "Chats" }).getByRole("link", { name: "charlie nav" }).hover();
+    await sidebar(page).getByRole("link", { name: "charlie nav" }).hover();
     await page.waitForTimeout(1500);
     const prefetched = await clickRow("charlie nav");
     const loaded2 = await clickRow("bravo nav");
@@ -293,7 +293,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     });
     await ensureSidebarOpen(page);
     // By href, not title: layout.spec runs the same scenario earlier in the suite, so the title is not unique.
-    await page.getByRole("complementary", { name: "Chats" }).locator(`a[href="${new URL(chatUrl).pathname}"]`).click();
+    await sidebar(page).locator(`a[href="${new URL(chatUrl).pathname}"]`).click();
     await expect(page).toHaveURL(chatUrl);
     await expect(lastAssistant(page).locator(".markdown-code")).toHaveAttribute("data-committed", "all", { timeout: 30_000 });
     await page.waitForTimeout(1000);

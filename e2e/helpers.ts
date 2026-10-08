@@ -49,9 +49,17 @@ export function assistantText(row: Locator): Promise<string> {
   return row.locator(".markdown").allInnerTexts().then((parts) => parts.join("\n"));
 }
 
+/**
+ * The sidebar by its label, not its role: docked it is a complementary landmark, but the open phone
+ * overlay is a dialog (and the closed one is inert), so a role query would lose it as it opens.
+ */
+export function sidebar(page: Page): Locator {
+  return page.locator('aside[aria-label="Chats"]');
+}
+
 /** Opens the sidebar if it is closed, on any project, without toggling it shut. */
 export async function ensureSidebarOpen(page: Page): Promise<void> {
-  const aside = page.getByRole("complementary", { name: "Chats" });
+  const aside = sidebar(page);
   if ((await aside.getAttribute("data-open")) === "true") return;
   await page.getByRole("button", { name: "Show sidebar" }).click();
   await expect(aside).toHaveAttribute("data-open", "true");

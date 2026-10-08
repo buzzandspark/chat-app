@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHAT_URL, ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, waitForChatUrl, waitForComposer } from "./helpers";
+import { CHAT_URL, ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, sidebar, waitForChatUrl, waitForComposer } from "./helpers";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "admin-password-123";
@@ -63,7 +63,7 @@ test.describe("sessions and errors", () => {
     await waitForComposer(page);
     const before = (await context.cookies()).filter((c) => /session_token/.test(c.name));
     expect(before.length).toBeGreaterThan(0);
-    const aside = page.getByRole("complementary", { name: "Chats" });
+    const aside = sidebar(page);
     if ((await aside.getAttribute("data-open")) !== "true") await page.getByRole("button", { name: "Show sidebar" }).click();
     await page.getByTestId("sign-out").click();
     await expect(page).toHaveURL(/\/login/);

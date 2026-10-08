@@ -10,7 +10,7 @@ import { ChatStoreProvider, useChatStore } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
 import { lazyChunk } from "../ui/lazy-chunk";
 import { markNavigationClose, useBackGesture } from "@client/hooks/use-back-gesture";
-import { useIsDesktop } from "@client/hooks/use-media-query";
+import { useIsDesktopOrNull } from "@client/hooks/use-media-query";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useScrollAnchoringFlag } from "@client/hooks/use-scroll-anchoring";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
@@ -43,7 +43,10 @@ export function ChatShell(props: ChatShellProps) {
 }
 
 function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
-  const desktop = useIsDesktop();
+  // Null until the viewport is known (server, hydration render); everything but the sidebar's
+  // modality treats that as the phone base, as useIsDesktop does.
+  const desktopOrNull = useIsDesktopOrNull();
+  const desktop = desktopOrNull === true;
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
   const { show } = useModals();
@@ -53,8 +56,22 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
   useScrollAnchoringFlag();
 
   const open = desktop ? desktopOpen : phoneOpen;
-  useBackGesture(!desktop && phoneOpen, () => setPhoneOpen(false));
-  const close = useCallback(() => (desktop ? setDesktopOpen(false) : setPhoneOpen(false)), [desktop]);
+  // The phone modal dismissed (X, backdrop, Escape, the back gesture) hands focus back to the menu button
+  // that opened it, once the column is no longer inert. Closed by a navigation or by Search it is left
+  // where the route or the dialog puts it, so those paths call setPhoneOpen directly.
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  const dismissPhone = useCallback(() => {
+    returnFocus.current = true;
+    setPhoneOpen(false);
+  }, []);
+  useEffect(() => {
+    // Reset on open too: a dismiss while already closed would otherwise leave the flag for a later navigation.
+    if (!phoneOpen && returnFocus.current) menuButtonRef.current?.focus();
+    returnFocus.current = false;
+  }, [phoneOpen]);
+  useBackGesture(!desktop && phoneOpen, dismissPhone);
+  const close = useCallback(() => (desktop ? setDesktopOpen(false) : dismissPhone()), [desktop, dismissPhone]);
   const toggle = useCallback(() => (desktop ? setDesktopOpen((v) => !v) : setPhoneOpen((v) => !v)), [desktop]);
   const closePhone = useCallback(() => setPhoneOpen(false), []);
   const onSidebarNavigate = useCallback(() => {
@@ -79,12 +96,12 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
         e.preventDefault();
         openSearch();
       } else if (e.key === "Escape" && !desktop && phoneOpen) {
-        setPhoneOpen(false);
+        dismissPhone();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [desktop, phoneOpen, newChat, openSearch]);
+  }, [desktop, phoneOpen, newChat, openSearch, dismissPhone]);
 
   // Inset swipe-to-open: starts at least 24 px in from the left edge (D0).
   useEffect(() => {
@@ -124,6 +141,7 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
     <div className="flex h-dvh w-full overflow-hidden bg-background">
       <Sidebar
         list={sidebarList}
+        desktop={desktopOrNull}
         phoneOpen={phoneOpen}
         desktopOpen={desktopOpen}
         open={open}
@@ -136,7 +154,7 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
           While the phone sidebar is open the column is inert, so the sidebar is a real modal (#56). */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" inert={!desktop && phoneOpen ? true : undefined}>
         <header data-tip-boundary className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
-          <IconButton label={open ? "Hide sidebar" : "Show sidebar"} aria-expanded={open} onClick={toggle}>
+          <IconButton ref={menuButtonRef} label={open ? "Hide sidebar" : "Show sidebar"} aria-expanded={open} onClick={toggle}>
             {desktop ? <PanelLeft /> : <Menu />}
           </IconButton>
           {/* #20: the chrome is in the static shell; only what depends on the URL streams in here. */}
