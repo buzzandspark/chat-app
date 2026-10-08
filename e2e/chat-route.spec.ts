@@ -19,7 +19,9 @@ test.describe("chat route", () => {
     await sendText(page, title);
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await page.getByRole("button", { name: "Choose model" }).click();
-    await page.getByRole("option", { name: /Claude Haiku 5.5/ }).click();
+    // The picker is a menu at `md` and a sheet's radio group on phones.
+    const haiku = { name: /Claude Haiku 5.5/ };
+    await page.getByRole("menuitemradio", haiku).or(page.getByRole("radio", haiku)).click();
     await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 5.5");
     const settingsUrl = page.url();
     await ensureSidebarOpen(page);

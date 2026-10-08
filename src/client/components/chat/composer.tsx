@@ -40,7 +40,7 @@ function ScenarioPanelOnIntent() {
   return <ScenarioButton data-testid="scenario-panel-trigger" {...intentProps(intent)} onClick={() => intent.press("panel")} />;
 }
 
-/** The picker's trigger as the stand-in: the chunk (Radix popover, sheet, switch) loads on intent. */
+/** The picker's trigger as the stand-in: the chunk (Radix menu, sheet, switch) loads on intent. */
 function PickerStandIn({
   model,
   thinking,
@@ -53,13 +53,15 @@ function PickerStandIn({
   onPress?: () => void;
 }) {
   const info = MODELS[model];
+  // Announce what the loaded trigger will open: the menu at `md`, the sheet (a dialog) on phones.
+  const desktop = useIsDesktop();
   return (
     <Button
       variant="ghost"
       size="sm"
       className="touch-target max-w-[55vw] gap-1 text-muted-foreground"
       aria-label="Choose model"
-      aria-haspopup="listbox"
+      aria-haspopup={desktop ? "menu" : "dialog"}
       disabled={!onPress}
       {...(intent ? intentProps(intent) : {})}
       onClick={onPress}

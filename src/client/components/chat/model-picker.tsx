@@ -1,8 +1,9 @@
 "use client";
 import { Check, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
+import { DropdownMenu as MenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,37 @@ const MODEL_BLURBS: Record<ModelId, string> = {
   "claude-haiku-5-5": "Fastest replies at the lowest cost",
 };
 
+const THINKING_LABEL = "Think harder";
+
+// Menu items are divs, so cursor-default/select-none keep the look of the buttons the sheet uses.
+const ROW = "flex min-h-12 w-full cursor-default items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50";
+const rowTone = (selected: boolean) => (selected ? "bg-accent text-accent-foreground" : "hover:bg-muted active:bg-muted");
+
+function RowText({ title, blurb }: { title: string; blurb: string }) {
+  return (
+    <span className="flex flex-col">
+      <span className="text-body font-medium">{title}</span>
+      <span className="text-caption text-muted-foreground">{blurb}</span>
+    </span>
+  );
+}
+
+const STEPS: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+
+/** The sheet's model rows are one tab stop; arrows (and Home/End) move between them. Picking closes the
+ *  sheet, so unlike a form's radio group the arrows move focus only and Space/Enter picks. */
+function onRadioKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
+  const group = e.currentTarget.closest('[role="radiogroup"]');
+  if (!group) return;
+  const radios = Array.from(group.querySelectorAll<HTMLElement>('[role="radio"]'));
+  const at = radios.indexOf(e.currentTarget);
+  const step = STEPS[e.key];
+  const next = step !== undefined ? radios[(at + step + radios.length) % radios.length] : e.key === "Home" ? radios[0] : e.key === "End" ? radios.at(-1) : undefined;
+  if (!next) return;
+  e.preventDefault();
+  next.focus();
+}
+
 interface ModelPickerProps {
   model: ModelId;
   thinking: ThinkingOptions;
@@ -26,13 +58,12 @@ interface ModelPickerProps {
   defaultOpen?: boolean;
 }
 
-/** One picker (D0): a bottom sheet on phones, a popover at `md`. */
+/** One picker (D0): a bottom sheet on phones, a menu at `md`. */
 export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: ModelPickerProps) {
   const desktop = useIsDesktop();
   const [open, setOpen] = useState(defaultOpen);
   useBackGesture(open && !desktop, () => setOpen(false));
   const info = MODELS[model];
-  const thinkingLabel = "Think harder";
 
   const trigger = (
     <Button variant="ghost" size="sm" className="touch-target max-w-[55vw] gap-1 text-muted-foreground" aria-label="Choose model">
@@ -42,59 +73,36 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: 
     </Button>
   );
 
-  const body = (
-    <div className="flex flex-col gap-1 py-1">
-      {MODEL_IDS.map((id) => {
-        const m = MODELS[id];
-        const selected = id === model;
-        return (
-          <button
-            key={id}
-            type="button"
-            role="option"
-            aria-selected={selected}
-            onClick={() => {
-              onChange({ model: id });
-              setOpen(false);
-            }}
-            className={cn(
-              "flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-              selected ? "bg-accent text-accent-foreground" : "hover:bg-muted active:bg-muted",
-            )}
-          >
-            <span className="flex flex-col">
-              <span className="text-body font-medium">{m.name}</span>
-              <span className="text-caption text-muted-foreground">{MODEL_BLURBS[id]}</span>
-            </span>
-            {selected ? <Check className="size-4 shrink-0" /> : null}
-          </button>
-        );
-      })}
-      <label className="mt-1 flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2.5">
-        <span className="flex flex-col">
-          <span className="text-body font-medium">{thinkingLabel}</span>
-          <span className="text-caption text-muted-foreground">Effort high instead of low</span>
-        </span>
-        <Switch checked={thinking.harder} onCheckedChange={(harder) => onChange({ thinking: { harder } })} aria-label={thinkingLabel} />
-      </label>
-    </div>
-  );
-
   if (desktop) {
+    // A Radix menu, not a popover of buttons: a popover portalled to the end of <body> let Tab from the
+    // trigger skip to the next composer control and dismiss it, so the options were out of a keyboard's
+    // reach. The menu takes focus (its first row when opened from the keyboard, the menu itself with a
+    // pointer, so no ring shows), arrows walk the models and the toggle, and Enter/Space picks.
     return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-        <PopoverContent
-          align="start"
-          className="w-80 p-1"
-          role="listbox"
-          aria-label="Models"
-          // Keep focus on the trigger when opened with a pointer; Tab still reaches the options.
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
-          {body}
-        </PopoverContent>
-      </Popover>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="flex w-80 flex-col gap-1 px-1 py-2 outline-none">
+          <MenuPrimitive.RadioGroup value={model} className="flex flex-col gap-1">
+            {MODEL_IDS.map((id) => (
+              <MenuPrimitive.RadioItem key={id} value={id} onSelect={() => onChange({ model: id })} className={cn(ROW, rowTone(id === model))}>
+                <RowText title={MODELS[id].name} blurb={MODEL_BLURBS[id]} />
+                {id === model ? <Check className="size-4 shrink-0" /> : null}
+              </MenuPrimitive.RadioItem>
+            ))}
+          </MenuPrimitive.RadioGroup>
+          <MenuPrimitive.CheckboxItem
+            checked={thinking.harder}
+            onCheckedChange={(harder) => onChange({ thinking: { harder } })}
+            // Toggling keeps the menu open, as the switch did in the popover.
+            onSelect={(e) => e.preventDefault()}
+            className={cn(ROW, "mt-1")}
+          >
+            <RowText title={THINKING_LABEL} blurb="Effort high instead of low" />
+            {/* The item is the menuitemcheckbox; the switch only draws its state. */}
+            <Switch checked={thinking.harder} tabIndex={-1} aria-hidden className="pointer-events-none" />
+          </MenuPrimitive.CheckboxItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   }
   return (
@@ -104,8 +112,35 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: 
         <SheetHeader className="px-0">
           <SheetTitle>Model</SheetTitle>
         </SheetHeader>
-        <div role="listbox" aria-label="Models">
-          {body}
+        <div className="flex flex-col gap-1 py-1">
+          {/* A radio group, with the switch outside it: a listbox may hold only options. */}
+          <div role="radiogroup" aria-label="Models" className="flex flex-col gap-1">
+            {MODEL_IDS.map((id) => {
+              const selected = id === model;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={selected ? 0 : -1}
+                  onKeyDown={onRadioKeyDown}
+                  onClick={() => {
+                    onChange({ model: id });
+                    setOpen(false);
+                  }}
+                  className={cn(ROW, rowTone(selected))}
+                >
+                  <RowText title={MODELS[id].name} blurb={MODEL_BLURBS[id]} />
+                  {selected ? <Check className="size-4 shrink-0" /> : null}
+                </button>
+              );
+            })}
+          </div>
+          <label className="mt-1 flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2.5">
+            <RowText title={THINKING_LABEL} blurb="Effort high instead of low" />
+            <Switch checked={thinking.harder} onCheckedChange={(harder) => onChange({ thinking: { harder } })} aria-label={THINKING_LABEL} />
+          </label>
         </div>
       </SheetContent>
     </Sheet>
