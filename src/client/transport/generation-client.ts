@@ -52,6 +52,12 @@ export interface BackoffOptions {
 }
 
 const DEFAULT_BACKOFF: BackoffOptions = { baseMs: 500, maxMs: 8000, maxAttempts: 10 };
+/**
+ * D2: re-POSTs after a resume found the server never saw the generation. A POST that keeps failing
+ * at the network level while the GET gets through (a proxy resetting on the body, an extension
+ * blocking /api/chat) is not a flaky connection: after this many the reply ends as a network error.
+ */
+const MAX_REPOSTS = 3;
 /** D16 watchdog: the server writes a keepalive every 15 s, so longer silence is a half-open socket. */
 const DEFAULT_IDLE_MS = 25_000;
 
@@ -222,6 +228,14 @@ export class GenerationClient {
   }
 
   private async post(body: PostBody): Promise<void> {
+    if ((await this.postOnce(body)) !== "done") await this.resume(body.generationId, body.assistantMessageId);
+  }
+
+  /**
+   * One POST. "unsent": it failed at the network level, so the server may or may not have it and
+   * resume decides; "cut": accepted, but the stream ended before a terminal event; "done": anything else.
+   */
+  private async postOnce(body: PostBody): Promise<"done" | "unsent" | "cut"> {
     const controller = new AbortController();
     const entry: Inflight = { controller, nudge: null };
     this.inflight.set(body.generationId, entry);
@@ -235,40 +249,64 @@ export class GenerationClient {
           signal: controller.signal,
         });
       } catch {
-        if (controller.signal.aborted) return;
-        // Network failure: the server may or may not have received the POST. Resume decides.
-        this.inflight.delete(body.generationId);
-        await this.resume(body.generationId, body.assistantMessageId);
-        return;
+        return controller.signal.aborted ? "done" : "unsent";
       }
       if (!res.ok) {
         this.failFromResponse(body.assistantMessageId, res, await safeJson(res));
-        return;
+        return "done";
       }
       this.accept(body.generationId);
       const finished = await this.consume(res, entry, body.generationId, body.assistantMessageId);
-      if (!finished && !controller.signal.aborted) {
-        // The stream was cut before a terminal event: catch up from the last seq.
-        this.inflight.delete(body.generationId);
-        await this.resume(body.generationId, body.assistantMessageId);
-      }
+      return finished || controller.signal.aborted ? "done" : "cut";
     } finally {
       if (this.inflight.get(body.generationId) === entry) this.inflight.delete(body.generationId);
     }
   }
 
+  /**
+   * Resume from the last seq; when the server never saw the POST, send it again with the same ids
+   * (D2) and resume after that. A loop, not post and resume calling each other, so a POST that
+   * keeps failing does not grow a promise chain, and the backoff attempt carries across re-POSTs:
+   * otherwise each resume starts at attempt 0, which skips the sleep, and the POST/GET pair spins.
+   */
   private async resume(generationId: string, messageId: string): Promise<void> {
-    if (this.inflight.has(generationId)) return;
+    let attempt = 0;
+    for (let reposts = 0; ; reposts++) {
+      const lostAt = await this.resumeOnce(generationId, messageId, attempt);
+      const body = this.bodies.get(generationId);
+      if (lostAt === null || !body) return;
+      if (reposts >= MAX_REPOSTS) {
+        this.store.updateMessage(messageId, {
+          status: "error",
+          connection: "idle",
+          error: { kind: "network", message: "Could not send this message", retryable: true },
+        });
+        return;
+      }
+      const sent = await this.postOnce(body);
+      if (sent === "done") return;
+      // Accepted then cut is progress: catch up as a fresh start, as the first POST's cut does.
+      attempt = sent === "unsent" ? lostAt + 1 : 0;
+    }
+  }
+
+  /**
+   * The resume GET loop, starting at `start` on the backoff schedule. Resolves to the attempt at
+   * which a 404 said the server never saw the POST and there is a body to send again; null when
+   * the loop ended any other way.
+   */
+  private async resumeOnce(generationId: string, messageId: string, start: number): Promise<number | null> {
+    if (this.inflight.has(generationId)) return null;
     const controller = new AbortController();
     const entry: Inflight = { controller, nudge: null };
     this.inflight.set(generationId, entry);
     try {
       let waitMs = 0;
-      for (let attempt = 0; attempt < this.backoff.maxAttempts; attempt++) {
-        if (this.isSettled(messageId)) return;
+      for (let attempt = start; attempt < this.backoff.maxAttempts; attempt++) {
+        if (this.isSettled(messageId)) return null;
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
           this.store.setConnection(messageId, "offline", attempt);
-          return;
+          return null;
         }
         this.store.setConnection(messageId, "reconnecting", attempt);
         if (attempt > 0 || waitMs > 0) {
@@ -279,7 +317,7 @@ export class GenerationClient {
           await this.sleepImpl(Math.max(backoff, waitMs), anySignal(controller.signal, wake.signal));
           entry.nudge = null;
           waitMs = 0;
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted) return null;
         }
         this.store.flush(); // the cursor must include everything already received
         const after = this.store.getMessage(messageId)?.lastSeq ?? -1;
@@ -287,7 +325,7 @@ export class GenerationClient {
         try {
           res = await this.fetchImpl(`/api/generations/${generationId}/events?after=${after}`, { signal: controller.signal });
         } catch {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted) return null;
           continue;
         }
         if (res.status === 404) {
@@ -298,21 +336,18 @@ export class GenerationClient {
               connection: "idle",
               error: { kind: "gone", message: "This chat was deleted", retryable: false, status: 404 },
             });
-            return;
+            return null;
           }
-          // The server never received the POST: re-POST with the same ids (D2).
-          const body = this.bodies.get(generationId);
-          if (!body) {
+          // The server never received the POST: the caller re-POSTs with the same ids (D2).
+          if (!this.bodies.has(generationId)) {
             this.store.updateMessage(messageId, {
               status: "error",
               connection: "idle",
               error: { kind: "unknown", message: "This reply was lost", retryable: false },
             });
-            return;
+            return null;
           }
-          this.inflight.delete(generationId);
-          await this.post(body);
-          return;
+          return attempt;
         }
         if (!res.ok) {
           // A server that is restarting, overloaded or rate limiting still has the reply: keep trying.
@@ -323,17 +358,18 @@ export class GenerationClient {
             continue;
           }
           this.failFromResponse(messageId, res, await safeJson(res));
-          return;
+          return null;
         }
         this.accept(generationId);
         const finished = await this.consume(res, entry, generationId, messageId);
-        if (finished || controller.signal.aborted) return;
+        if (finished || controller.signal.aborted) return null;
         // Nothing left to fetch for a reply that has already ended here.
-        if (this.isSettled(messageId)) return;
+        if (this.isSettled(messageId)) return null;
         // Stream ended without a terminal event: try again, counting progress as a fresh start.
         if ((this.store.getMessage(messageId)?.lastSeq ?? -1) > after) attempt = -1;
       }
       this.store.setConnection(messageId, "offline", this.backoff.maxAttempts);
+      return null;
     } finally {
       if (this.inflight.get(generationId) === entry) this.inflight.delete(generationId);
     }

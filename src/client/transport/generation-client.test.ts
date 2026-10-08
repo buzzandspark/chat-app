@@ -167,6 +167,38 @@ describe("GenerationClient", () => {
     expect(calls.some((c) => c.url.startsWith(`/api/generations/${generationId}/events?after=-1`))).toBe(true);
   });
 
+  it("a POST that keeps failing while the GET answers 404 re-POSTs with growing backoff, then ends as a network error", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5); // no jitter: the schedule is exactly base * 2^(attempt - 1)
+    try {
+      const posts: number[] = [];
+      const fetchImpl: typeof fetch = async (input) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url === "/api/chat") {
+          posts.push(Date.now());
+          // A guard, so a regression fails the assertions instead of spinning forever in microtasks.
+          if (posts.length > 20) return new Response("{}", { status: 400 });
+          throw new TypeError("fetch failed");
+        }
+        return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
+      };
+      // The real sleep, on fake timers: the delays between POSTs are what the backoff schedule says.
+      const client = new GenerationClient(store, { fetch: fetchImpl, backoff: { baseMs: 500, maxMs: 8000, maxAttempts: 10 } });
+      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+      await vi.runAllTimersAsync();
+      store.flush();
+      const m = store.getMessage(assistantMessageId)!;
+      expect(posts).toHaveLength(4); // the first POST and three re-POSTs
+      const gaps = posts.slice(1).map((t, i) => t - posts[i]!);
+      expect(gaps).toEqual([0, 500, 1000]);
+      expect(m.status).toBe("error");
+      expect(m.connection).toBe("idle");
+      expect(m.error).toMatchObject({ kind: "network", retryable: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("resumes after a mid-stream drop from the last seq with no duplicated or missing text", async () => {
     const client = makeClient((url, init) => {
       if (url === "/api/chat") {
