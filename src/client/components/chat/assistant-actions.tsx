@@ -42,7 +42,7 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Message actions"
-            className="text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
+            className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
           >
             <MoreHorizontal />
           </IconButton>
