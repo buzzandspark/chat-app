@@ -60,10 +60,19 @@ const DEFAULT_BACKOFF: BackoffOptions = { baseMs: 500, maxMs: 8000, maxAttempts:
 const MAX_REPOSTS = 3;
 /** D16 watchdog: the server writes a keepalive every 15 s, so longer silence is a half-open socket. */
 const DEFAULT_IDLE_MS = 25_000;
+/**
+ * The idle watchdog only starts once a response exists, so a request sent into a half-open socket
+ * (a phone handing over between cells) would wait for the OS TCP timeout, minutes. Both routes
+ * answer headers before any model work (the stream is returned as soon as the generation starts),
+ * so a healthy server answers in well under a second; 15 s still leaves room for a slow upload of
+ * a long message, and a timeout that fires on a slow but live request costs only a retry, which is
+ * idempotent (D2): the GET or the duplicate POST attaches to the generation the first one started.
+ */
+const DEFAULT_HEADERS_MS = 15_000;
 
 interface Inflight {
   controller: AbortController;
-  /** Preempts whatever the loop is waiting on (a stale read, a backoff sleep) so it retries now. */
+  /** Preempts whatever the loop is waiting on (headers, a stale read, a backoff sleep) so it retries now. */
   nudge: (() => void) | null;
 }
 
@@ -76,6 +85,7 @@ export class GenerationClient {
   private accepted = new Map<string, () => void>();
   private backoff: BackoffOptions;
   private idleMs: number;
+  private headersMs: number;
   private fetchImpl: typeof fetch;
   private sleepImpl: (ms: number, signal?: AbortSignal) => Promise<void>;
 
@@ -87,11 +97,14 @@ export class GenerationClient {
       sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
       /** No bytes for this long drops the connection and resumes from the last seq (0 disables). */
       idleMs?: number;
+      /** A request with no response headers for this long is dropped and retried (0 disables). */
+      headersMs?: number;
     } = {},
   ) {
     this.fetchImpl = options.fetch ?? ((input, init) => fetch(input, init));
     this.backoff = { ...DEFAULT_BACKOFF, ...options.backoff };
     this.idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
+    this.headersMs = options.headersMs ?? DEFAULT_HEADERS_MS;
     this.sleepImpl = options.sleep ?? sleep;
     if (typeof window !== "undefined") {
       window.addEventListener("online", () => this.resumeAll());
@@ -215,10 +228,14 @@ export class GenerationClient {
 
   /**
    * D16: `online` and `visibilitychange` trigger an immediate attempt for every pending message. A
-   * loop already in flight is nudged: a read that went quiet is cancelled and a backoff sleep is cut
-   * short, so recovery does not wait for the 25 s watchdog or the next scheduled attempt.
+   * loop already in flight is nudged: a request still waiting for headers or a read that went quiet
+   * is cancelled and a backoff sleep is cut short, so recovery does not wait for a watchdog or the
+   * next scheduled attempt.
    */
   resumeAll(): void {
+    // A hidden tab runs no animation frames, so a reply that finished meanwhile still has its
+    // terminal event queued and reads as streaming: apply it first, or it is resumed for nothing.
+    this.store.flush();
     for (const m of this.store.pendingMessages()) {
       if (!m.generationId) continue;
       const entry = this.inflight.get(m.generationId);
@@ -254,17 +271,12 @@ export class GenerationClient {
     const entry: Inflight = { controller, nudge: null };
     this.inflight.set(body.generationId, entry);
     try {
-      let res: Response;
-      try {
-        res = await this.fetchImpl("/api/chat", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-      } catch {
-        return controller.signal.aborted ? "done" : "unsent";
-      }
+      const res = await this.fetchAttempt(entry, "/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (typeof res === "string") return controller.signal.aborted ? "done" : "unsent";
       if (!res.ok) {
         this.failFromResponse(body.assistantMessageId, res, await safeJson(res));
         return "done";
@@ -316,6 +328,7 @@ export class GenerationClient {
     this.inflight.set(generationId, entry);
     try {
       let waitMs = 0;
+      let retryNow = false;
       for (let attempt = start; attempt < this.backoff.maxAttempts; attempt++) {
         if (this.isSettled(messageId)) return null;
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -323,7 +336,8 @@ export class GenerationClient {
           return null;
         }
         this.store.setConnection(messageId, "reconnecting", attempt);
-        if (attempt > 0 || waitMs > 0) {
+        if (retryNow) retryNow = false;
+        else if (attempt > 0 || waitMs > 0) {
           const backoff = attempt > 0 ? Math.min(this.backoff.maxMs, this.backoff.baseMs * 2 ** (attempt - 1)) * (0.7 + Math.random() * 0.6) : 0;
           // A nudge (online, visible) cuts the sleep short; aborting the loop ends it.
           const wake = new AbortController();
@@ -335,11 +349,11 @@ export class GenerationClient {
         }
         this.store.flush(); // the cursor must include everything already received
         const after = this.store.getMessage(messageId)?.lastSeq ?? -1;
-        let res: Response;
-        try {
-          res = await this.fetchImpl(`/api/generations/${generationId}/events?after=${after}`, { signal: controller.signal });
-        } catch {
+        const res = await this.fetchAttempt(entry, `/api/generations/${generationId}/events?after=${after}`, {});
+        if (typeof res === "string") {
           if (controller.signal.aborted) return null;
+          // A nudge means the network just came back: the next attempt goes now, not after a sleep.
+          retryNow = res === "nudged";
           continue;
         }
         if (res.status === 404) {
@@ -386,6 +400,31 @@ export class GenerationClient {
       return null;
     } finally {
       if (this.inflight.get(generationId) === entry) this.inflight.delete(generationId);
+    }
+  }
+
+  /**
+   * One request, on its own controller so that dropping it is a failed attempt and not a give-up:
+   * the headers timeout and a nudge abort only this attempt, while the loop's controller (chained
+   * in) still aborts the request and, once it answers, the body. Resolves to the response, or to
+   * why there is none: "nudged", or "dropped" (a network error, the headers timeout, or the loop's
+   * own abort, which the caller tells apart by checking the loop's signal).
+   */
+  private async fetchAttempt(entry: Inflight, url: string, init: RequestInit): Promise<Response | "dropped" | "nudged"> {
+    const attempt = new AbortController();
+    let nudged = false;
+    entry.nudge = () => {
+      nudged = true;
+      attempt.abort();
+    };
+    const timer = this.headersMs > 0 ? setTimeout(() => attempt.abort(), this.headersMs) : null;
+    try {
+      return await this.fetchImpl(url, { ...init, signal: anySignal(entry.controller.signal, attempt.signal) });
+    } catch {
+      return nudged ? "nudged" : "dropped";
+    } finally {
+      if (timer) clearTimeout(timer);
+      entry.nudge = null;
     }
   }
 

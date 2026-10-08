@@ -422,4 +422,103 @@ describe("GenerationClient", () => {
     expect(m.status).toBe("done");
     expect(textOf(m.blocks)).toBe("hello");
   });
+
+  // A request into a half-open socket: no headers ever, until its signal aborts it.
+  function hang(init?: RequestInit): Promise<Response> {
+    return new Promise((_resolve, reject) => {
+      const signal = init?.signal;
+      const fail = () => reject(new DOMException("aborted", "AbortError"));
+      if (signal?.aborted) fail();
+      else signal?.addEventListener("abort", fail, { once: true });
+    });
+  }
+
+  describe("before response headers", () => {
+    let sent: Array<{ url: string; at: number; signal: AbortSignal | null | undefined }>;
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0); // request times read as ms since the send
+      sent = [];
+    });
+    afterEach(() => vi.useRealTimers());
+
+    /** `answer` decides each request in order (POST, then resume GETs); PATCHes for timings just succeed. */
+    function headersClient(answer: (url: string, init: RequestInit | undefined, n: number) => Promise<Response> | Response) {
+      const fetchImpl: typeof fetch = async (input, init) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (init?.method === "PATCH") return new Response("{}");
+        sent.push({ url, at: Date.now(), signal: init?.signal });
+        return answer(url, init, sent.length);
+      };
+      return new GenerationClient(store, { fetch: fetchImpl, backoff: { baseMs: 60_000, maxMs: 60_000, maxAttempts: 5 }, headersMs: 10_000 });
+    }
+    function resumed(url: string): Response {
+      const gen = /\/api\/generations\/(.+)\/events/.exec(url)![1]!;
+      return sseResponse(makeEvents(gen, store.messageIdForGeneration(gen)!, "hi"));
+    }
+
+    it("a POST with no headers is dropped after headersMs and the reply resumes over the GET", async () => {
+      const client = headersClient((url, init) => (url === "/api/chat" ? hang(init) : resumed(url)));
+      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(sent).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(sent).toHaveLength(2);
+      expect(sent[0]!.signal?.aborted).toBe(true);
+      expect(sent[1]).toMatchObject({ at: 10_000 });
+      expect(sent[1]!.url).toMatch(/\/events\?after=-1$/);
+      await vi.runAllTimersAsync();
+      store.flush();
+      const m = store.getMessage(assistantMessageId)!;
+      expect(m.status).toBe("done");
+      expect(textOf(m.blocks)).toBe("hi");
+    });
+
+    it("resumeAll while a POST or a GET waits for headers drops it and retries at once, with no backoff sleep", async () => {
+      // The POST and the first GET hang; the second GET answers.
+      const client = headersClient((url, init, n) => (n <= 2 ? hang(init) : resumed(url)));
+      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+      await vi.advanceTimersByTimeAsync(1_000);
+      client.resumeAll();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sent.map((s) => s.at)).toEqual([0, 1_000]);
+      await vi.advanceTimersByTimeAsync(1_000);
+      client.resumeAll();
+      await vi.advanceTimersByTimeAsync(0);
+      // The nudged GET is followed by another at once, not after the 60 s backoff.
+      expect(sent.map((s) => s.at)).toEqual([0, 1_000, 2_000]);
+      expect(sent.slice(0, 2).every((s) => s.signal?.aborted)).toBe(true);
+      await vi.runAllTimersAsync();
+      store.flush();
+      expect(store.getMessage(assistantMessageId)!.status).toBe("done");
+    });
+
+    it("the loop giving up while a POST waits for headers cancels it, retries nothing and leaves no timer", async () => {
+      const client = headersClient((_url, init) => hang(init));
+      const { generationId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+      await vi.advanceTimersByTimeAsync(1_000);
+      // Nothing public aborts the loop's controller; this is what a give-up (stop, unmount) would do.
+      const inflight = (client as unknown as { inflight: Map<string, { controller: AbortController }> }).inflight;
+      inflight.get(generationId)!.controller.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      store.flush();
+      expect(sent[0]!.signal?.aborted).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.runAllTimersAsync();
+      expect(sent).toHaveLength(1);
+    });
+  });
+
+  it("resumeAll applies events a hidden tab left queued, so a reply that finished there is not resumed", async () => {
+    // A hidden tab: no animation frames, so nothing flushes on its own.
+    store = new ChatStore({ schedule: () => 1, cancel: () => {} });
+    const client = makeClient((url, init) => (url === "/api/chat" ? sseResponse(eventsFromPost(init, "ok")) : new Response("{}")));
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(store.getMessage(assistantMessageId)!.status).toBe("streaming"); // `done` is still queued
+    client.resumeAll();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(store.getMessage(assistantMessageId)!.status).toBe("done");
+    expect(calls.some((c) => c.url.includes("/events?after="))).toBe(false);
+  });
 });
