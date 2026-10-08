@@ -40,9 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# app data
-/data/*.db
-/data/*.db-*
+# app data: SQLite files and harness output (data/shutdown-test/); nothing under data/ is tracked
+/data/
 /fixtures/recorded/
 
 # playwright
