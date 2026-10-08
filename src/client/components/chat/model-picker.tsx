@@ -15,7 +15,8 @@ import type { ThinkingOptions } from "@shared/types";
 const MODEL_BLURBS: Record<ModelId, string> = {
   "claude-sonnet-5-5": "Fast and capable for everyday work",
   "claude-opus-5-5": "Deepest reasoning for hard problems",
-  "claude-haiku-4-5": "Quickest replies, lowest cost",
+  "claude-haiku-5-5": "Fastest replies at the lowest cost, with effort levels",
+  "claude-haiku-4-5": "Quick replies, previous generation",
 };
 
 interface ModelPickerProps {

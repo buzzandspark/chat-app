@@ -7,12 +7,21 @@ export interface Rates {
   output: number;
   cacheRead: number;
   cacheWrite: number;
+  /** Rates for a request whose prompt (input plus cached tokens) exceeds `threshold` tokens; the whole request is billed at them. */
+  longContext?: { threshold: number } & Omit<Rates, "longContext">;
 }
 
-// Checked against the bundled Claude API reference on 2026-10-06.
+// Checked against the bundled Claude API reference on 2026-10-06; Claude Haiku 5.5 against its platform docs page on 2026-10-07.
 const RATES: Record<string, Rates> = {
   "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+  "claude-haiku-5-5": {
+    input: 0.1,
+    output: 0.5,
+    cacheRead: 0.01,
+    cacheWrite: 0.125,
+    longContext: { threshold: 100_000, input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 },
+  },
   "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
   // Fallback targets the API may route to (D11).
   "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -31,15 +40,27 @@ export function worstCaseRates(model: string): { input: number; output: number }
   let input = 0;
   let output = 0;
   for (const id of [model, ...FALLBACK_TARGETS]) {
-    const r = ratesFor(id);
-    input = Math.max(input, r.cacheWrite);
-    output = Math.max(output, r.output);
+    const r = baseRatesFor(id);
+    input = Math.max(input, r.cacheWrite, r.longContext?.cacheWrite ?? 0);
+    output = Math.max(output, r.output, r.longContext?.output ?? 0);
   }
   return { input, output };
 }
 
-/** Exact id first, then the longest known prefix (dated snapshots), else Opus rates. */
-export function ratesFor(model: string): Rates {
+/**
+ * Exact id first, then the longest known prefix (dated snapshots), else Opus rates. With `promptTokens`,
+ * a model that prices long prompts separately answers with that tier once the prompt is over its threshold.
+ */
+export function ratesFor(model: string, promptTokens = 0): Rates {
+  const base = baseRatesFor(model);
+  const tier = base.longContext;
+  if (tier && promptTokens > tier.threshold) {
+    return { input: tier.input, output: tier.output, cacheRead: tier.cacheRead, cacheWrite: tier.cacheWrite };
+  }
+  return base;
+}
+
+function baseRatesFor(model: string): Rates {
   const exact = RATES[model];
   if (exact) return exact;
   let best: Rates | null = null;
@@ -61,7 +82,7 @@ export interface TokenCounts {
 }
 
 export function costOf(model: string, tokens: TokenCounts): number {
-  const r = ratesFor(model);
+  const r = ratesFor(model, tokens.inputTokens + tokens.cacheReadTokens + tokens.cacheWriteTokens);
   return (
     (tokens.inputTokens * r.input +
       tokens.outputTokens * r.output +
@@ -118,6 +139,7 @@ export function summarize(rows: UsageRow[], estimated = false): UsageSummary {
 export const SEED_OUTPUT_TPS: Record<string, number> = {
   "claude-sonnet-5-5": 80,
   "claude-opus-5-5": 50,
+  "claude-haiku-5-5": 150,
   "claude-haiku-4-5": 140,
 };
 

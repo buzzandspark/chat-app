@@ -29,6 +29,17 @@ export function modelParams(model: ModelId, opts: ThinkingOptions): ModelParams 
         betas: [FALLBACK_BETA, BINDING_BETA],
         fallbacks: "default",
       };
+    case "claude-haiku-5-5":
+      // Adaptive thinking steered by effort (default medium), bound thinking blocks; no server-side fallback is documented for it.
+      return {
+        thinking: {
+          type: "adaptive",
+          display: "summarized",
+          block_binding: { prefix_mismatch_behavior: "drop_block" },
+        },
+        output_config: { effort: opts.harder ? "high" : "low" },
+        betas: [BINDING_BETA],
+      };
     case "claude-haiku-4-5":
       return {
         thinking: opts.harder ? { type: "enabled", budget_tokens: 2048 } : undefined,

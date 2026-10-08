@@ -1,5 +1,5 @@
 // Client-safe model catalogue (D11); request params live in thinking-config.ts, prices in pricing.ts.
-export const MODEL_IDS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-4-5"] as const;
+export const MODEL_IDS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-haiku-4-5"] as const;
 export type ModelId = (typeof MODEL_IDS)[number];
 export const DEFAULT_MODEL: ModelId = "claude-sonnet-5-5";
 
@@ -25,6 +25,13 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     id: "claude-opus-5-5",
     name: "Claude Opus 5.5",
     short: "Opus 5.5",
+    contextWindow: 1_000_000,
+    thinking: "adaptive",
+  },
+  "claude-haiku-5-5": {
+    id: "claude-haiku-5-5",
+    name: "Claude Haiku 5.5",
+    short: "Haiku 5.5",
     contextWindow: 1_000_000,
     thinking: "adaptive",
   },

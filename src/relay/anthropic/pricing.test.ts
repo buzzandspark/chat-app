@@ -35,4 +35,13 @@ describe("pricing", () => {
     );
     expect(rows[0]!.model).toBe("claude-haiku-4-5");
   });
+
+  it("prices Claude Haiku 5.5 at its long-context tier once the prompt passes 100k tokens", () => {
+    const short = costOf("claude-haiku-5-5", { inputTokens: 50_000, outputTokens: 1_000, cacheReadTokens: 0, cacheWriteTokens: 0 });
+    expect(short).toBeCloseTo((50_000 * 0.1 + 1_000 * 0.5) / 1_000_000, 9);
+    const long = costOf("claude-haiku-5-5", { inputTokens: 90_000, outputTokens: 1_000, cacheReadTokens: 20_000, cacheWriteTokens: 0 });
+    expect(long).toBeCloseTo((90_000 * 0.5 + 1_000 * 2.5 + 20_000 * 0.05) / 1_000_000, 9);
+    expect(ratesFor("claude-haiku-5-5").output).toBe(0.5);
+    expect(ratesFor("claude-haiku-5-5", 200_000).output).toBe(2.5);
+  });
 });
