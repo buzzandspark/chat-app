@@ -91,6 +91,50 @@ describe("Markdown", () => {
     expect(a).not.toHaveAttribute("href");
   });
 
+  it("decodes character references in text, but not in code or after a backslash", () => {
+    const { container } = render(
+      <Markdown
+        streaming={false}
+        text={
+          "AT&T &amp; &copy; &mdash; &#169; &amp;lt; &#38;amp;\n\n" +
+          "# A &amp; *b &lt;*\n\n" +
+          "\\&amp; and `&amp; code`\n\n" +
+          "```\n&amp; fence\n```\n\n" +
+          "- item &rarr; x\n\n" +
+          "| a&nbsp;b | `&lt;` |\n|---|---|\n| &lt; | x |"
+        }
+      />,
+    );
+    expect(container.querySelector("p")!.textContent).toBe("AT&T & © — © &lt; &amp;");
+    expect(container.querySelector("h1")!.textContent).toBe("A & b <");
+    expect(container.querySelectorAll("p")[1]!.textContent).toBe("&amp; and &amp; code");
+    expect(container.querySelector("pre")!.textContent).toBe("&amp; fence");
+    expect(container.querySelector("li")!.textContent).toBe("item → x");
+    expect([...container.querySelectorAll("th, td")].map((c) => c.textContent)).toEqual(["a\u00a0b", "&lt;", "<", "x"]);
+  });
+
+  it("decodes references in a link's destination and title, then checks its scheme", () => {
+    const { container } = render(
+      <Markdown
+        streaming={false}
+        text={
+          '[a &amp; b](https://x.com/?a=1&amp;b=2 "t &amp; u") [x](&#106;avascript:alert(1)) ' +
+          "![alt &amp; c](https://x.com/i&amp;j.png) <https://x.com/?a&amp;b>"
+        }
+      />,
+    );
+    const [link, js, image, auto] = [...container.querySelectorAll("a")];
+    expect(link).toHaveAttribute("href", "https://x.com/?a=1&b=2");
+    expect(link).toHaveAttribute("title", "t & u");
+    expect(link).toHaveTextContent("a & b");
+    expect(js).not.toHaveAttribute("href");
+    expect(image).toHaveAttribute("href", "https://x.com/i&j.png");
+    expect(image).toHaveTextContent("alt & c");
+    // An autolink is literal, as CommonMark has it.
+    expect(auto).toHaveAttribute("href", "https://x.com/?a&amp;b");
+    expect(auto).toHaveTextContent("https://x.com/?a&amp;b");
+  });
+
   it("does not re-render finished blocks while the trailing block grows", () => {
     const onBlockRender = vi.fn();
     const { rerender } = render(

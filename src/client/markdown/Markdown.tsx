@@ -5,6 +5,7 @@ import { Lexer, type Token, type Tokens } from "marked";
 import { cn } from "@/lib/utils";
 import { parseFence, splitBlocksIncremental, type MarkdownBlock } from "./blocks";
 import { CodeBlock } from "./CodeBlock";
+import { decodeEntities } from "./entities";
 
 /** D9: finished blocks memoise by hash; marked's lexer tokens render to React text nodes, never innerHTML. */
 
@@ -186,7 +187,11 @@ function renderToken(token: Token, key: number, streamingTable = false, growth: 
     }
     case "text": {
       const t = token as Tokens.Text;
-      return <span key={key}>{children(t)}</span>;
+      // A block text token (a tight list item) renders its inline tokens. An inline one's `text` has
+      // marked's numeric references decoded but not its named ones, so decoding it again would turn
+      // `&#38;amp;` into `&`; its `raw` is the source as typed, decoded here once. Code spans, fences
+      // and backslash escapes are other token types and stay literal, as CommonMark has them.
+      return <span key={key}>{t.tokens ? children(t) : decodeEntities(t.raw)}</span>;
     }
     case "strong":
       return <strong key={key}>{children(token as Tokens.Strong)}</strong>;
@@ -204,30 +209,35 @@ function renderToken(token: Token, key: number, streamingTable = false, growth: 
     }
     case "link": {
       const t = token as Tokens.Link;
+      // References resolve in a destination and title, decoded before safeHref sees the scheme, so
+      // `&#106;avascript:` is refused like `javascript:`. marked has already removed backslash escapes
+      // there, so `\&amp;` in a destination decodes too; rare enough to leave. An autolink is literal.
       return (
         <a
           key={key}
-          href={safeHref(t.href)}
-          title={t.title ?? undefined}
+          href={safeHref(t.autolink ? t.href : decodeEntities(t.href))}
+          title={t.title ? decodeEntities(t.title) : undefined}
           target="_blank"
           rel="noreferrer"
           className="text-primary underline underline-offset-2"
         >
-          {children(t)}
+          {t.autolink ? t.text : children(t)}
         </a>
       );
     }
     case "image": {
       const t = token as Tokens.Image;
+      // Shown as a link to the image; its label renders from tokens, so references and escapes in it
+      // resolve like any other text (`t.text` is the label as typed).
       return (
         <a
           key={key}
-          href={safeHref(t.href)}
+          href={safeHref(decodeEntities(t.href))}
           target="_blank"
           rel="noreferrer"
           className="text-primary underline underline-offset-2"
         >
-          {t.text || t.href}
+          {t.tokens.length > 0 ? renderTokens(t.tokens) : t.href}
         </a>
       );
     }
