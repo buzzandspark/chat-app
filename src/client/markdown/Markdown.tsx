@@ -17,7 +17,7 @@ interface MarkdownProps {
 }
 
 export function Markdown({ text, streaming, className, onBlockRender }: MarkdownProps) {
-  const blocks = useMemo(() => splitBlocksIncremental(text), [text]);
+  const blocks = useMemo(() => splitBlocksIncremental(normalizeNewlines(text)), [text]);
   return (
     <div className={cn("markdown min-w-0 max-w-full space-y-3 break-words text-body", className)}>
       {blocks.map((block) => (
@@ -30,6 +30,17 @@ export function Markdown({ text, streaming, className, onBlockRender }: Markdown
       ))}
     </div>
   );
+}
+
+/**
+ * marked reads \r\n and a lone \r as \n, but the splitter's line patterns would leave a trailing \r
+ * on every line: no blank line or fence opener would match, so the whole reply became one block,
+ * re-lexed on every chunk. Normalised once here, before the split and every hash. A chunk that ends
+ * between \r and \n still yields a prefix of the next text (the lone \r and the \r\n both become one
+ * \n), so the incremental split keeps its cache.
+ */
+function normalizeNewlines(text: string): string {
+  return text.includes("\r") ? text.replace(/\r\n?/g, "\n") : text;
 }
 
 interface BlockProps {
@@ -52,7 +63,7 @@ function BlockImpl({ block, closed, onRender }: BlockProps) {
   if (block.kind === "table" && !tokens.some((t) => t.type === "table")) {
     return <PartialTable source={source} streaming={streamingTable} />;
   }
-  return <>{renderTokens(tokens, streamingTable)}</>;
+  return <>{renderTokens(tokens, streamingTable, closed ? "closed" : "tail")}</>;
 }
 
 const Block = memo(
@@ -126,8 +137,19 @@ function alignClass(align: "center" | "left" | "right" | null): string | undefin
   return undefined;
 }
 
-export function renderTokens(tokens: Token[], streamingTable = false): ReactNode[] {
-  return tokens.map((token, i) => renderToken(token, i, streamingTable));
+/**
+ * Where a token sits in its block: "closed" once the block is final; "open" inside a block that is
+ * still streaming; "tail" on the path to that block's last token, the one still being written. Only
+ * a fence nested in a list or quote reads it: a top-level fence is a block of its own.
+ */
+type Growth = "closed" | "open" | "tail";
+
+function childGrowth(growth: Growth, last: boolean): Growth {
+  return growth === "tail" && !last ? "open" : growth;
+}
+
+export function renderTokens(tokens: Token[], streamingTable = false, growth: Growth = "closed"): ReactNode[] {
+  return tokens.map((token, i) => renderToken(token, i, streamingTable, childGrowth(growth, i === tokens.length - 1)));
 }
 
 function children(token: { tokens?: Token[]; text?: string }): ReactNode {
@@ -135,7 +157,7 @@ function children(token: { tokens?: Token[]; text?: string }): ReactNode {
   return token.text ?? "";
 }
 
-function renderToken(token: Token, key: number, streamingTable = false): ReactNode {
+function renderToken(token: Token, key: number, streamingTable = false, growth: Growth = "closed"): ReactNode {
   switch (token.type) {
     case "space":
       return null;
@@ -228,7 +250,7 @@ function renderToken(token: Token, key: number, streamingTable = false): ReactNo
     case "blockquote":
       return (
         <blockquote key={key} className="border-l-2 border-border pl-3 text-muted-foreground">
-          <div className="space-y-2">{children(token as Tokens.Blockquote)}</div>
+          <div className="space-y-2">{renderTokens((token as Tokens.Blockquote).tokens, false, growth)}</div>
         </blockquote>
       );
     case "list": {
@@ -243,12 +265,12 @@ function renderToken(token: Token, key: number, streamingTable = false): ReactNo
             t.ordered ? "list-decimal" : "list-disc",
           )}
         >
-          {t.items.map((item, j) => renderListItem(item, j))}
+          {t.items.map((item, j) => renderListItem(item, j, childGrowth(growth, j === t.items.length - 1)))}
         </Tag>
       );
     }
     case "list_item":
-      return renderListItem(token as Tokens.ListItem, key);
+      return renderListItem(token as Tokens.ListItem, key, growth);
     case "checkbox": {
       const t = token as Tokens.Checkbox;
       return (
@@ -265,7 +287,13 @@ function renderToken(token: Token, key: number, streamingTable = false): ReactNo
     }
     case "code": {
       const t = token as Tokens.Code;
-      return <CodeBlock key={key} code={t.text} lang={t.lang ? t.lang.split(/\s+/)[0]! : null} closed />;
+      // marked ends an unclosed fence at its container's end, so while the list or quote streams a
+      // nested fence's text grows chunk by chunk. Called closed then, each chunk would tokenise the
+      // whole partial code in the worker, flash colours, revert, and push real entries out of the
+      // highlight cache. It closes once its closing fence is in and a later token proves that line
+      // done; a block that is final closes everything in it.
+      const closed = growth === "closed" || (growth === "open" && hasClosingFence(t.raw));
+      return <CodeBlock key={key} code={t.text} lang={t.lang ? t.lang.split(/\s+/)[0]! : null} closed={closed} />;
     }
     case "table": {
       const t = token as Tokens.Table;
@@ -298,12 +326,12 @@ function renderToken(token: Token, key: number, streamingTable = false): ReactNo
       return null;
     default: {
       const t = token as Tokens.Generic;
-      return <span key={key}>{t.tokens ? renderTokens(t.tokens) : t.raw}</span>;
+      return <span key={key}>{t.tokens ? renderTokens(t.tokens, false, growth) : t.raw}</span>;
     }
   }
 }
 
-function renderListItem(item: Tokens.ListItem, key: number): ReactNode {
+function renderListItem(item: Tokens.ListItem, key: number, growth: Growth = "closed"): ReactNode {
   // Task items carry a leading checkbox token; render the rest inline after it. A loose item (blank
   // lines between paragraphs) keeps its paragraphs as blocks; a tight one stays inline.
   return (
@@ -318,11 +346,20 @@ function renderListItem(item: Tokens.ListItem, key: number): ReactNode {
             <span key={i}>{children(t as Tokens.Paragraph)}</span>
           )
         ) : (
-          renderToken(t, i)
+          renderToken(t, i, false, childGrowth(growth, i === item.tokens.length - 1))
         ),
       )}
     </li>
   );
+}
+
+/** A fenced code token's raw (already dedented by marked) ends in a fence of its opener's character, at least as long. */
+function hasClosingFence(raw: string): boolean {
+  const open = /^ {0,3}(`{3,}|~{3,})/.exec(raw);
+  const nl = raw.lastIndexOf("\n");
+  if (!open || nl === -1) return false;
+  const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(raw.slice(nl + 1));
+  return !!close && close[1]![0] === open[1]![0] && close[1]!.length >= open[1]!.length;
 }
 
 function safeHref(href: string): string | undefined {

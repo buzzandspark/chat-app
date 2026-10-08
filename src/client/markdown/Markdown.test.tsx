@@ -1,8 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
+
+// Highlight requests are recorded and never settle: these tests only ask which code was sent.
+const { highlight } = vi.hoisted(() => ({
+  highlight: vi.fn<(code: string, lang: string) => Promise<never>>(() => new Promise(() => {})),
+}));
+vi.mock("./highlight", async (importOriginal) => ({ ...(await importOriginal<object>()), highlight }));
+
 import { Markdown } from "./Markdown";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  highlight.mockClear();
+});
 
 describe("Markdown", () => {
   it("renders headings, lists, links, and tables", () => {
@@ -96,5 +107,58 @@ describe("Markdown", () => {
       />,
     );
     expect(onBlockRender.mock.calls.map((c) => c[0])).toEqual(["b2-other"]);
+  });
+
+  it("keeps a fence nested in a streaming list plain until its closing fence is in", () => {
+    vi.useFakeTimers();
+    const idle = () => act(() => vi.advanceTimersByTime(3000));
+    const code = () => document.querySelector(".markdown-code");
+    let text = "1. Install:\n\n   ```bash\n   npm i foo";
+    const { rerender } = render(<Markdown streaming text={text} />);
+    idle();
+    expect(code()).toHaveAttribute("data-closed", "false");
+    for (const chunk of [" ba", "r", "\n   ```"]) {
+      text += chunk;
+      rerender(<Markdown streaming text={text} />);
+      idle();
+      // The closing fence is the block's last line, so it may still grow; it stays open.
+      expect(code()).toHaveAttribute("data-closed", "false");
+    }
+    expect(highlight).not.toHaveBeenCalled();
+    text += "\n2. Next";
+    rerender(<Markdown streaming text={text} />);
+    idle();
+    expect(code()).toHaveAttribute("data-closed", "true");
+    expect(highlight.mock.calls).toEqual([["npm i foo bar", "bash"]]);
+  });
+
+  it("keeps a fence nested in a streaming blockquote plain, and closes it when the reply ends", () => {
+    const { container, rerender } = render(<Markdown streaming text={"> ```ts\n> const a = 1"} />);
+    expect(container.querySelector(".markdown-code")).toHaveAttribute("data-closed", "false");
+    // marked ends the fence at the end of the quote; once streaming stops that is final.
+    rerender(<Markdown streaming={false} text={"> ```ts\n> const a = 1"} />);
+    expect(container.querySelector(".markdown-code")).toHaveAttribute("data-closed", "true");
+  });
+
+  it("does not close a nested fence on a shorter or different fence line", () => {
+    const { container } = render(<Markdown streaming text={"- ````md\n  ```\n  x\n  ~~~~\n- next"} />);
+    expect(container.querySelector(".markdown-code")).toHaveAttribute("data-closed", "false");
+  });
+
+  it("splits CRLF text into blocks like LF text", () => {
+    const onBlockRender = vi.fn();
+    const { container } = render(
+      <Markdown
+        streaming
+        text={"intro\r\n\r\n```ts\r\nconst a = 1;\r\n```\r\n\r\n- one\r\n- two\r\n\r\nafter"}
+        onBlockRender={onBlockRender}
+      />,
+    );
+    expect(onBlockRender.mock.calls.map((c) => c[0])).toEqual(["b0-other", "b1-fence", "b2-other", "b3-other"]);
+    const block = container.querySelector(".markdown-code");
+    expect(block).toHaveAttribute("data-closed", "true");
+    expect(block!.querySelector("pre")!.textContent).toBe("const a = 1;");
+    expect(container.textContent).not.toContain("\r");
+    expect(container.querySelectorAll("li")).toHaveLength(2);
   });
 });
