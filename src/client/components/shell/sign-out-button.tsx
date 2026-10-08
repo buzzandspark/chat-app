@@ -18,7 +18,7 @@ export function SignOutButton() {
     window.location.assign(new URL("/login", window.location.origin).href);
   };
   return (
-    <IconButton label="Sign out" tipSide="top" tipAlign="end" onClick={() => void signOut()} data-testid="sign-out">
+    <IconButton label="Sign out" tipSide="top" onClick={() => void signOut()} data-testid="sign-out">
       <LogOut />
     </IconButton>
   );

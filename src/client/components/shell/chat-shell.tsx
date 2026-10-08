@@ -135,8 +135,8 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
       {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold.
           While the phone sidebar is open the column is inert, so the sidebar is a real modal (#56). */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" inert={!desktop && phoneOpen ? true : undefined}>
-        <header className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
-          <IconButton label={open ? "Hide sidebar" : "Show sidebar"} tipAlign="start" aria-expanded={open} onClick={toggle}>
+        <header data-tip-boundary className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
+          <IconButton label={open ? "Hide sidebar" : "Show sidebar"} aria-expanded={open} onClick={toggle}>
             {desktop ? <PanelLeft /> : <Menu />}
           </IconButton>
           {/* #20: the chrome is in the static shell; only what depends on the URL streams in here. */}
@@ -155,7 +155,7 @@ function HeaderRouteFallback() {
   return (
     <>
       <h1 className="min-w-0 flex-1 truncate px-2 text-small font-medium" data-testid="chat-title" />
-      <IconButton label="Send feedback" tipAlign="end" disabled>
+      <IconButton label="Send feedback" disabled>
         <MessageSquareText />
       </IconButton>
     </>
@@ -233,7 +233,7 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
           {title}
         </h1>
       )}
-      <IconButton label="Send feedback" tipAlign="end" onClick={openFeedback}>
+      <IconButton label="Send feedback" onClick={openFeedback}>
         <MessageSquareText />
       </IconButton>
     </>

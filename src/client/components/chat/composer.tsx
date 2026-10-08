@@ -218,6 +218,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   return (
     <div
       ref={rootRef}
+      data-tip-boundary
       className="shrink-0 border-t border-border bg-background safe-x pt-2"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
       data-testid="composer"
@@ -272,7 +273,6 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
                 <IconButton
                   label={stopping === streamingId ? "Stopping" : "Stop generating"}
                   tipSide="top"
-                  tipAlign="end"
                   variant="secondary"
                   className="rounded-full"
                   aria-busy={stopping === streamingId}
@@ -287,7 +287,6 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
                 <IconButton
                   label={streamingId ? "Queue message" : editing ? "Send edited message" : "Send message"}
                   tipSide="top"
-                  tipAlign="end"
                   variant="default"
                   className={cn("rounded-full", (!value.trim() || overLimit) && "bg-muted text-muted-foreground disabled:opacity-100")}
                   disabled={!value.trim() || overLimit}

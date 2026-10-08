@@ -43,6 +43,7 @@ export function Sidebar({ list, phoneOpen, desktopOpen, open, onClose, onNavigat
         )}
       />
       <aside
+        data-tip-boundary
         aria-label="Chats"
         data-open={open}
         // Off-screen on a phone it is also out of the tab order and the accessibility tree; open, it is the modal (#56).
@@ -81,7 +82,7 @@ export function Sidebar({ list, phoneOpen, desktopOpen, open, onClose, onNavigat
             >
               <Plus />
             </Link>
-            <IconButton label="Close sidebar" tipAlign="end" className="dock:hidden" onClick={onClose}>
+            <IconButton label="Close sidebar" className="dock:hidden" onClick={onClose}>
               <X />
             </IconButton>
           </div>

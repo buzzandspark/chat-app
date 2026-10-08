@@ -32,7 +32,7 @@ export function ThemeToggle() {
     () => false,
   );
   return (
-    <IconButton label={dark ? "Switch to light theme" : "Switch to dark theme"} tipSide="top" tipAlign="end" onClick={() => setDark(!dark)}>
+    <IconButton label={dark ? "Switch to light theme" : "Switch to dark theme"} tipSide="top" onClick={() => setDark(!dark)}>
       {dark ? <Sun /> : <Moon />}
     </IconButton>
   );
