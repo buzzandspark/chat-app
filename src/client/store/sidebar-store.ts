@@ -19,7 +19,7 @@ export interface GroupSummary {
 type Listener = () => void;
 
 /** Chat list store so a first send updates the sidebar without a server round trip. */
-class SidebarStore {
+export class SidebarStore {
   private chats: ChatSummary[] = [];
   private groups: GroupSummary[] = [];
   private listeners = new Set<Listener>();
@@ -87,9 +87,15 @@ class SidebarStore {
     this.emit();
   }
 
+  /**
+   * Inserts a new chat, or merges into the known one: a send names only id, title and updatedAt, and
+   * replacing the entry would drop `pinned` and `groupId`, moving the row out of its section until a
+   * reload. Clearing either field goes through `patch` (or `removeGroup`), never through here.
+   */
   upsert(chat: ChatSummary): void {
-    const rest = this.chats.filter((c) => c.id !== chat.id);
-    this.chats = [chat, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
+    const existing = this.chats.find((c) => c.id === chat.id);
+    const rest = existing ? this.chats.filter((c) => c !== existing) : this.chats;
+    this.chats = [existing ? { ...existing, ...chat } : chat, ...rest].sort((a, b) => b.updatedAt - a.updatedAt);
     this.emit();
   }
 
