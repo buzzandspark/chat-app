@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
@@ -85,6 +86,13 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         />
       </div>
       <ul id="search-hits" role="listbox" className="mt-2 max-h-[50dvh] overflow-y-auto" aria-busy={searching}>
+        {searching && visibleHits.length === 0 ? (
+          // One row's worth of pulse while the first results are on their way; earlier hits stay put while a refinement loads.
+          <li className="flex min-h-11 flex-col justify-center gap-1.5 px-3 py-2" aria-hidden>
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-3 w-3/4" />
+          </li>
+        ) : null}
         {visibleHits.map((h, i) => (
           <li key={h.chatId} id={`search-hit-${i}`} role="option" aria-selected={i === activeIndex}>
             <Link
