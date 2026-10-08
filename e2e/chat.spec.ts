@@ -19,6 +19,34 @@ test.describe("streaming", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
   });
 
+  test("a message sent while a reply streams is queued, can be removed, and goes out when the reply ends", async ({ page }) => {
+    await openNewChat(page);
+    await runScenario(page, "slow_tokens");
+    const first = lastAssistant(page);
+    await expect(first).toHaveAttribute("data-status", "streaming");
+    const box = page.getByRole("textbox", { name: "Message" });
+    await box.fill("queued one");
+    await page.getByRole("button", { name: "Queue message" }).click();
+    await box.fill("queued two");
+    await page.getByRole("button", { name: "Queue message" }).click();
+    const queued = page.getByTestId("queued-message");
+    await expect(queued).toHaveCount(2);
+    await expect(queued.first()).toContainText("queued one");
+    // Nothing went out yet: still one user row, Stop still offered, and the composer is clear again.
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
+    await expect(box).toHaveValue("");
+    await queued.nth(1).getByRole("button", { name: "Remove" }).click();
+    await expect(queued).toHaveCount(1);
+    await expect(first).toHaveAttribute("data-status", "done", { timeout: 60_000 });
+    // The queued message is sent as soon as the reply ends.
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(2, { timeout: 15_000 });
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("queued one");
+    await expect(queued).toHaveCount(0);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 60_000 });
+    await expect(page.locator('[data-role="assistant"]:visible')).toHaveCount(2);
+  });
+
   test("stop is explicit and keeps the partial", async ({ page }) => {
     await openNewChat(page);
     await runScenario(page, "slow_tokens");

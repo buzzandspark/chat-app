@@ -22,6 +22,9 @@ export interface ChatActions {
   retry: (userMessageId: string, fromMessageId: string) => void;
   /** D10: load a user message into the composer for editing. */
   editMessage: (userMessageId: string) => void;
+  /** A queued message back into the composer (and out of the queue). */
+  editQueued: (id: string) => void;
+  removeQueued: (id: string) => void;
   cancelEdit: () => void;
   focusComposer: () => void;
   autoFollow: { engage: () => void; disengage: () => void };

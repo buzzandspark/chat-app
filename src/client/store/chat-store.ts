@@ -66,6 +66,8 @@ export interface ChatState {
   settingsTouched: boolean;
   /** Messages before the window the server sent (#47); 0 once everything is loaded. */
   older: number;
+  /** Messages typed while a reply was streaming; the first goes out when that reply ends. */
+  queue: QueuedMessage[];
 }
 
 /** A message row as the page and `GET /api/chats/:id` deliver it. */
@@ -94,10 +96,16 @@ interface Internal {
 
 type Listener = () => void;
 
-export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false, older: 0 };
+export interface QueuedMessage {
+  id: string;
+  text: string;
+  scenario: string | null;
+}
+
+export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false, older: 0, queue: [] };
 
 function emptyChat(id: string, settings: ChatSettings = DEFAULT_SETTINGS): ChatState {
-  return { id, messageIds: [], title: null, seeded: false, settings, settingsTouched: false, older: 0 };
+  return { id, messageIds: [], title: null, seeded: false, settings, settingsTouched: false, older: 0, queue: [] };
 }
 
 const TERMINAL: ReadonlySet<MessageStatus> = new Set(["done", "stopped", "interrupted", "error", "refused"]);
@@ -382,6 +390,31 @@ export class ChatStore {
     }
     this.chats.set(chatId, { ...this.emptyChat(chatId), seeded: true });
     this.notifyChat(chatId);
+  }
+
+  /** A message typed while a reply streams waits here; the view sends the first one when that reply ends. */
+  enqueueMessage(chatId: string, item: QueuedMessage): void {
+    const chat = this.chats.get(chatId) ?? this.emptyChat(chatId);
+    this.chats.set(chatId, { ...chat, queue: [...chat.queue, item] });
+    this.notifyChat(chatId);
+  }
+
+  takeQueued(chatId: string): QueuedMessage | undefined {
+    const chat = this.chats.get(chatId);
+    const [first, ...rest] = chat?.queue ?? [];
+    if (!chat || !first) return undefined;
+    this.chats.set(chatId, { ...chat, queue: rest });
+    this.notifyChat(chatId);
+    return first;
+  }
+
+  removeQueued(chatId: string, id: string): QueuedMessage | undefined {
+    const chat = this.chats.get(chatId);
+    const item = chat?.queue.find((q) => q.id === id);
+    if (!chat || !item) return undefined;
+    this.chats.set(chatId, { ...chat, queue: chat.queue.filter((q) => q.id !== id) });
+    this.notifyChat(chatId);
+    return item;
   }
 
   setChatTitle(chatId: string, title: string | null): void {

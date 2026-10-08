@@ -3,8 +3,31 @@ import { ArrowDown } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useChat, useChatStore } from "@client/store/hooks";
+import type { QueuedMessage } from "@client/store/chat-store";
 import { loadEarlierMessages } from "@client/store/prefetch";
+import { useChatActions } from "./chat-context";
 import { MessageRow } from "./message-row";
+
+/** A message waiting for the streaming reply to end: shown where it will land, editable, removable. */
+function QueuedRow({ item }: { item: QueuedMessage }) {
+  const { editQueued, removeQueued } = useChatActions();
+  return (
+    <div className="flex flex-col items-end gap-1" data-testid="queued-message">
+      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-bubble border border-dashed border-border bg-bubble/50 px-4 py-2.5 text-body text-bubble-foreground/80 md:max-w-[75%]">
+        {item.text}
+      </div>
+      <div className="flex items-center gap-3 text-caption text-muted-foreground">
+        <span>Queued, sends when the reply finishes</span>
+        <button type="button" className="touch-target underline underline-offset-2 hover:text-foreground" onClick={() => editQueued(item.id)}>
+          Edit
+        </button>
+        <button type="button" className="touch-target underline underline-offset-2 hover:text-foreground" onClick={() => removeQueued(item.id)}>
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export interface MessageListHandle {
   engage: () => void;
@@ -155,6 +178,9 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
             ) : (
               chat.messageIds.map((id) => <MessageRow key={id} id={id} />)
             )}
+            {chat.queue.map((item) => (
+              <QueuedRow key={item.id} item={item} />
+            ))}
             <div ref={endRef} className="h-px" />
           </div>
         </div>

@@ -6,10 +6,10 @@ import { saveLastChoice } from "@client/hooks/use-last-choice";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { textOf, type ChatSettings } from "@client/store/chat-store";
 import { ensureMarkdown, useMarkdownReady } from "@client/markdown/ready";
-import { useChat, useChatSeeded, useChatStore } from "@client/store/hooks";
+import { useChat, useChatSeeded, useChatStore, useMessage } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
-import { isUuid } from "@shared/id";
+import { isUuid, uuidv7 } from "@shared/id";
 import { isModelId } from "@shared/models";
 import { ChatActionsContext, ChatLiveStateContext, type EditingState } from "./chat-context";
 import { Composer, type ComposerHandle } from "./composer";
@@ -73,13 +73,10 @@ export function ChatView({ children }: { children: ReactNode }) {
 
   // `edit` is explicit (#36): only the composer's own submit replaces a message. Continue and a
   // scenario pick while an edit is open leave the edited turns alone and cancel the edit instead.
-  const send = useCallback(
+  const dispatch = useCallback(
     (text: string, scenario?: string, edit: EditingState | null = null) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      const lastId = store.getChat(chatId).messageIds.at(-1);
-      const last = lastId ? store.getMessage(lastId) : undefined;
-      if (last?.role === "assistant" && last.status === "streaming") return;
       const current = settingsRef.current;
       const opts = { chatId, model: current.model, thinking: current.thinking, scenario: scenario ?? current.scenario?.name };
       const hooks = { onAccepted: announceChat(trimmed) };
@@ -99,6 +96,48 @@ export function ChatView({ children }: { children: ReactNode }) {
     },
     [chatId, client, store, announceChat],
   );
+
+  // One generation at a time, but typing never has to wait: a message sent while a reply streams
+  // joins the chat's queue and goes out when that reply ends. An edit cannot be queued (it would
+  // replace the turns that are still being written), so it is ignored while a reply streams.
+  const send = useCallback(
+    (text: string, scenario?: string, edit: EditingState | null = null) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const lastId = store.getChat(chatId).messageIds.at(-1);
+      const last = lastId ? store.getMessage(lastId) : undefined;
+      if (last?.role === "assistant" && last.status === "streaming") {
+        if (edit) return;
+        store.enqueueMessage(chatId, { id: uuidv7(), text: trimmed, scenario: scenario ?? settingsRef.current.scenario?.name ?? null });
+        listRef.current?.engage();
+        return;
+      }
+      dispatch(trimmed, scenario, edit);
+    },
+    [chatId, store, dispatch],
+  );
+
+  // The queue drains one message per finished reply; a failed reply keeps the queue and leaves the
+  // decision (Try again, or send anyway) to the user.
+  const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
+  const lastStatus = lastMessage?.role === "assistant" ? lastMessage.status : null;
+  useEffect(() => {
+    if (lastStatus === null || lastStatus === "streaming" || lastStatus === "error") return;
+    const next = store.takeQueued(chatId);
+    // After the commit, not inside it: the send updates state (the edit flag, the sidebar) of its own.
+    if (next) queueMicrotask(() => dispatch(next.text, next.scenario ?? undefined));
+  }, [lastStatus, lastMessage?.id, chatId, store, dispatch]);
+
+  const editQueued = useCallback(
+    (id: string) => {
+      const item = store.removeQueued(chatId, id);
+      if (!item) return;
+      composerRef.current?.setValue(item.text);
+      composerRef.current?.focus();
+    },
+    [chatId, store],
+  );
+  const removeQueued = useCallback((id: string) => void store.removeQueued(chatId, id), [chatId, store]);
 
   const retry = useCallback(
     (userMessageId: string, fromMessageId: string) => {
@@ -139,12 +178,14 @@ export function ChatView({ children }: { children: ReactNode }) {
       send,
       retry,
       editMessage,
+      editQueued,
+      removeQueued,
       cancelEdit: () => setEditing(null),
       focusComposer: () => composerRef.current?.focus(),
       autoFollow: { engage: () => listRef.current?.engage(), disengage: () => listRef.current?.disengage() },
       scenarioPanel,
     }),
-    [chatId, userId, client, setSettings, send, retry, editMessage, scenarioPanel],
+    [chatId, userId, client, setSettings, send, retry, editMessage, editQueued, removeQueued, scenarioPanel],
   );
   const live = useMemo(() => ({ settings, editing, followEngaged }), [settings, editing, followEngaged]);
 

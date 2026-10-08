@@ -87,6 +87,8 @@ function ModelPickerOnIntent(props: { model: ModelId; thinking: ThinkingOptions;
 
 export interface ComposerHandle {
   focus: () => void;
+  /** Replace the draft (a queued message taken back for editing). */
+  setValue: (text: string) => void;
 }
 
 const MAX_ROWS_PX = 180;
@@ -110,7 +112,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const [adopted, setAdopted] = useState(false);
   useDraft(key, editing ? stash : value, adopted);
 
-  useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
+  useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus(), setValue: (text: string) => setValue(text) }), []);
 
   // Adopt text typed before hydration, else the stored draft; data-hydrated tells tests the composer is live.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -179,8 +181,8 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const overLimit = value.length > MAX_MESSAGE_CHARS;
   const nearLimit = value.length > MAX_MESSAGE_CHARS * 0.9;
   const submit = () => {
-    // One generation at a time: while a reply streams, Enter and the button do nothing.
-    if (!value.trim() || streamingId || overLimit) return;
+    // While a reply streams a new message is queued (the view decides); an edit has to wait for it to end.
+    if (!value.trim() || overLimit || (streamingId && editing)) return;
     const wasEditing = editing !== null;
     send(value, settings.scenario?.name, editing);
     if (!wasEditing) {
@@ -265,32 +267,36 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
                 </ChunkBoundary>
               ) : null}
             </div>
-            {streamingId ? (
-              <IconButton
-                label={stopping === streamingId ? "Stopping" : "Stop generating"}
-                tipSide="top"
-                tipAlign="end"
-                variant="secondary"
-                className="rounded-full"
-                aria-busy={stopping === streamingId}
-                disabled={stopping === streamingId}
-                onClick={() => stop(streamingId)}
-              >
-                <Square className={cn("fill-current", stopping === streamingId && "animate-pulse")} />
-              </IconButton>
-            ) : (
-              <IconButton
-                label={editing ? "Send edited message" : "Send message"}
-                tipSide="top"
-                tipAlign="end"
-                variant="default"
-                className={cn("rounded-full", (!value.trim() || overLimit) && "bg-muted text-muted-foreground disabled:opacity-100")}
-                disabled={!value.trim() || overLimit}
-                onClick={submit}
-              >
-                <ArrowUp />
-              </IconButton>
-            )}
+            <div className="flex items-center gap-1">
+              {streamingId ? (
+                <IconButton
+                  label={stopping === streamingId ? "Stopping" : "Stop generating"}
+                  tipSide="top"
+                  tipAlign="end"
+                  variant="secondary"
+                  className="rounded-full"
+                  aria-busy={stopping === streamingId}
+                  disabled={stopping === streamingId}
+                  onClick={() => stop(streamingId)}
+                >
+                  <Square className={cn("fill-current", stopping === streamingId && "animate-pulse")} />
+                </IconButton>
+              ) : null}
+              {/* While a reply streams this queues the message; an edit cannot be queued, so it waits. */}
+              {streamingId && editing ? null : (
+                <IconButton
+                  label={streamingId ? "Queue message" : editing ? "Send edited message" : "Send message"}
+                  tipSide="top"
+                  tipAlign="end"
+                  variant="default"
+                  className={cn("rounded-full", (!value.trim() || overLimit) && "bg-muted text-muted-foreground disabled:opacity-100")}
+                  disabled={!value.trim() || overLimit}
+                  onClick={submit}
+                >
+                  <ArrowUp />
+                </IconButton>
+              )}
+            </div>
           </div>
         </div>
         {/* Shown by CSS where a hardware keyboard is likely (md + hover), so the server, the skeleton and the client agree on the height. */}

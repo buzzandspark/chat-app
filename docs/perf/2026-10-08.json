@@ -1,0 +1,109 @@
+{
+  "shell": {
+    "cls": 0,
+    "shifts": 0,
+    "ttfbMs": 2,
+    "domContentLoadedMs": 1291,
+    "paints": {
+      "first-paint": 1412,
+      "first-contentful-paint": 1412
+    },
+    "fonts": [
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:loaded",
+      "Inter Fallback:loaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded"
+    ],
+    "interLoaded": true,
+    "transferredKb": 276,
+    "hydratedMs": 3975,
+    "chunksAfterHydration": 2,
+    "at": "2026-10-08T02:48:35.586Z"
+  },
+  "long_reply": {
+    "firstPaintMs": 1965,
+    "frames": 622,
+    "p50": 16.7,
+    "p95": 16.7,
+    "p99": 16.8,
+    "longFrames": 0,
+    "assistantRows": 1,
+    "at": "2026-10-08T02:48:50.040Z"
+  },
+  "long_chat": {
+    "rows": 200,
+    "loadMs": 2952,
+    "frames": 574,
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 16.8,
+    "longFrames": 2,
+    "at": "2026-10-08T02:49:08.038Z"
+  },
+  "click_to_thread": {
+    "coldInFlight": {
+      "click": 1334.8000000715256,
+      "frames": 21,
+      "activeFrame": 1,
+      "skeletonFrame": 2,
+      "threadFrame": 21,
+      "threadMs": 342
+    },
+    "warmedByOpen": {
+      "click": 2017.3000000715256,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 29
+    },
+    "loaded": {
+      "click": 2466.8000000715256,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 28
+    },
+    "loaded2": {
+      "click": 4950.800000071526,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 27
+    },
+    "prefetched": {
+      "click": 4483.800000071526,
+      "frames": 3,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 3,
+      "threadMs": 46
+    },
+    "at": "2026-10-08T02:49:27.313Z"
+  },
+  "giant_code_block": {
+    "frames": 2068,
+    "p50": 16.7,
+    "p95": 16.7,
+    "p99": 16.8,
+    "longFrames": 5,
+    "maxFrame": 266.7,
+    "reopenMaxFrame": 183.3,
+    "reopenLongFrames": 6,
+    "source": "worker",
+    "reopenSource": "kept",
+    "at": "2026-10-08T02:50:11.112Z"
+  }
+}

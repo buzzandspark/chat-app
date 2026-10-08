@@ -361,4 +361,19 @@ describe("ChatStore", () => {
     store.markClientTiming("a", "firstPaint");
     expect(store.getMessage("a")?.timings?.client).toBeUndefined();
   });
+
+  it("queues messages in order, hands them out one at a time, and lets one be removed", () => {
+    const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
+    store.createChat("q");
+    store.enqueueMessage("q", { id: "a", text: "first", scenario: null });
+    store.enqueueMessage("q", { id: "b", text: "second", scenario: "normal" });
+    store.enqueueMessage("q", { id: "c", text: "third", scenario: null });
+    expect(store.getChat("q").queue.map((m) => m.id)).toEqual(["a", "b", "c"]);
+    expect(store.removeQueued("q", "b")?.text).toBe("second");
+    expect(store.takeQueued("q")?.text).toBe("first");
+    expect(store.getChat("q").queue.map((m) => m.id)).toEqual(["c"]);
+    expect(store.takeQueued("q")?.id).toBe("c");
+    expect(store.takeQueued("q")).toBeUndefined();
+    expect(store.removeQueued("q", "zzz")).toBeUndefined();
+  });
 });
