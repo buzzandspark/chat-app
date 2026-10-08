@@ -21,7 +21,7 @@ const g = globalThis as unknown as { __cadenceRelay?: RelaySingleton };
 export function getRelay(): RelaySingleton {
   if (g.__cadenceRelay) return g.__cadenceRelay;
   const db = getDb();
-  // A finished buffer is kept a minute for late resumes; after that a resume gets the saved snapshot (#62).
+  // A finished buffer is kept a minute for late resumes; after that a resume gets the saved snapshot.
   const store = new EventStore({ evictAfterMs: 60_000 });
   store.startSweeper();
   const quota = new QuotaManager(db);
@@ -33,11 +33,14 @@ export function getRelay(): RelaySingleton {
     isDraining,
   });
   const rateLimiter = new RateLimiter();
+  // Every user who ever sent keeps a key until swept; idle ones go every ten minutes.
+  rateLimiter.startSweeper();
   // Registered after boot's closeDatabase drain, so it runs before it (LIFO).
   onShutdown(async () => {
     console.log(`[shutdown] draining ${engine.runningCount()} generation(s)`);
     await engine.drain();
     store.stopSweeper();
+    rateLimiter.stopSweeper();
   });
   g.__cadenceRelay = { engine, store, rateLimiter, quota };
   return g.__cadenceRelay;

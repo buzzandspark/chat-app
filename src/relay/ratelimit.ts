@@ -8,6 +8,7 @@ export interface RateLimitResult {
 
 export class RateLimiter {
   private hits = new Map<string, number[]>();
+  private sweeper: ReturnType<typeof setInterval> | null = null;
   constructor(
     private perMinute = 20,
     private perDay = 300,
@@ -43,6 +44,22 @@ export class RateLimiter {
     for (const [key, list] of this.hits) {
       if (!list.some((t) => t > dayAgo)) this.hits.delete(key);
     }
+  }
+
+  /**
+   * Sweeps on a timer, at most one per limiter however often it is called: the owner holds the
+   * limiter on globalThis, so a dev reload reaches the same instance and its existing timer.
+   * Unref'd so an idle timer never keeps the process alive.
+   */
+  startSweeper(intervalMs = 10 * 60 * 1000): void {
+    if (this.sweeper) return;
+    this.sweeper = setInterval(() => this.sweep(), intervalMs);
+    this.sweeper.unref();
+  }
+
+  stopSweeper(): void {
+    if (this.sweeper) clearInterval(this.sweeper);
+    this.sweeper = null;
   }
 
   reset(userId?: string): void {
