@@ -46,6 +46,10 @@ function splitFrom(markdown: string, base: number, startIndex: number): Markdown
   let cur: string[] = [];
   let curStart = 0;
   let kind: BlockKind = "other";
+  // Some line of the block opened a list item, not just its first: Claude often leads a list with a
+  // label line (`**Steps:**` then `1. Install:`), and a block that starts with that label is a list
+  // block too, for the fences and blank-separated items that follow.
+  let listed = false;
   let fence: Open | null = null;
   let pendingBlanks = 0;
   let offset = 0;
@@ -57,10 +61,12 @@ function splitFrom(markdown: string, base: number, startIndex: number): Markdown
     blocks.push({ key: `b${index}-${kind}`, hash: hashString(source), source, closed, kind, start: base + curStart });
     cur = [];
     kind = "other";
+    listed = false;
     pendingBlanks = 0;
   };
   const push = (line: string, at: number) => {
     if (cur.length === 0) curStart = at;
+    if (LIST_MARKER.test(line)) listed = true;
     cur.push(line);
   };
 
@@ -85,8 +91,9 @@ function splitFrom(markdown: string, base: number, startIndex: number): Markdown
     const open = FENCE_OPEN.exec(line);
     if (open && !(open[2]![0] === "`" && open[3]!.includes("`"))) {
       // An indented fence that follows a list marker is part of that list item (#24): keep it in the
-      // list block so marked nests it and Copy gets the code without the indent.
-      const inList = cur.length > 0 && kind === "other" && LIST_MARKER.test(cur[0]!) && open[1]!.length > 0;
+      // list block so marked nests it and Copy gets the code without the indent. If the block isn't
+      // really a list (`1990. was` lazily continuing a paragraph), marked still renders it right.
+      const inList = cur.length > 0 && kind === "other" && listed && open[1]!.length > 0;
       if (!inList) {
         flush(true);
         kind = "fence";
@@ -105,15 +112,14 @@ function splitFrom(markdown: string, base: number, startIndex: number): Markdown
     }
 
     if (cur.length > 0 && pendingBlanks > 0) {
-      const first = cur[0]!;
       const continues =
         kind === "other" &&
-        ((INDENTED.test(first) && INDENTED.test(line)) ||
-          (LIST_MARKER.test(first) && (LIST_MARKER.test(line) || CONTINUATION.test(line))));
+        ((INDENTED.test(cur[0]!) && INDENTED.test(line)) ||
+          (listed && (LIST_MARKER.test(line) || CONTINUATION.test(line))));
       if (continues) {
         for (let b = 0; b < pendingBlanks; b++) cur.push("");
         pendingBlanks = 0;
-        cur.push(line);
+        push(line, lineStart);
         continue;
       }
       flush(true);
@@ -137,6 +143,8 @@ export function splitBlocks(markdown: string): MarkdownBlock[] {
 // #25: while a reply streams, every frame appends to the same text. The blocks before the last one
 // are final (a later line can only extend the last block), so only the tail is re-split. A small
 // cache of recent results is kept here rather than in React state, so the renderer stays pure.
+// The exception is a last block that is one unfinished line: `2` (its `.` not in yet) closed the
+// list before it, but `2. b` continues that list, so the block before it is re-split too.
 const RECENT = 8;
 const recent: Array<{ text: string; blocks: MarkdownBlock[] }> = [];
 
@@ -149,8 +157,10 @@ export function splitBlocksIncremental(markdown: string): MarkdownBlock[] {
       break;
     }
     if (entry.blocks.length > 1 && markdown.length > entry.text.length && markdown.startsWith(entry.text)) {
-      const stable = entry.blocks.slice(0, -1);
-      const tailStart = entry.blocks[entry.blocks.length - 1]!.start;
+      let keep = entry.blocks.length - 1;
+      if (!entry.text.includes("\n", entry.blocks[keep]!.start)) keep--;
+      const stable = entry.blocks.slice(0, keep);
+      const tailStart = entry.blocks[keep]!.start;
       result = stable.concat(splitFrom(markdown.slice(tailStart), tailStart, stable.length));
       break;
     }
@@ -169,6 +179,10 @@ export function parseFence(source: string, closed: boolean): { lang: string | nu
   const lang = info ? info.split(/\s+/)[0]!.toLowerCase() : null;
   if (nl === -1) return { lang, code: "" };
   let body = source.slice(nl + 1);
+  // CommonMark: an opener indented N spaces (after a paragraph, say) strips up to N from each line,
+  // so the code and its Copy don't carry the indent.
+  const indent = m?.[1]?.length ?? 0;
+  if (indent > 0) body = body.replace(new RegExp(`^ {1,${indent}}`, "gm"), "");
   if (closed) {
     const last = body.lastIndexOf("\n");
     body = last === -1 ? "" : body.slice(0, last);
