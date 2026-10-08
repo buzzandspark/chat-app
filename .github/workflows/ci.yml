@@ -9,6 +9,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   checks:
     name: Typecheck, lint, unit, build, size
@@ -30,13 +33,16 @@ jobs:
         env:
           REPLAY_MODE: "1"
       - run: pnpm size
+      # A tarball keeps what an artifact upload would drop: hidden paths (upload-artifact skips
+      # .next/standalone/.next and node_modules/.pnpm), pnpm's symlinks, and file modes.
+      # public/ is not packed: the e2e job's checkout has it, and scripts/standalone.sh copies it.
+      - name: Pack the standalone build
+        run: tar -cf next-build.tar .next/standalone .next/static
       - uses: actions/upload-artifact@v4
         with:
           name: next-build
-          path: |
-            .next/standalone
-            .next/static
-            public
+          path: next-build.tar
+          if-no-files-found: error
           retention-days: 1
 
   e2e:
@@ -56,6 +62,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: next-build
+      - name: Unpack the standalone build
+        run: |
+          tar -xf next-build.tar
+          test -f .next/standalone/server.js
       - run: pnpm exec playwright install --with-deps chromium webkit
       - name: Pixel 7 with throttling (budgets gate everything else)
         run: pnpm e2e --project=pixel7
