@@ -58,7 +58,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: 
               setOpen(false);
             }}
             className={cn(
-              "flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              "flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
               selected ? "bg-accent text-accent-foreground" : "hover:bg-muted active:bg-muted",
             )}
           >
@@ -70,7 +70,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: 
           </button>
         );
       })}
-      <label className="mt-1 flex min-h-12 items-center justify-between gap-3 rounded-lg px-3">
+      <label className="mt-1 flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2.5">
         <span className="flex flex-col">
           <span className="text-body font-medium">{thinkingLabel}</span>
           <span className="text-caption text-muted-foreground">Effort high instead of low</span>
