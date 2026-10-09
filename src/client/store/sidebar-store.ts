@@ -8,6 +8,7 @@ export interface ChatSummary {
   pinned?: boolean;
   forkedFrom?: string | null;
   forkOrder?: number | null;
+  tabHidden?: boolean;
 }
 
 type Listener = () => void;
@@ -97,6 +98,14 @@ export async function patchChatOptimistic(store: SidebarStore, id: string, field
   store.patch(id, fields);
   const ok = await patchChat(id, fields);
   if (!ok && read() === fields.pinned) store.patch(id, { pinned: before });
+  return ok;
+}
+
+/** A tab closed or reopened: the strip changes at once; a refused request puts it back. */
+export async function setTabHidden(store: SidebarStore, id: string, hidden: boolean): Promise<boolean> {
+  store.patch(id, { tabHidden: hidden });
+  const ok = await patchChat(id, { tabHidden: hidden });
+  if (!ok) store.patch(id, { tabHidden: !hidden });
   return ok;
 }
 

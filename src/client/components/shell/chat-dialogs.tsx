@@ -124,3 +124,52 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
     </ResponsiveDialog>
   );
 }
+
+
+/** Promotes a fork: it becomes the main chat and the current main becomes one of its forks. */
+export function MakeMainDialog({ chat, open, onOpenChange }: DialogProps & { chat: ChatSummary }) {
+  const store = useChatStore();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirm = async () => {
+    if (busy || !chat.forkedFrom) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/make-main`, { method: "POST" });
+      if (!res.ok) {
+        setError(res.status === 404 ? "This chat is no longer a fork." : `Could not make it the main chat (${res.status}).`);
+        return;
+      }
+      const made = (await res.json()) as { parentId: string; parentForkPosition: number; parentForkOrder: number };
+      const sidebar = getSidebarStore();
+      for (const c of sidebar.get()) if (c.forkedFrom === made.parentId && c.id !== chat.id) sidebar.patch(c.id, { forkedFrom: chat.id });
+      sidebar.patch(chat.id, { forkedFrom: null, forkOrder: null, tabHidden: false });
+      sidebar.patch(made.parentId, { forkedFrom: chat.id, forkOrder: made.parentForkOrder });
+      store.setFork(chat.id, { from: null, position: null });
+      store.setFork(made.parentId, { from: chat.id, position: made.parentForkPosition });
+      onOpenChange(false);
+    } catch {
+      setError("You seem to be offline.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Make this the main chat?" description={`"${chat.title}" becomes the main chat and the current main chat becomes one of its forks.`}>
+      {error ? (
+        <p role="alert" className="text-small text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button type="button" className="touch-target" disabled={busy} onClick={() => void confirm()}>
+          Make main chat
+        </Button>
+      </div>
+    </ResponsiveDialog>
+  );
+}

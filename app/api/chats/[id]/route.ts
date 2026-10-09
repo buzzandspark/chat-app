@@ -7,7 +7,9 @@ import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 import { isUuid } from "@shared/id";
 
-const Patch = z.object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional() }).refine((p) => p.title !== undefined || p.pinned !== undefined);
+const Patch = z
+  .object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional(), tabHidden: z.boolean().optional() })
+  .refine((p) => p.title !== undefined || p.pinned !== undefined || p.tabHidden !== undefined);
 
 /** ADR-0005: the same rows the page seeds with, for prefetch on intent and the second-tab case; `?all=1` lifts the window (#47). */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
@@ -24,7 +26,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[i
 }
 
 
-/** Rename or pin a chat (D19 rename sheet; the ⋯ menu's Pin). */
+/** Rename, pin, or close the tab of a chat (D19 rename sheet; the ⋯ menu's Pin; a tab's ×). */
 export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
   try {
     const user = await requireUser();
@@ -37,6 +39,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/
       .set({
         ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
         ...(parsed.data.pinned !== undefined ? { pinned: parsed.data.pinned } : {}),
+        ...(parsed.data.tabHidden !== undefined ? { tabHidden: parsed.data.tabHidden } : {}),
       })
       .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, user.id)))
       .run();

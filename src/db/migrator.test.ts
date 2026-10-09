@@ -197,7 +197,7 @@ const CHAT_FIELDS = "id, user_id, title, pinned, created_at, updated_at, last_me
 
 /** After 0010: no groups anywhere, every row kept, search and FKs working, the schema of a fresh database. */
 function expectGroupsGoneRowsKept(chatsBefore: unknown[]): void {
-  expect(journalRows()).toBe(12);
+  expect(journalRows()).toBe(13);
   expect(hasTable("chat_groups")).toBe(false);
   expect(chatColumns()).not.toContain("group_id");
   expect(sqlite.prepare(`SELECT ${CHAT_FIELDS} FROM chats ORDER BY id`).all()).toEqual(chatsBefore);
@@ -244,7 +244,7 @@ describe("migrations 0009 and 0010 (chat groups repaired, then removed)", () => 
   it("a fresh database ends without groups", () => {
     applyMigrations(sqlite);
 
-    expect(journalRows()).toBe(12);
+    expect(journalRows()).toBe(13);
     expect(hasTable("chat_groups")).toBe(false);
     expect(chatColumns()).not.toContain("group_id");
   });

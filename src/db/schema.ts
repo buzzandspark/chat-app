@@ -126,6 +126,8 @@ export const chats = sqliteTable(
     /** Position of a fork's first own message; the divider renders above it. */
     forkPosition: integer("fork_position"),
     forkOrder: integer("fork_order"),
+    /** The tab was closed; it comes back when the chat is opened. */
+    tabHidden: integer("tab_hidden", { mode: "boolean" }).notNull().default(false),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at").notNull().$defaultFn(now),
     lastMessageAt: timestamp("last_message_at"),

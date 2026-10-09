@@ -12,6 +12,7 @@ export interface ChatSummary {
   pinned: boolean;
   forkedFrom: string | null;
   forkOrder: number | null;
+  tabHidden: boolean;
 }
 
 export type ChatDetail = ChatSummary & { forkPosition: number | null };
@@ -48,6 +49,7 @@ export function listChats(userId: string, limit = 200): ChatSummary[] {
       pinned: schema.chats.pinned,
       forkedFrom: schema.chats.forkedFrom,
       forkOrder: schema.chats.forkOrder,
+      tabHidden: schema.chats.tabHidden,
     })
     .from(schema.chats)
     .where(eq(schema.chats.userId, userId))
@@ -106,6 +108,7 @@ export function getChatWithMessages(
       pinned: chat.pinned,
       forkedFrom: chat.forkedFrom,
       forkOrder: chat.forkOrder,
+      tabHidden: chat.tabHidden,
       forkPosition: chat.forkPosition,
     },
     older,

@@ -7,7 +7,7 @@ import { uuidv7 } from "@shared/id";
 import type { HistoryMessage } from "./anthropic/history";
 import { buildRequest } from "./anthropic/request";
 import { Engine, type StartInput } from "./engine";
-import { createForks, ForkError, setForkOrder, type ForkRequest } from "./forks";
+import { createForks, ForkError, makeMain, setForkOrder, type ForkRequest } from "./forks";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { scenarioScript, type ScenarioName } from "./scenarios";
@@ -172,6 +172,27 @@ describe("createForks", () => {
     const orphan = db.select().from(chats).where(eq(chats.id, started!.chatId)).get()!;
     expect(orphan.forkedFrom).toBeNull();
     expect(db.select().from(messages).where(eq(messages.chatId, started!.chatId)).all().length).toBeGreaterThan(2);
+  });
+
+  it("makeMain promotes a fork: the old main takes its place as a fork and the siblings follow", async () => {
+    const parentId = await parentChat(2);
+    const forks = [fork("A"), fork("B")];
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
+    await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
+    const promoted = forks[1]!.chatId;
+    expect(makeMain(db, "nobody", promoted)).toBeNull();
+    expect(makeMain(db, USER, parentId)).toBeNull();
+    const made = makeMain(db, USER, promoted)!;
+    expect(made).toEqual({ parentId, parentForkPosition: 4, parentForkOrder: 1 });
+    const row = (id: string) => db.select().from(chats).where(eq(chats.id, id)).get()!;
+    expect(row(promoted)).toMatchObject({ forkedFrom: null, forkPosition: null, forkOrder: null });
+    expect(row(parentId)).toMatchObject({ forkedFrom: promoted, forkPosition: 4, forkOrder: 1 });
+    expect(row(forks[0]!.chatId)).toMatchObject({ forkedFrom: promoted, forkOrder: 0 });
+    // The old main is a fork now, so it cannot be forked; the new main can.
+    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId, forks: [fork()] })).toThrow(/is_fork/);
+    const [again] = createForks(deps(), { userId: USER, userRole: "user", parentId: promoted, forks: [fork("C")] });
+    await collectUntilTerminal(store, again!.generationId);
+    expect(row(again!.chatId).forkedFrom).toBe(promoted);
   });
 
   it("setForkOrder stores the given order and keeps unnamed forks after it", async () => {

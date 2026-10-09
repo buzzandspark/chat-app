@@ -85,6 +85,13 @@
       "when": 1791582425133,
       "tag": "0011_forks",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791586530510,
+      "tag": "0012_fork_tabs",
+      "breakpoints": true
     }
   ]
 }

@@ -458,6 +458,14 @@ export class ChatStore {
     return item;
   }
 
+  /** A fork promoted to main, or a main turned fork: the divider follows. */
+  setFork(chatId: string, fork: { from: string | null; position: number | null }): void {
+    const chat = this.chats.get(chatId);
+    if (!chat || (chat.forkedFrom === fork.from && chat.forkPosition === fork.position)) return;
+    this.chats.set(chatId, { ...chat, forkedFrom: fork.from, forkPosition: fork.position });
+    this.notifyChat(chatId);
+  }
+
   setChatTitle(chatId: string, title: string | null): void {
     const chat = this.chats.get(chatId) ?? this.emptyChat(chatId);
     if (chat.title === title) return;

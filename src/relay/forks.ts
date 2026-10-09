@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, max } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages } from "@db/schema";
 import { MAX_FORKS } from "@shared/forks";
@@ -190,4 +190,28 @@ export function setForkOrder(db: Db, userId: string, parentId: string, ids: stri
     ordered.forEach((id, index) => tx.update(chats).set({ forkOrder: index }).where(eq(chats.id, id)).run());
   });
   return true;
+}
+
+
+export interface MadeMain {
+  parentId: string;
+  parentForkPosition: number;
+  parentForkOrder: number;
+}
+
+/** A fork becomes the main chat: the old main becomes one of its forks (in the promoted tab's place) and its siblings follow. */
+export function makeMain(db: Db, userId: string, chatId: string): MadeMain | null {
+  const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, userId))).get();
+  if (!chat?.forkedFrom) return null;
+  const parent = db.select().from(chats).where(eq(chats.id, chat.forkedFrom)).get();
+  if (!parent) return null;
+  const last = db.select({ position: max(messages.position) }).from(messages).where(eq(messages.chatId, parent.id)).get();
+  const parentForkPosition = (last?.position ?? -1) + 1;
+  const parentForkOrder = chat.forkOrder ?? 0;
+  db.transaction((tx) => {
+    tx.update(chats).set({ forkedFrom: chat.id }).where(eq(chats.forkedFrom, parent.id)).run();
+    tx.update(chats).set({ forkedFrom: null, forkPosition: null, forkOrder: null, tabHidden: false }).where(eq(chats.id, chat.id)).run();
+    tx.update(chats).set({ forkedFrom: chat.id, forkPosition: parentForkPosition, forkOrder: parentForkOrder }).where(eq(chats.id, parent.id)).run();
+  });
+  return { parentId: parent.id, parentForkPosition, parentForkOrder };
 }

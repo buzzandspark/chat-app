@@ -1,9 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { lastAssistant, openNewChat, runScenario, visible } from "./helpers";
 
-const tabs = (page: import("@playwright/test").Page) => page.locator('[role="tab"]:visible');
+const tabs = (page: Page) => page.locator('[role="tab"]:visible');
 
-async function replyWithOptions(page: import("@playwright/test").Page) {
+async function replyWithOptions(page: Page) {
   await openNewChat(page);
   await runScenario(page, "options_reply");
   await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
@@ -92,5 +92,41 @@ test.describe("explore options", () => {
     await expect(tabs(page)).toHaveText(reordered);
     await page.reload();
     await expect(tabs(page)).toHaveText(reordered, { timeout: 15_000 });
+  });
+
+  test("tabs close and reopen from the sidebar, cycle with Ctrl+Shift+brackets, and a right-click menu promotes or deletes", async ({ page, isMobile }) => {
+    test.skip(isMobile, "keyboard and right-click are desktop gestures");
+    const button = await replyWithOptions(page);
+    const parentUrl = page.url();
+    await button.click();
+    await expect(tabs(page)).toHaveCount(4, { timeout: 15_000 });
+    // Close a tab: it leaves the strip and stays out across a reload; opening its chat from the sidebar brings it back.
+    await page.getByRole("button", { name: "Close tab Move to Postgres" }).click();
+    await expect(tabs(page)).toHaveText(["Main chat", "Keep SQLite", "Embedded then managed"]);
+    await page.reload();
+    await expect(tabs(page)).toHaveText(["Main chat", "Keep SQLite", "Embedded then managed"], { timeout: 15_000 });
+    await page.locator('aside[aria-label="Chats"]').getByRole("link", { name: "Move to Postgres" }).click();
+    await expect(tabs(page)).toHaveText(["Main chat", "Keep SQLite", "Move to Postgres", "Embedded then managed"], { timeout: 15_000 });
+    await expect(tabs(page).nth(2)).toHaveAttribute("aria-selected", "true");
+    // Ctrl+Shift+] moves to the next tab, [ back; both wrap.
+    await page.keyboard.press("Control+Shift+BracketRight");
+    await expect(tabs(page).nth(3)).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
+    await page.keyboard.press("Control+Shift+BracketRight");
+    await expect(page).toHaveURL(parentUrl, { timeout: 15_000 });
+    await page.keyboard.press("Control+Shift+BracketLeft");
+    await expect(tabs(page).nth(3)).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
+    // Right-click: Make main chat swaps roles after a confirmation.
+    await tabs(page).nth(1).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Make main chat" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Make main chat" }).click();
+    await expect(tabs(page)).toHaveText(["Main chat", "Scenario: Reply with options", "Move to Postgres", "Embedded then managed"]);
+    await tabs(page).nth(0).click();
+    await expect(page.getByTestId("fork-divider").locator("visible=true")).toHaveCount(0);
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("keeping SQLite");
+    // Right-click: Delete chat removes the tab after a confirmation.
+    await tabs(page).nth(3).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Delete chat" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+    await expect(tabs(page)).toHaveText(["Main chat", "Scenario: Reply with options", "Move to Postgres"]);
   });
 });
