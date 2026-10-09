@@ -44,8 +44,8 @@ const DRAG_PX = 6;
 
 /**
  * Browser-style tabs above the thread: the main chat, then its forks. A closed tab stays closed until
- * the chat is opened again (from the sidebar); Ctrl+Shift+[ and ] cycle; a right-click offers Delete
- * chat and Make main chat; forks reorder by dragging with a mouse or pen.
+ * the chat is opened again (from the sidebar); Ctrl+Shift+[ and ] cycle; a right-click offers Declare
+ * winner and Delete chat; forks reorder by dragging with a mouse or pen.
  */
 export function ForkTabs({ chatId }: { chatId: string }) {
   const chats = useSidebarChats();

@@ -1,11 +1,12 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
-import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
+import { getSidebarStore, setPendingChat, type ChatSummary } from "@client/store/sidebar-store";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface DialogProps {
@@ -126,9 +127,10 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
 }
 
 
-/** Promotes a fork: it becomes the main chat and the current main becomes one of its forks. */
-export function MakeMainDialog({ chat, open, onOpenChange }: DialogProps & { chat: ChatSummary }) {
+/** The fork wins: it stays, with its history; the main chat and the other forks are deleted. */
+export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const store = useChatStore();
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const confirm = async () => {
@@ -136,19 +138,26 @@ export function MakeMainDialog({ chat, open, onOpenChange }: DialogProps & { cha
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/chats/${chat.id}/make-main`, { method: "POST" });
+      const res = await fetch(`/api/chats/${chat.id}/declare-winner`, { method: "POST" });
       if (!res.ok) {
-        setError(res.status === 404 ? "This chat is no longer a fork." : `Could not make it the main chat (${res.status}).`);
+        setError(res.status === 404 ? "This chat is no longer a fork." : `Could not declare the winner (${res.status}).`);
         return;
       }
-      const made = (await res.json()) as { parentId: string; parentForkPosition: number; parentForkOrder: number };
+      const winner = (await res.json()) as { id: string; deleted: string[] };
       const sidebar = getSidebarStore();
-      for (const c of sidebar.get()) if (c.forkedFrom === made.parentId && c.id !== chat.id) sidebar.patch(c.id, { forkedFrom: chat.id });
+      for (const id of winner.deleted) {
+        sidebar.remove(id);
+        store.removeChat(id);
+      }
       sidebar.patch(chat.id, { forkedFrom: null, forkOrder: null, tabHidden: false });
-      sidebar.patch(made.parentId, { forkedFrom: chat.id, forkOrder: made.parentForkOrder });
       store.setFork(chat.id, { from: null, position: null });
-      store.setFork(made.parentId, { from: chat.id, position: made.parentForkPosition });
+      const leaving = currentChatId !== null && winner.deleted.includes(currentChatId);
+      if (leaving) markNavigationClose();
       onOpenChange(false);
+      if (leaving) {
+        setPendingChat(chat.id);
+        router.push(`/c/${chat.id}`);
+      }
     } catch {
       setError("You seem to be offline.");
     } finally {
@@ -156,7 +165,12 @@ export function MakeMainDialog({ chat, open, onOpenChange }: DialogProps & { cha
     }
   };
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Make this the main chat?" description={`"${chat.title}" becomes the main chat and the current main chat becomes one of its forks.`}>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Declare the winner?"
+      description={`"${chat.title}" stays, with its history. The main chat and the other forks will be deleted. This cannot be undone.`}
+    >
       {error ? (
         <p role="alert" className="text-small text-destructive">
           {error}
@@ -166,8 +180,8 @@ export function MakeMainDialog({ chat, open, onOpenChange }: DialogProps & { cha
         <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
-        <Button type="button" className="touch-target" disabled={busy} onClick={() => void confirm()}>
-          Make main chat
+        <Button type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
+          Declare winner
         </Button>
       </div>
     </ResponsiveDialog>

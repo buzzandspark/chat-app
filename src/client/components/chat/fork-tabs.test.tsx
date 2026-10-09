@@ -92,12 +92,12 @@ describe("ForkTabs", () => {
     expect(push).toHaveBeenLastCalledWith("/c/f1");
   });
 
-  it("a right-click opens the tab's menu with Make main chat only for forks", async () => {
+  it("a right-click opens the tab's menu with Declare winner only for forks", async () => {
     getSidebarStore().hydrate(chats);
     renderTabs("f1");
     fireEvent.contextMenu(screen.getByRole("tab", { name: "Postgres" }));
     const menu = await screen.findByRole("menu", { name: "Tab actions for Postgres" });
-    expect(Array.from(menu.querySelectorAll("[role=menuitem]")).map((b) => b.textContent)).toEqual(["Make main chat", "Delete chat"]);
+    expect(Array.from(menu.querySelectorAll("[role=menuitem]")).map((b) => b.textContent)).toEqual(["Declare winner", "Delete chat"]);
     fireEvent.keyDown(menu, { key: "Escape" });
     expect(screen.queryByRole("menu")).toBeNull();
     fireEvent.contextMenu(screen.getByRole("tab", { name: "Main chat" }));

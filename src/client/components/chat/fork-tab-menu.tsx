@@ -1,5 +1,5 @@
 "use client";
-import { Crown, Trash2 } from "lucide-react";
+import { Trash2, Trophy } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
@@ -7,7 +7,7 @@ import { lazyChunk } from "../ui/lazy-chunk";
 import { useModals } from "../ui/modal-manager";
 
 const DeleteDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.DeleteDialog), { ssr: false }));
-const MakeMainDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.MakeMainDialog), { ssr: false }));
+const DeclareWinnerDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.DeclareWinnerDialog), { ssr: false }));
 
 export interface ForkTabMenuProps {
   tabId: string;
@@ -19,7 +19,7 @@ export interface ForkTabMenuProps {
   onClose: () => void;
 }
 
-/** A tab's right-click menu: Delete chat, Make main chat; each confirms in a dialog. */
+/** A tab's right-click menu: Declare winner (a fork stays alone), Delete chat; each confirms in a dialog. */
 export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose }: ForkTabMenuProps) {
   const { show } = useModals();
   const ref = useRef<HTMLDivElement>(null);
@@ -37,10 +37,10 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
     const c = chat();
     show(({ open, close }) => <DeleteDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />);
   };
-  const onMakeMain = () => {
+  const onDeclareWinner = () => {
     onClose();
     const c = chat();
-    show(({ open, close }) => <MakeMainDialog chat={c} open={open} onOpenChange={(o) => !o && close()} />);
+    show(({ open, close }) => <DeclareWinnerDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? []);
@@ -64,9 +64,9 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
       onKeyDown={onKeyDown}
     >
       {isMain ? null : (
-        <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={onMakeMain}>
-          <Crown className="size-4" />
-          Make main chat
+        <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={onDeclareWinner}>
+          <Trophy className="size-4" />
+          Declare winner
         </button>
       )}
       <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small text-destructive hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={onDelete}>

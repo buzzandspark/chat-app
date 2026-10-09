@@ -1,4 +1,4 @@
-import { and, asc, eq, max } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages } from "@db/schema";
 import { MAX_FORKS } from "@shared/forks";
@@ -193,25 +193,22 @@ export function setForkOrder(db: Db, userId: string, parentId: string, ids: stri
 }
 
 
-export interface MadeMain {
-  parentId: string;
-  parentForkPosition: number;
-  parentForkOrder: number;
+export interface Winner {
+  id: string;
+  deleted: string[];
 }
 
-/** A fork becomes the main chat: the old main becomes one of its forks (in the promoted tab's place) and its siblings follow. */
-export function makeMain(db: Db, userId: string, chatId: string): MadeMain | null {
+/** The winning fork stands alone with its history; the main chat and the other forks are deleted. */
+export async function declareWinner(db: Db, engine: Engine, userId: string, chatId: string): Promise<Winner | null> {
   const chat = db.select().from(chats).where(and(eq(chats.id, chatId), eq(chats.userId, userId))).get();
   if (!chat?.forkedFrom) return null;
-  const parent = db.select().from(chats).where(eq(chats.id, chat.forkedFrom)).get();
-  if (!parent) return null;
-  const last = db.select({ position: max(messages.position) }).from(messages).where(eq(messages.chatId, parent.id)).get();
-  const parentForkPosition = (last?.position ?? -1) + 1;
-  const parentForkOrder = chat.forkOrder ?? 0;
+  const parentId = chat.forkedFrom;
+  const losers = [parentId, ...db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, parentId)).all().map((c) => c.id).filter((id) => id !== chat.id)];
+  // A reply still streaming in a loser is stopped and settled before its rows cascade away.
+  await Promise.all(losers.map((id) => engine.stopChat(id)));
   db.transaction((tx) => {
-    tx.update(chats).set({ forkedFrom: chat.id }).where(eq(chats.forkedFrom, parent.id)).run();
     tx.update(chats).set({ forkedFrom: null, forkPosition: null, forkOrder: null, tabHidden: false }).where(eq(chats.id, chat.id)).run();
-    tx.update(chats).set({ forkedFrom: chat.id, forkPosition: parentForkPosition, forkOrder: parentForkOrder }).where(eq(chats.id, parent.id)).run();
+    for (const id of losers) tx.delete(chats).where(and(eq(chats.id, id), eq(chats.userId, userId))).run();
   });
-  return { parentId: parent.id, parentForkPosition, parentForkOrder };
+  return { id: chat.id, deleted: losers };
 }

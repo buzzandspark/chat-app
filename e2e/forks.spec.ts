@@ -98,7 +98,7 @@ test.describe("explore options", () => {
     await expect(tabs(page)).toHaveText(reordered, { timeout: 15_000 });
   });
 
-  test("tabs close and reopen from the sidebar, cycle with Ctrl+Shift+brackets, and a right-click menu promotes or deletes", async ({ page, isMobile }) => {
+  test("tabs close and reopen from the sidebar, cycle with Ctrl+Shift+brackets, and a right-click menu deletes or declares a winner", async ({ page, isMobile }) => {
     test.skip(isMobile, "keyboard and right-click are desktop gestures");
     const button = await replyWithOptions(page);
     const parentUrl = page.url();
@@ -119,18 +119,24 @@ test.describe("explore options", () => {
     await expect(page).toHaveURL(parentUrl, { timeout: 15_000 });
     await page.keyboard.press("Control+Shift+BracketLeft");
     await expect(tabs(page).nth(3)).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
-    // Right-click: Make main chat swaps roles after a confirmation.
-    await tabs(page).nth(1).click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Make main chat" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Make main chat" }).click();
-    await expect(tabs(page)).toHaveText(["Main chat", "Scenario: Reply with options", "Move to Postgres", "Embedded then managed"]);
-    await tabs(page).nth(0).click();
-    await expect(page.getByTestId("fork-divider").locator("visible=true")).toHaveCount(0);
-    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("keeping SQLite");
-    // Right-click: Delete chat removes the tab after a confirmation.
+    // Right-click: Delete chat removes another tab after a confirmation.
+    await tabs(page).nth(1).click();
+    await expect(tabs(page).nth(1)).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
     await tabs(page).nth(3).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Delete chat" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
-    await expect(tabs(page)).toHaveText(["Main chat", "Scenario: Reply with options", "Move to Postgres"]);
+    await expect(tabs(page)).toHaveText(["Main chat", "Keep SQLite", "Move to Postgres"]);
+    // Right-click: Declare winner keeps that chat alone, with its history, and opens it since this one is deleted.
+    await tabs(page).nth(2).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Declare winner" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Declare winner" }).click();
+    await expect(page).not.toHaveURL(parentUrl, { timeout: 15_000 });
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("moving to Postgres", { timeout: 15_000 });
+    await expect(tabs(page)).toHaveCount(0);
+    await expect(page.getByTestId("fork-divider").locator("visible=true")).toHaveCount(0);
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(2);
+    const aside = page.locator('aside[aria-label="Chats"]');
+    await expect(aside.getByRole("link", { name: "Move to Postgres" })).toHaveCount(1);
+    await expect(aside.getByRole("link", { name: /Keep SQLite|Scenario: Reply with options/ })).toHaveCount(0);
   });
 });

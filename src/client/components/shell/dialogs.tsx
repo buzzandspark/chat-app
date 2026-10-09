@@ -2,4 +2,4 @@
 // #82: every dialog loads from this one module, so Radix's dialog primitives ship in a single chunk.
 export { SearchDialog } from "./search-dialog";
 export { FeedbackDialog } from "./feedback-dialog";
-export { DeleteDialog, MakeMainDialog, RenameDialog } from "./chat-dialogs";
+export { DeclareWinnerDialog, DeleteDialog, RenameDialog } from "./chat-dialogs";

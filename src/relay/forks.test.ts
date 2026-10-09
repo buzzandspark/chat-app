@@ -7,7 +7,7 @@ import { uuidv7 } from "@shared/id";
 import type { HistoryMessage } from "./anthropic/history";
 import { buildRequest } from "./anthropic/request";
 import { Engine, type StartInput } from "./engine";
-import { createForks, ForkError, makeMain, setForkOrder, type ForkRequest } from "./forks";
+import { createForks, declareWinner, ForkError, setForkOrder, type ForkRequest } from "./forks";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { scenarioScript, type ScenarioName } from "./scenarios";
@@ -174,25 +174,30 @@ describe("createForks", () => {
     expect(db.select().from(messages).where(eq(messages.chatId, started!.chatId)).all().length).toBeGreaterThan(2);
   });
 
-  it("makeMain promotes a fork: the old main takes its place as a fork and the siblings follow", async () => {
+  it("declareWinner keeps the fork alone with its history and deletes the main chat and the other forks", async () => {
     const parentId = await parentChat(2);
     const forks = [fork("A"), fork("B")];
     const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
     await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
-    const promoted = forks[1]!.chatId;
-    expect(makeMain(db, "nobody", promoted)).toBeNull();
-    expect(makeMain(db, USER, parentId)).toBeNull();
-    const made = makeMain(db, USER, promoted)!;
-    expect(made).toEqual({ parentId, parentForkPosition: 4, parentForkOrder: 1 });
-    const row = (id: string) => db.select().from(chats).where(eq(chats.id, id)).get()!;
-    expect(row(promoted)).toMatchObject({ forkedFrom: null, forkPosition: null, forkOrder: null });
-    expect(row(parentId)).toMatchObject({ forkedFrom: promoted, forkPosition: 4, forkOrder: 1 });
-    expect(row(forks[0]!.chatId)).toMatchObject({ forkedFrom: promoted, forkOrder: 0 });
-    // The old main is a fork now, so it cannot be forked; the new main can.
-    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId, forks: [fork()] })).toThrow(/is_fork/);
-    const [again] = createForks(deps(), { userId: USER, userRole: "user", parentId: promoted, forks: [fork("C")] });
+    const winner = forks[1]!.chatId;
+    expect(await declareWinner(db, engine, "nobody", winner)).toBeNull();
+    expect(await declareWinner(db, engine, USER, parentId)).toBeNull();
+    // A reply still streaming in a loser is stopped and settled first.
+    engine = new Engine({ db, store, providers: () => new ScriptedProvider((req) => scenarioScript((req.scenario as ScenarioName) ?? "normal", req), 1), partialPersistMs: 50 });
+    const slow: StartInput = { generationId: uuidv7(), chatId: forks[0]!.chatId, userId: USER, userRole: "user", userMessageId: uuidv7(), assistantMessageId: uuidv7(), text: "more", model: "claude-opus-5-5", thinking: { harder: true }, scenario: "slow_tokens" };
+    engine.start(slow);
+    const rowsBefore = db.select().from(messages).where(eq(messages.chatId, winner)).orderBy(asc(messages.position)).all();
+    const made = await declareWinner(db, engine, USER, winner);
+    expect(made).toEqual({ id: winner, deleted: [parentId, forks[0]!.chatId] });
+    expect(engine.runningCount()).toBe(0);
+    expect(db.select().from(chats).where(eq(chats.userId, USER)).all().map((c) => c.id)).toEqual([winner]);
+    expect(db.select().from(chats).where(eq(chats.id, winner)).get()).toMatchObject({ forkedFrom: null, forkPosition: null, forkOrder: null });
+    expect(db.select().from(messages).where(eq(messages.chatId, winner)).orderBy(asc(messages.position)).all()).toEqual(rowsBefore);
+    expect(db.select().from(messages).where(eq(messages.chatId, parentId)).all()).toHaveLength(0);
+    // Standing alone, it can be forked again.
+    const [again] = createForks(deps(), { userId: USER, userRole: "user", parentId: winner, forks: [fork("C")] });
     await collectUntilTerminal(store, again!.generationId);
-    expect(row(again!.chatId).forkedFrom).toBe(promoted);
+    expect(db.select().from(chats).where(eq(chats.id, again!.chatId)).get()!.forkedFrom).toBe(winner);
   });
 
   it("setForkOrder stores the given order and keeps unnamed forks after it", async () => {
