@@ -6,6 +6,8 @@ export interface ChatSummary {
   title: string;
   updatedAt: number;
   pinned?: boolean;
+  forkedFrom?: string | null;
+  forkOrder?: number | null;
 }
 
 type Listener = () => void;

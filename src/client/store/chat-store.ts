@@ -1,5 +1,6 @@
 import type { ClientBlock, StoredContentBlock } from "@shared/blocks";
 import { toClientBlocks } from "@shared/blocks";
+import type { ForkOption } from "@shared/forks";
 import { DEFAULT_MODEL, isModelId, type ModelId } from "@shared/models";
 import type {
   InterruptedReason,
@@ -45,6 +46,10 @@ export interface MessageState {
   retryAttempt: number;
   /** The scripted scenario this reply comes from, so Continue and retries keep it. */
   scenario: string | null;
+  /** Row position on the server; null until the server has listed the message. */
+  position: number | null;
+  /** Fork prompts for a reply: null = not run or unknown, [] = none. */
+  options: ForkOption[] | null;
 }
 
 /** Per-chat composer settings (ADR-0005): kept here so a remount or an Activity eviction never resets them. */
@@ -70,6 +75,9 @@ export interface ChatState {
   older: number;
   /** Messages typed while a reply was streaming; the first goes out when that reply ends. */
   queue: QueuedMessage[];
+  /** Set on a fork: the chat its rows were copied from, and the position of its first own message. */
+  forkedFrom: string | null;
+  forkPosition: number | null;
 }
 
 /** A message row as the page and `GET /api/chats/:id` deliver it. */
@@ -88,6 +96,9 @@ export interface SeedRow {
   generationId: string | null;
   lastSeq?: number | null;
   scenario?: string | null;
+  position?: number;
+  thinking?: ThinkingOptions | null;
+  options?: ForkOption[] | null;
   createdAt: number;
 }
 
@@ -104,11 +115,11 @@ export interface QueuedMessage {
   scenario: string | null;
 }
 
-export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false, older: 0, queue: [] };
-
 function emptyChat(id: string, settings: ChatSettings = DEFAULT_SETTINGS): ChatState {
-  return { id, messageIds: [], title: null, seeded: false, settings, settingsTouched: false, older: 0, queue: [] };
+  return { id, messageIds: [], title: null, seeded: false, settings, settingsTouched: false, older: 0, queue: [], forkedFrom: null, forkPosition: null };
 }
+
+export const EMPTY_CHAT: ChatState = emptyChat("");
 
 const TERMINAL: ReadonlySet<MessageStatus> = new Set(["done", "stopped", "interrupted", "error", "refused"]);
 
@@ -135,6 +146,8 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
     local: false,
     retryAttempt: 0,
     scenario: null,
+    position: null,
+    options: null,
     ...partial,
   };
 }
@@ -287,7 +300,12 @@ export class ChatStore {
    * not listed yet stay, after the server's rows. deferNotify: the caller seeds during its own
    * render, so subscribers are notified in a microtask.
    */
-  seedChat(chatId: string, title: string | null, rows: readonly SeedRow[], options: { deferNotify?: boolean; older?: number } = {}): void {
+  seedChat(
+    chatId: string,
+    title: string | null,
+    rows: readonly SeedRow[],
+    options: { deferNotify?: boolean; older?: number; fork?: { from: string | null; position: number | null } } = {},
+  ): void {
     const previous = this.chats.get(chatId);
     const ids: string[] = [];
     const touched: string[] = [];
@@ -313,27 +331,36 @@ export class ChatStore {
       }
     }
     const nextTitle = title ?? previous?.title ?? null;
-    // An existing chat opens on the model its last reply was asked of, unless the user already chose one here.
+    // An existing chat opens on the model and effort its last reply was asked with, unless the user already chose here.
     let settings = previous?.settings ?? this.defaults;
     if (!previous?.settingsTouched) {
       for (let i = rows.length - 1; i >= 0; i--) {
         const row = rows[i]!;
         if (row.role === "assistant" && isModelId(row.requestedModel)) {
-          if (settings.model !== row.requestedModel) settings = { ...settings, model: row.requestedModel };
+          const thinking = row.thinking ?? settings.thinking;
+          if (settings.model !== row.requestedModel || thinking.harder !== settings.thinking.harder) {
+            settings = { ...settings, model: row.requestedModel, thinking };
+          }
           break;
         }
       }
     }
     const older = options.older ?? 0;
+    const forkedFrom = options.fork ? options.fork.from : (previous?.forkedFrom ?? null);
+    const forkPosition = options.fork ? options.fork.position : (previous?.forkPosition ?? null);
     const same =
       previous !== undefined &&
       previous.seeded &&
       previous.title === nextTitle &&
       previous.settings === settings &&
       previous.older === older &&
+      previous.forkedFrom === forkedFrom &&
+      previous.forkPosition === forkPosition &&
       previous.messageIds.length === ids.length &&
       previous.messageIds.every((id, i) => id === ids[i]);
-    if (!same) this.chats.set(chatId, { ...(previous ?? this.emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true, settings, older });
+    if (!same) {
+      this.chats.set(chatId, { ...(previous ?? this.emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true, settings, older, forkedFrom, forkPosition });
+    }
     const notify = () => {
       for (const id of touched) this.notifyMessage(id);
       if (!same) this.notifyChat(chatId);
@@ -653,6 +680,7 @@ export class ChatStore {
 function sameRow(existing: MessageState, row: SeedRow): boolean {
   if (existing.local || existing.status !== row.status || existing.stopReason !== row.stopReason) return false;
   if (existing.lastSeq !== (row.lastSeq ?? -1)) return false;
+  if ((existing.options === null) !== (row.options == null)) return false;
   const blocks = toClientBlocks(row.content);
   if (blocks.length !== existing.blocks.length) return false;
   return textOf(blocks) === textOf(existing.blocks);
@@ -677,6 +705,8 @@ export function messageStateFromRow(row: SeedRow): MessageState {
     discardedText: row.status === "refused" && textOf(blocks).length > 0,
     lastSeq: row.lastSeq ?? -1,
     scenario: row.scenario ?? null,
+    position: row.position ?? null,
+    options: row.options ?? null,
     createdAt: row.createdAt,
   });
 }

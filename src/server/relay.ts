@@ -3,7 +3,6 @@ import { env } from "@shared/env";
 import { getDb } from "@db/client";
 import { Engine } from "@relay/engine";
 import { QuotaManager } from "@relay/quota";
-import { RateLimiter } from "@relay/ratelimit";
 import { createProviderResolver } from "@relay/registry";
 import { EventStore } from "@relay/store";
 import { isDraining, onShutdown } from "./shutdown";
@@ -11,7 +10,6 @@ import { isDraining, onShutdown } from "./shutdown";
 interface RelaySingleton {
   engine: Engine;
   store: EventStore;
-  rateLimiter: RateLimiter;
   quota: QuotaManager;
 }
 
@@ -32,16 +30,12 @@ export function getRelay(): RelaySingleton {
     providers: createProviderResolver({ replayMode: env.replayMode, record: env.record }),
     isDraining,
   });
-  const rateLimiter = new RateLimiter();
-  // Every user who ever sent keeps a key until swept; idle ones go every ten minutes.
-  rateLimiter.startSweeper();
   // Registered after boot's closeDatabase drain, so it runs before it (LIFO).
   onShutdown(async () => {
     console.log(`[shutdown] draining ${engine.runningCount()} generation(s)`);
     await engine.drain();
     store.stopSweeper();
-    rateLimiter.stopSweeper();
   });
-  g.__cadenceRelay = { engine, store, rateLimiter, quota };
+  g.__cadenceRelay = { engine, store, quota };
   return g.__cadenceRelay;
 }

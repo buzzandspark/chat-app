@@ -2,19 +2,25 @@ import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@db/client";
 import type { StoredContentBlock } from "@shared/blocks";
-import type { MessageStatus, RefusalInfo, RelayError, Timings } from "@shared/types";
+import type { ForkOption } from "@shared/forks";
+import type { MessageStatus, RefusalInfo, RelayError, ThinkingOptions, Timings } from "@shared/types";
 
 export interface ChatSummary {
   id: string;
   title: string;
   updatedAt: number;
   pinned: boolean;
+  forkedFrom: string | null;
+  forkOrder: number | null;
 }
+
+export type ChatDetail = ChatSummary & { forkPosition: number | null };
 
 export interface MessageRow {
   id: string;
   chatId: string;
   role: "user" | "assistant";
+  position: number;
   content: StoredContentBlock[];
   status: MessageStatus;
   requestedModel: string | null;
@@ -23,6 +29,8 @@ export interface MessageRow {
   refusal: RefusalInfo | null;
   error: RelayError | null;
   timings: Timings | null;
+  thinking: ThinkingOptions | null;
+  options: ForkOption[] | null;
   generationId: string | null;
   lastSeq: number | null;
   /** From the message's generation; a reply from a scripted scenario keeps it through Continue and retries. */
@@ -33,13 +41,20 @@ export interface MessageRow {
 export function listChats(userId: string, limit = 200): ChatSummary[] {
   const db = getDb();
   return db
-    .select({ id: schema.chats.id, title: schema.chats.title, updatedAt: schema.chats.updatedAt, pinned: schema.chats.pinned })
+    .select({
+      id: schema.chats.id,
+      title: schema.chats.title,
+      updatedAt: schema.chats.updatedAt,
+      pinned: schema.chats.pinned,
+      forkedFrom: schema.chats.forkedFrom,
+      forkOrder: schema.chats.forkOrder,
+    })
     .from(schema.chats)
     .where(eq(schema.chats.userId, userId))
     .orderBy(desc(schema.chats.updatedAt))
     .limit(limit)
     .all()
-    .map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt.getTime(), pinned: c.pinned }));
+    .map((c) => ({ ...c, updatedAt: c.updatedAt.getTime() }));
 }
 
 /** The newest messages the page ships; the rest load on request (#47). */
@@ -58,7 +73,7 @@ export function getChatWithMessages(
   chatId: string,
   userId: string,
   options: { limit?: number | null } = {},
-): { chat: ChatSummary; messages: MessageRow[]; older: number } | null {
+): { chat: ChatDetail; messages: MessageRow[]; older: number } | null {
   const db = getDb();
   const chat = db
     .select()
@@ -84,12 +99,21 @@ export function getChatWithMessages(
       .map((g) => [g.id, g.scenario] as const),
   );
   return {
-    chat: { id: chat.id, title: chat.title, updatedAt: chat.updatedAt.getTime(), pinned: chat.pinned },
+    chat: {
+      id: chat.id,
+      title: chat.title,
+      updatedAt: chat.updatedAt.getTime(),
+      pinned: chat.pinned,
+      forkedFrom: chat.forkedFrom,
+      forkOrder: chat.forkOrder,
+      forkPosition: chat.forkPosition,
+    },
     older,
     messages: rows.map((r) => ({
       id: r.id,
       chatId: r.chatId,
       role: r.role,
+      position: r.position,
       content: stripForClient(r.content),
       status: r.status,
       requestedModel: r.requestedModel,
@@ -98,6 +122,8 @@ export function getChatWithMessages(
       refusal: r.refusal ?? null,
       error: r.error ?? null,
       timings: r.timings ?? null,
+      thinking: r.thinking ?? null,
+      options: r.forkOptions ?? null,
       generationId: r.generationId,
       lastSeq: r.lastSeq,
       scenario: (r.generationId && scenarios.get(r.generationId)) || null,

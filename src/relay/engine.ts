@@ -282,6 +282,7 @@ export class Engine {
             content: [],
             status: "streaming",
             requestedModel: input.model,
+            thinking: input.thinking,
             generationId: input.generationId,
             timings: { server: { received: this.now() } },
             createdAt: now,
@@ -340,13 +341,6 @@ export class Engine {
       console.error(`[engine] generation ${active.id} crashed`, err);
     });
     return { created: true };
-  }
-
-  /** Generations running here for one user (the per-user concurrency cap, #62). */
-  runningFor(userId: string): number {
-    let n = 0;
-    for (const a of this.active.values()) if (a.userId === userId && !a.abortReason) n++;
-    return n;
   }
 
   /** Stops and settles every running generation of a user (admin delete or ban, #69). */

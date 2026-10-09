@@ -12,28 +12,30 @@ interface SeedChatProps {
   rows: SeedRow[];
   /** Messages before the window the server sent (#47); the list offers to load them. */
   older?: number;
+  forkedFrom?: string | null;
+  forkPosition?: number | null;
 }
 
 /**
  * ADR-0005: the server's rows reconcile into the store during render (so a hard load paints them in
  * its first frame) and render nothing. Notifications are deferred so no ancestor updates mid-render.
  */
-export function SeedChat({ chatId, title, updatedAt, rows, older = 0 }: SeedChatProps) {
+export function SeedChat({ chatId, title, updatedAt, rows, older = 0, forkedFrom = null, forkPosition = null }: SeedChatProps) {
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
   const [applied, setApplied] = useState<SeedRow[] | null>(null);
   // Re-applied when the rows change and when the store has since evicted this chat (#72).
   if (applied !== rows || !store.getChat(chatId).seeded) {
-    store.seedChat(chatId, title, rows, { deferNotify: true, older });
+    store.seedChat(chatId, title, rows, { deferNotify: true, older, fork: { from: forkedFrom, position: forkPosition } });
     setApplied(rows);
   }
   useEffect(() => {
     // A chat opened by deep link joins the sidebar even if the layout rendered before it existed.
-    if (title) getSidebarStore().ensure({ id: chatId, title, updatedAt: updatedAt ?? 0 });
+    if (title) getSidebarStore().ensure({ id: chatId, title, updatedAt: updatedAt ?? 0, forkedFrom });
     // D2: a reply still streaming on the server reattaches through the resume path.
     for (const row of rows) {
       if (row.role === "assistant" && row.status === "streaming" && row.generationId) client.attach(row.generationId, row.id);
     }
-  }, [chatId, title, updatedAt, rows, client]);
+  }, [chatId, title, updatedAt, rows, client, forkedFrom]);
   return null;
 }

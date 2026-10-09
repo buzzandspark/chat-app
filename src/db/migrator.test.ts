@@ -197,7 +197,7 @@ const CHAT_FIELDS = "id, user_id, title, pinned, created_at, updated_at, last_me
 
 /** After 0010: no groups anywhere, every row kept, search and FKs working, the schema of a fresh database. */
 function expectGroupsGoneRowsKept(chatsBefore: unknown[]): void {
-  expect(journalRows()).toBe(11);
+  expect(journalRows()).toBe(12);
   expect(hasTable("chat_groups")).toBe(false);
   expect(chatColumns()).not.toContain("group_id");
   expect(sqlite.prepare(`SELECT ${CHAT_FIELDS} FROM chats ORDER BY id`).all()).toEqual(chatsBefore);
@@ -205,7 +205,7 @@ function expectGroupsGoneRowsKept(chatsBefore: unknown[]): void {
   expect(count("generations")).toBe(1);
   expect(
     sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'chats' ORDER BY name").pluck().all(),
-  ).toEqual(["chats_user_updated_idx", "sqlite_autoindex_chats_1"]);
+  ).toEqual(["chats_forked_from_idx", "chats_user_updated_idx", "sqlite_autoindex_chats_1"]);
   // Search (FTS5 over messages, kept by triggers) is untouched by the rebuilds.
   expect(sqlite.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'quokka'").all()).toHaveLength(1);
   expect(sqlite.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -244,7 +244,7 @@ describe("migrations 0009 and 0010 (chat groups repaired, then removed)", () => 
   it("a fresh database ends without groups", () => {
     applyMigrations(sqlite);
 
-    expect(journalRows()).toBe(11);
+    expect(journalRows()).toBe(12);
     expect(hasTable("chat_groups")).toBe(false);
     expect(chatColumns()).not.toContain("group_id");
   });

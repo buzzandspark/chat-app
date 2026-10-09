@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type Anthropic from "@anthropic-ai/sdk";
 import type {
   GenerationStatus,
@@ -6,9 +6,11 @@ import type {
   MessageStatus,
   RefusalInfo,
   RelayError,
+  ThinkingOptions,
   Timings,
   UserRole,
 } from "@shared/types";
+import type { ForkOption } from "@shared/forks";
 
 // ADR-0003: JSON columns are text with { mode: "json" }. Property names on the better-auth tables
 // must match better-auth's field names; the DB column names are free.
@@ -119,11 +121,16 @@ export const chats = sqliteTable(
     title: text("title").notNull().default("New chat"),
     /** Pinned chats sit in their own section at the top of the sidebar. */
     pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
+    /** Set on a fork: the chat whose rows it copied; deleting the parent leaves the fork standing. */
+    forkedFrom: text("forked_from").references((): AnySQLiteColumn => chats.id, { onDelete: "set null" }),
+    /** Position of a fork's first own message; the divider renders above it. */
+    forkPosition: integer("fork_position"),
+    forkOrder: integer("fork_order"),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at").notNull().$defaultFn(now),
     lastMessageAt: timestamp("last_message_at"),
   },
-  (t) => [index("chats_user_updated_idx").on(t.userId, t.updatedAt)],
+  (t) => [index("chats_user_updated_idx").on(t.userId, t.updatedAt), index("chats_forked_from_idx").on(t.forkedFrom)],
 );
 
 export type StoredContentBlock = Anthropic.Beta.BetaContentBlock;
@@ -148,6 +155,10 @@ export const messages = sqliteTable(
     error: text("error", { mode: "json" }).$type<RelayError>(),
     generationId: text("generation_id"),
     timings: text("timings", { mode: "json" }).$type<Timings>(),
+    /** The effort a reply was asked with; a fork repeats it so the prompt cache holds. */
+    thinking: text("thinking", { mode: "json" }).$type<ThinkingOptions>(),
+    /** Haiku's fork prompts for a reply: null = not run, [] = no options. */
+    forkOptions: text("fork_options", { mode: "json" }).$type<ForkOption[]>(),
     /** The last producer seq folded into `content` by the write that saved it (D2 resume); null for user messages and old rows. */
     lastSeq: integer("last_seq"),
     /** The text blocks of `content`, kept by a trigger for the FTS5 index (#60). */
