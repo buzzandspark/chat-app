@@ -2,6 +2,11 @@
 
 All notable changes, newest first. Dates are the day the work landed.
 
+## 2026-10-09
+
+- Explore options: after a reply that lays out alternatives, a button above the composer forks the chat once per option. Claude Haiku 5.5 reads the final reply (only that) as a side effect of the reply and proposes a tab title and a first message per option; a click forks up to five, press and hold opens a sheet to pick, retitle and reword them or apply one instruction to every prompt; more than five opens the sheet too. Each fork copies every parent row, shows "Forked from main chat", and asks the parent's model at the parent's effort; the first fork writes the cache entry for the parent's final reply and the rest read it, and a first reply that fails before the API begins a message is retried after 1 s, 2 s and 4 s. Tabs above the thread list the main chat and its forks, drag-ordered with a mouse or pen; fork rows in the sidebar carry a fork icon. At most ten forks per chat, none of a fork. Migration 0011 adds `chats.forked_from`, `fork_position`, `fork_order` and `messages.thinking`, `fork_options`. ADR-0006.
+- The per-user running cap (3) and the send window (20 a minute, 300 a day) are removed: the cost cap is the only limit. The feedback and long-chat seed endpoints keep their windows.
+
 ## 2026-10-08
 
 - Chat groups are removed. The sidebar is Pinned, then Chats again; a chat row's ⋯ menu has Pin, Rename and Delete (no Move to); `/api/groups` and `groupId` on `PATCH /api/chats/:id` are gone. Migration 0010 drops `chat_groups` and rebuilds `chats` without `group_id` (SQLite cannot drop a column that carries a foreign key); chats that sat in a group stay, ungrouped. Migration tests take a database that ran the original 0008, one at 0009 and a fresh one to the same schema with every chat, message and generation kept. The chat route measures 196.67 kB against the 205 kB gate.
