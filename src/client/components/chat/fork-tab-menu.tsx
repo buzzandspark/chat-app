@@ -8,6 +8,7 @@ import { useModals } from "../ui/modal-manager";
 
 const DeleteDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.DeleteDialog), { ssr: false }));
 const DeclareWinnerDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.DeclareWinnerDialog), { ssr: false }));
+const DeleteForksDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.DeleteForksDialog), { ssr: false }));
 
 export interface ForkTabMenuProps {
   tabId: string;
@@ -19,7 +20,7 @@ export interface ForkTabMenuProps {
   onClose: () => void;
 }
 
-/** A tab's right-click menu: Declare winner (a fork stays alone), Delete chat; each confirms in a dialog. */
+/** A tab's right-click menu: Declare winner (a fork stays alone) or Delete forks (the main chat stays), then Delete chat; each confirms in a dialog. */
 export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose }: ForkTabMenuProps) {
   const { show } = useModals();
   const ref = useRef<HTMLDivElement>(null);
@@ -42,6 +43,11 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
     const c = chat();
     show(({ open, close }) => <DeclareWinnerDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />);
   };
+  const onDeleteForks = () => {
+    onClose();
+    const c = chat();
+    show(({ open, close }) => <DeleteForksDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />);
+  };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? []);
     const i = items.indexOf(document.activeElement as HTMLButtonElement);
@@ -63,12 +69,10 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
       style={{ left, top: y }}
       onKeyDown={onKeyDown}
     >
-      {isMain ? null : (
-        <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={onDeclareWinner}>
-          <Trophy className="size-4" />
-          Declare winner
-        </button>
-      )}
+      <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={isMain ? onDeleteForks : onDeclareWinner}>
+        <Trophy className="size-4" />
+        {isMain ? "Delete forks" : "Declare winner"}
+      </button>
       <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small text-destructive hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={onDelete}>
         <Trash2 className="size-4" />
         Delete chat

@@ -144,4 +144,23 @@ test.describe("explore options", () => {
     await expect(aside.locator(`a[href="${loserPath}"]`)).toHaveCount(0);
     await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveCount(0);
   });
+
+  test("Delete forks on the main tab removes every fork and keeps the main chat", async ({ page, isMobile }) => {
+    test.skip(isMobile, "right-click is a desktop gesture");
+    const button = await replyWithOptions(page);
+    const parentUrl = page.url();
+    await button.click();
+    await expect(tabs(page)).toHaveCount(4, { timeout: 15_000 });
+    const forkPath = new URL(page.url()).pathname;
+    await tabs(page).nth(0).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Delete forks" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete forks" }).click();
+    // The viewed fork was deleted, so the main chat opens, alone.
+    await expect(page).toHaveURL(parentUrl, { timeout: 15_000 });
+    await expect(tabs(page)).toHaveCount(0);
+    const aside = page.locator('aside[aria-label="Chats"]');
+    await expect(aside.locator(`a[href="${forkPath}"]`)).toHaveCount(0);
+    await expect(aside.locator(`a[href="${new URL(parentUrl).pathname}"]`)).toHaveCount(1);
+    await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
+  });
 });

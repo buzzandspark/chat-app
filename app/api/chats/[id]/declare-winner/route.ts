@@ -5,7 +5,7 @@ import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 
 /** The fork wins: it stays, with its history; the main chat and the other forks are deleted. */
-export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
+export async function POST(_request: NextRequest, ctx: RouteContext<"/api/chats/[id]/declare-winner">): Promise<Response> {
   try {
     const user = await requireUser();
     const { id } = await ctx.params;

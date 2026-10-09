@@ -187,3 +187,58 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
     </ResponsiveDialog>
   );
 }
+
+
+/** Every fork of the main chat is deleted; the main chat stays and is opened if a fork was being viewed. */
+export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
+  const store = useChatStore();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirm = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/delete-forks`, { method: "POST" });
+      if (!res.ok) {
+        setError(res.status === 404 ? "This chat no longer exists." : `Could not delete the forks (${res.status}).`);
+        return;
+      }
+      const { deleted } = (await res.json()) as { deleted: string[] };
+      const sidebar = getSidebarStore();
+      for (const id of deleted) {
+        sidebar.remove(id);
+        store.removeChat(id);
+      }
+      const leaving = currentChatId !== null && deleted.includes(currentChatId);
+      if (leaving) markNavigationClose();
+      onOpenChange(false);
+      if (leaving) {
+        setPendingChat(chat.id);
+        router.push(`/c/${chat.id}`);
+      }
+    } catch {
+      setError("You seem to be offline.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Delete all forks?" description={`Every fork of "${chat.title}" will be deleted; the main chat stays. This cannot be undone.`}>
+      {error ? (
+        <p role="alert" className="text-small text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
+          Delete forks
+        </Button>
+      </div>
+    </ResponsiveDialog>
+  );
+}

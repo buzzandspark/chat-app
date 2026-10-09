@@ -6,18 +6,33 @@ import { clampOptions, LiveOptionsMessenger, OPTIONS_MODEL } from "./messenger";
 describe("options messenger", () => {
   it("asks Haiku with a structured output format at low effort and maps the parsed answer", async () => {
     const parse = vi.fn().mockResolvedValue({
-      parsed_output: { options: [{ title: " Keep SQLite ", prompt: " Let's keep SQLite. " }, { title: "", prompt: "dropped" }] },
+      parsed_output: {
+        is_choice: true,
+        options: [{ title: " Keep SQLite ", prompt: " Let's keep SQLite. " }, { title: "", prompt: "dropped" }, { title: "Postgres", prompt: "Let's move." }],
+      },
       usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: null, cache_creation_input_tokens: null },
     });
     const client = { messages: { parse } } as unknown as Anthropic;
     const result = await new LiveOptionsMessenger(client).detect("Here are two ways");
-    expect(result.options).toEqual([{ title: "Keep SQLite", prompt: "Let's keep SQLite." }]);
+    expect(result.options).toEqual([
+      { title: "Keep SQLite", prompt: "Let's keep SQLite." },
+      { title: "Postgres", prompt: "Let's move." },
+    ]);
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0 });
     const params = parse.mock.calls[0]![0] as { model: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
     expect(params.model).toBe(OPTIONS_MODEL);
     expect(params.output_config.effort).toBe("low");
     expect(params.output_config.format.type).toBe("json_schema");
     expect(params.messages[0]!.content).toContain("Here are two ways");
+  });
+
+  it("no choice, or a single alternative, is an empty list", async () => {
+    const answer = (parsed_output: unknown) => ({ messages: { parse: vi.fn().mockResolvedValue({ parsed_output, usage: { input_tokens: 1, output_tokens: 1 } }) } }) as unknown as Anthropic;
+    const two = [{ title: "A", prompt: "a" }, { title: "B", prompt: "b" }];
+    expect((await new LiveOptionsMessenger(answer({ is_choice: false, options: two })).detect("x")).options).toEqual([]);
+    expect((await new LiveOptionsMessenger(answer({ is_choice: true, options: two.slice(0, 1) })).detect("x")).options).toEqual([]);
+    expect((await new LiveOptionsMessenger(answer(null)).detect("x")).options).toEqual([]);
+    expect(clampOptions(two.slice(0, 1))).toEqual([]);
   });
 
   it("clamps titles and prompts and caps the list", () => {

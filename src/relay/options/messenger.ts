@@ -19,10 +19,11 @@ export interface OptionsMessenger {
   rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult>;
 }
 
-const DETECT_SYSTEM = `You read one assistant reply from a chat app and decide whether it lays out options: alternatives the user could choose between, such as approaches, libraries, designs or plans. The steps of one procedure, a list of facts, or a single recommendation are not options.
-Return one item per option in the reply's order, and an empty list when the reply has none. Each item has a title of at most four words for a tab, and the message a user would send in a new chat to explore that option in depth, written in the user's voice and naming the option.`;
+const DETECT_SYSTEM = `You read one assistant reply from a chat app and decide whether it presents the user with a choice: two or more distinct, mutually exclusive alternatives the user is meant to pick between, such as approaches, tools, designs, plans or versions of one thing.
+Most replies do not. The steps of one procedure, a list of tips, features or facts, the pros and cons of one thing, a ranked list that ends in a single recommendation, follow-up suggestions, and questions back to the user are not a choice. When in doubt, it is not a choice.
+Set is_choice accordingly. When it is a choice, list one item per alternative in the reply's order: a title of at most four words for a tab, and the message a user would send in a new chat to explore that alternative in depth, written in the user's voice and naming it. When it is not a choice, leave the list empty.`;
 
-const REWRITE_SYSTEM = `You revise a list of chat prompts, each with a tab title, under one instruction from the user. Keep one item per input item in the same order, apply the instruction to every prompt, and keep each title at most four words.`;
+const REWRITE_SYSTEM = `You revise a list of chat prompts, each with a tab title, under one instruction from the user. Keep one item per input item in the same order, apply the instruction to every prompt, keep each title at most four words, and set is_choice to true.`;
 
 export class LiveOptionsMessenger implements OptionsMessenger {
   readonly name = "haiku" as const;
@@ -45,8 +46,9 @@ export class LiveOptionsMessenger implements OptionsMessenger {
       output_config: { effort: "low", format: zodOutputFormat(OptionsOutput) },
     });
     const u = message.usage;
+    const parsed = message.parsed_output;
     return {
-      options: clampOptions(message.parsed_output?.options ?? []),
+      options: parsed?.is_choice ? clampOptions(parsed.options) : [],
       usage: {
         inputTokens: u.input_tokens,
         outputTokens: u.output_tokens,
@@ -57,6 +59,7 @@ export class LiveOptionsMessenger implements OptionsMessenger {
   }
 }
 
+/** A single alternative is no choice: fewer than two items is an empty list. */
 export function clampOptions(raw: readonly { title: string; prompt: string }[]): ForkOption[] {
   const out: ForkOption[] = [];
   for (const o of raw) {
@@ -65,7 +68,7 @@ export function clampOptions(raw: readonly { title: string; prompt: string }[]):
     if (title && prompt) out.push({ title, prompt });
     if (out.length === MAX_FORKS) break;
   }
-  return out;
+  return out.length >= 2 ? out : [];
 }
 
 export const SCRIPTED_OPTIONS: ForkOption[] = [

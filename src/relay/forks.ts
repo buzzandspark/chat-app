@@ -212,3 +212,16 @@ export async function declareWinner(db: Db, engine: Engine, userId: string, chat
   });
   return { id: chat.id, deleted: losers };
 }
+
+
+/** Every fork of a main chat is deleted; the main chat stays. */
+export async function deleteForks(db: Db, engine: Engine, userId: string, parentId: string): Promise<{ deleted: string[] } | null> {
+  const parent = db.select().from(chats).where(and(eq(chats.id, parentId), eq(chats.userId, userId))).get();
+  if (!parent || parent.forkedFrom) return null;
+  const forks = db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, parent.id)).all().map((c) => c.id);
+  await Promise.all(forks.map((id) => engine.stopChat(id)));
+  db.transaction((tx) => {
+    for (const id of forks) tx.delete(chats).where(and(eq(chats.id, id), eq(chats.userId, userId))).run();
+  });
+  return { deleted: forks };
+}
