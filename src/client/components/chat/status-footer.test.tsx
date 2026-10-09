@@ -40,4 +40,19 @@ describe("StatusFooter", () => {
     expect(screen.getByText("Claude is overloaded right now.")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
   });
+
+  it("offers Reload, not Retry, for a replace another request already made (#21)", () => {
+    const message = createMessageState({
+      id: "a1",
+      chatId: "c1",
+      role: "assistant",
+      status: "error",
+      error: { kind: "conflict", message: "", retryable: false, status: 409 },
+      local: true,
+    });
+    render(<StatusFooter message={message} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
+    expect(screen.getByText("These turns were already replaced in another request.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
+  });
 });

@@ -112,7 +112,13 @@ export interface StartInput {
   retry?: RetryPolicy;
 }
 
-export type StartOutcome = { created: true } | { created: false; reason: "exists" };
+/**
+ * `replace_running`: a turn the replace would drop still has a generation running here (the caller's
+ * stop has not settled it, or another request started one meanwhile); nothing changed, try again.
+ * `replace_gone`: `replaceFromMessageId` is no longer in the chat, so another request replaced it first.
+ */
+export type ReplaceConflict = "replace_running" | "replace_gone";
+export type StartOutcome = { created: true } | { created: false; reason: "exists" | ReplaceConflict };
 
 export type ResumeOutcome =
   | { kind: "live" }
@@ -227,10 +233,32 @@ export class Engine {
     }
 
     const now = new Date(this.now());
+    let conflict: ReplaceConflict | null;
     try {
-      this.db.transaction((tx) => {
+      conflict = this.db.transaction((tx): ReplaceConflict | null => {
         const chat = tx.select().from(chats).where(eq(chats.id, input.chatId)).get();
         if (chat && chat.userId !== input.userId) throw new ForbiddenError("Not your chat");
+        let victims: string[] = [];
+        if (input.replaceFromMessageId) {
+          // Edit and Regenerate replace in one request: no separate truncate round trip, and a failed
+          // start leaves the server's turns exactly as they were. The caller's stop was awaited, so the
+          // turns are checked again here, where nothing can interleave: deleting a running reply's rows
+          // fails its finalize and loses its usage rows, and a target already gone would append (#21).
+          const from = tx
+            .select({ position: messages.position })
+            .from(messages)
+            .where(and(eq(messages.id, input.replaceFromMessageId), eq(messages.chatId, input.chatId)))
+            .get();
+          if (!from) return "replace_gone";
+          victims = tx
+            .select({ id: messages.id })
+            .from(messages)
+            .where(and(eq(messages.chatId, input.chatId), gte(messages.position, from.position)))
+            .all()
+            .map((v) => v.id);
+          const running = new Set([...this.active.values()].map((a) => a.messageId));
+          if (victims.some((id) => running.has(id))) return "replace_running";
+        }
         if (!chat) {
           tx.insert(chats)
             .values({
@@ -252,26 +280,9 @@ export class Engine {
             .where(eq(chats.id, input.chatId))
             .run();
         }
-        if (input.replaceFromMessageId) {
-          // Edit and Regenerate replace in one request: no separate truncate round trip, and a failed
-          // start leaves the server's turns exactly as they were (the caller stopped the victims first).
-          const from = tx
-            .select({ position: messages.position })
-            .from(messages)
-            .where(and(eq(messages.id, input.replaceFromMessageId), eq(messages.chatId, input.chatId)))
-            .get();
-          if (from) {
-            const victims = tx
-              .select({ id: messages.id })
-              .from(messages)
-              .where(and(eq(messages.chatId, input.chatId), gte(messages.position, from.position)))
-              .all()
-              .map((v) => v.id);
-            if (victims.length > 0) {
-              tx.delete(generations).where(inArray(generations.messageId, victims)).run();
-              tx.delete(messages).where(inArray(messages.id, victims)).run();
-            }
-          }
+        if (victims.length > 0) {
+          tx.delete(generations).where(inArray(generations.messageId, victims)).run();
+          tx.delete(messages).where(inArray(messages.id, victims)).run();
         }
         const last = tx
           .select({ position: max(messages.position) })
@@ -329,10 +340,16 @@ export class Engine {
             startedAt: now,
           })
           .run();
+        return null;
       });
     } catch (err) {
       this.quota.release(input.userId, input.generationId);
       throw err;
+    }
+    if (conflict) {
+      // Returned before the transaction wrote anything.
+      this.quota.release(input.userId, input.generationId);
+      return { created: false, reason: conflict };
     }
 
     this.store.open(input.generationId);

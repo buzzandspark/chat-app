@@ -82,6 +82,8 @@ export const ERROR_KINDS = [
   "unavailable",
   /** The server knew this generation and no longer does: its chat was deleted. */
   "gone",
+  /** An Edit or Regenerate whose turns the server could not replace now (#21); nothing was added. */
+  "conflict",
   "unknown",
 ] as const;
 

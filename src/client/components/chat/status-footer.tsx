@@ -144,6 +144,12 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
         text = "This chat was deleted.";
         offer = action("New chat", newChat);
         break;
+      case "conflict":
+        // Nothing was added on the server (#21). A retry would only be refused again once another
+        // request has replaced these turns: show what the server has instead.
+        text = e.retryable ? "An earlier reply was still finishing." : "These turns were already replaced in another request.";
+        offer = e.retryable ? retry : action("Reload", () => window.location.reload());
+        break;
       case "quota_exceeded":
         text = "You have used the whole budget on this instance.";
         offer = link("https://github.com/bzahory/cadence/blob/main/docs/self-host.md", "Run your own");
