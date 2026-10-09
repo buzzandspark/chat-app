@@ -1,5 +1,5 @@
 "use client";
-import { MoreHorizontal } from "lucide-react";
+import { GitFork, MoreHorizontal } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -119,6 +119,12 @@ const SidebarRow = memo(function SidebarRow({
         aria-current={active ? "page" : undefined}
         className={cn("flex min-h-11 min-w-0 flex-1 items-center rounded-lg pl-3 text-small", active && "font-medium")}
       >
+        {chat.forkedFrom ? (
+          <>
+            <GitFork aria-hidden className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" />
+            <span className="sr-only">Fork: </span>
+          </>
+        ) : null}
         <span className="truncate">{chat.title}</span>
       </Link>
       <ChunkBoundary label="chat menu">

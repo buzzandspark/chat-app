@@ -1,10 +1,12 @@
 "use client";
 import { ArrowDown } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useChat, useChatStore } from "@client/store/hooks";
 import type { QueuedMessage } from "@client/store/chat-store";
 import { loadEarlierMessages } from "@client/store/prefetch";
+import { setPendingChat } from "@client/store/sidebar-store";
 import { useChatActions } from "./chat-context";
 import { MessageRow } from "./message-row";
 
@@ -25,6 +27,26 @@ function QueuedRow({ item }: { item: QueuedMessage }) {
           Remove
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Where a fork's own turns begin; the rows above are the parent's. */
+function ForkDivider({ parentId }: { parentId: string | null }) {
+  return (
+    <div role="separator" className="flex items-center gap-3 text-caption text-muted-foreground" data-testid="fork-divider">
+      <span className="h-px flex-1 bg-border" />
+      <span>
+        Forked from{" "}
+        {parentId ? (
+          <Link href={`/c/${parentId}`} prefetch={false} onNavigate={() => setPendingChat(parentId)} className="underline underline-offset-2 hover:text-foreground">
+            main chat
+          </Link>
+        ) : (
+          "main chat"
+        )}
+      </span>
+      <span className="h-px flex-1 bg-border" />
     </div>
   );
 }
@@ -176,7 +198,12 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
                 Ask anything. Replies keep streaming even if you switch apps.
               </div>
             ) : (
-              chat.messageIds.map((id) => <MessageRow key={id} id={id} />)
+              chat.messageIds.map((id) => (
+                <Fragment key={id}>
+                  {chat.forkPosition !== null && store.getMessage(id)?.position === chat.forkPosition ? <ForkDivider parentId={chat.forkedFrom} /> : null}
+                  <MessageRow id={id} />
+                </Fragment>
+              ))
             )}
             {chat.queue.map((item) => (
               <QueuedRow key={item.id} item={item} />

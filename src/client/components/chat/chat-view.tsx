@@ -14,6 +14,7 @@ import { isUuid, uuidv7 } from "@shared/id";
 import { isModelId } from "@shared/models";
 import { ChatActionsContext, ChatLiveStateContext, type EditingState } from "./chat-context";
 import { Composer, type ComposerHandle } from "./composer";
+import { ForkTabs } from "./fork-tabs";
 import { LiveRegion } from "./live-region";
 import { MessageList, type MessageListHandle } from "./message-list";
 import { useShellUser } from "../shell/shell-user";
@@ -220,6 +221,7 @@ export function ChatView({ children }: { children: ReactNode }) {
       <ChatLiveStateContext.Provider value={live}>
         <div className="flex min-h-0 flex-1 flex-col">
           {children}
+          <ForkTabs chatId={chatId} />
           <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />
           <LiveRegion chatId={chatId} />
           <Composer ref={composerRef} chatId={chatId} />
