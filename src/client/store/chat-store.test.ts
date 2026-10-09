@@ -397,3 +397,50 @@ describe("ChatStore", () => {
     expect(retryable("a1")).toBe(true);
   });
 });
+
+
+describe("forks in the store", () => {
+  const row = (id: string, role: "user" | "assistant", extra: Partial<SeedRow> = {}): SeedRow => ({
+    id,
+    chatId: "c1",
+    role,
+    content: [text(id)],
+    status: "done",
+    requestedModel: role === "assistant" ? "claude-opus-5-5" : null,
+    servingModel: null,
+    stopReason: null,
+    refusal: null,
+    error: null,
+    timings: null,
+    generationId: null,
+    createdAt: 1,
+    ...extra,
+  });
+
+  it("a seed carries the fork fields, the row positions and the reply's options", () => {
+    const { store } = makeStore();
+    const rows = [row("u1", "user", { position: 0 }), row("a1", "assistant", { position: 1, options: [{ title: "A", prompt: "Explore A" }] }), row("u2", "user", { position: 2 })];
+    store.seedChat("c1", "Forked", rows, { fork: { from: "parent", position: 2 } });
+    const chat = store.getChat("c1");
+    expect(chat.forkedFrom).toBe("parent");
+    expect(chat.forkPosition).toBe(2);
+    expect(store.getMessage("u2")!.position).toBe(2);
+    expect(store.getMessage("a1")!.options).toEqual([{ title: "A", prompt: "Explore A" }]);
+    expect(store.getMessage("u1")!.options).toBeNull();
+    // A re-seed of the same rows keeps the chat object; new options on the reply replace the row.
+    const before = store.getChat("c1");
+    store.seedChat("c1", "Forked", rows, { fork: { from: "parent", position: 2 } });
+    expect(store.getChat("c1")).toBe(before);
+    store.seedChat("c1", "Forked", [rows[0]!, { ...rows[1]!, options: [] }, rows[2]!], { fork: { from: "parent", position: 2 } });
+    expect(store.getMessage("a1")!.options).toEqual([]);
+  });
+
+  it("a seeded chat inherits the effort of its last reply along with the model", () => {
+    const { store } = makeStore();
+    store.seedChat("c1", null, [row("u1", "user"), row("a1", "assistant", { thinking: { harder: true } })]);
+    expect(store.getChat("c1").settings).toMatchObject({ model: "claude-opus-5-5", thinking: { harder: true } });
+    store.setSettings("c1", { thinking: { harder: false } });
+    store.seedChat("c1", null, [row("u1", "user"), row("a1", "assistant", { thinking: { harder: true } })]);
+    expect(store.getChat("c1").settings.thinking.harder).toBe(false);
+  });
+});

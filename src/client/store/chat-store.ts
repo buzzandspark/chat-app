@@ -680,7 +680,7 @@ export class ChatStore {
 function sameRow(existing: MessageState, row: SeedRow): boolean {
   if (existing.local || existing.status !== row.status || existing.stopReason !== row.stopReason) return false;
   if (existing.lastSeq !== (row.lastSeq ?? -1)) return false;
-  if ((existing.options === null) !== (row.options == null)) return false;
+  if (JSON.stringify(existing.options) !== JSON.stringify(row.options ?? null)) return false;
   const blocks = toClientBlocks(row.content);
   if (blocks.length !== existing.blocks.length) return false;
   return textOf(blocks) === textOf(existing.blocks);

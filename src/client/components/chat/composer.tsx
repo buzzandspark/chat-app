@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { lazyChunk } from "../ui/lazy-chunk";
 import { IconButton } from "../ui/icon-button";
+import { ExploreOptionsIsland } from "./explore-options";
 
 // D21: the panel's chunk (a Radix dialog) loads on intent; the stand-in is the same button.
 function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" | "children">) {
@@ -218,6 +219,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   const scenario = settings.scenario;
   const editingText = editing ? textOf(store.getMessage(editing.userMessageId)?.blocks ?? []) : "";
+  const explorable = !editing && !chat.forkedFrom && lastMessage?.role === "assistant" && lastMessage.status === "done" && (lastMessage.options?.length ?? 0) > 0;
 
   return (
     <div
@@ -244,6 +246,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
             </IconButton>
           </div>
         ) : null}
+        {explorable && lastMessage ? <ExploreOptionsIsland chatId={chatId} message={lastMessage} /> : null}
         <div className="flex flex-col rounded-xl border border-input bg-card shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
           <textarea
             ref={textareaRef}

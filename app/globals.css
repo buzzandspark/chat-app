@@ -254,6 +254,20 @@
   background: currentColor;
   animation: caret-pulse 1s steps(2, start) infinite;
 }
+@keyframes explore-march {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.explore-border {
+  animation: explore-march 1.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .explore-border {
+    animation: none;
+  }
+}
+
 @keyframes caret-pulse {
   to {
     visibility: hidden;
