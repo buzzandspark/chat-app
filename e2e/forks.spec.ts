@@ -35,6 +35,10 @@ test.describe("explore options", () => {
     const aside = page.locator('aside[aria-label="Chats"]');
     await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveAttribute("aria-label", /^Forked: /);
     await expect(aside.locator(`a[href="${forkPath}"]`)).toHaveText("Keep SQLite");
+    // Tabs navigate on a click, the main one and a fork alike.
+    await tabs(page).nth(2).click();
+    await expect(tabs(page).nth(2)).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText("moving to Postgres");
     // Back on the main chat: no divider, and the options are spent, so the button is gone.
     await tabs(page).nth(0).click();
     await expect(page).toHaveURL(parentUrl);

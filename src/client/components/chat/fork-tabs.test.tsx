@@ -51,14 +51,19 @@ describe("forkTabs", () => {
 });
 
 describe("ForkTabs", () => {
-  it("marks the open chat and navigates on click", () => {
+  it("marks the open chat and navigates on a click, as the pointer sequence delivers it", () => {
     getSidebarStore().hydrate(chats);
     renderTabs("f1");
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((t) => t.textContent)).toEqual(["Main chat", "SQLite", "Postgres"]);
     expect(tabs[1]).toHaveAttribute("aria-selected", "true");
+    // A fork tab is draggable; a plain press must still be a click, with no pointer capture taken.
+    fireEvent.pointerDown(tabs[2]!, { button: 0, pointerType: "mouse", clientX: 10 });
+    fireEvent.pointerUp(tabs[2]!, { pointerType: "mouse", clientX: 10 });
     fireEvent.click(tabs[2]!);
     expect(push).toHaveBeenCalledWith("/c/f2");
+    fireEvent.click(tabs[0]!);
+    expect(push).toHaveBeenLastCalledWith("/c/p");
   });
 
   it("a closed tab leaves the strip and is told to the server; opening its chat brings it back", () => {

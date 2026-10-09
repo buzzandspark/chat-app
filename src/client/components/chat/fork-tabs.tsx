@@ -118,12 +118,13 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>, id: string) => {
     if (e.button !== 0 || e.pointerType === "touch" || (e.target as HTMLElement).closest("[data-tab-close]")) return;
     drag.current = { id, startX: e.clientX, moved: false };
-    e.currentTarget.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
     if (!d.moved && Math.abs(e.clientX - d.startX) < DRAG_PX) return;
+    // Capture only once this is a drag: a captured pointer sends the click to the wrapper, not the tab.
+    if (!d.moved) e.currentTarget.setPointerCapture(e.pointerId);
     d.moved = true;
     const over = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-fork-tab]")?.dataset.forkTab;
     const ids = over && over !== d.id && forkIds.includes(over) ? moveBefore(forkIds, d.id, over) : forkIds;
@@ -162,6 +163,15 @@ export function ForkTabs({ chatId }: { chatId: string }) {
                 e.preventDefault();
                 setMenu({ tab, x: e.clientX, y: e.clientY });
               }}
+              // On the wrapper: a drag's pointer capture delivers the click here, and a keyboard press on the tab bubbles up.
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest("[data-tab-close]")) return;
+                if (suppressClick.current) {
+                  suppressClick.current = false;
+                  return;
+                }
+                open(tab.id);
+              }}
             >
               <button
                 type="button"
@@ -169,13 +179,6 @@ export function ForkTabs({ chatId }: { chatId: string }) {
                 aria-selected={active}
                 className={cn("flex h-full min-w-0 items-center pl-3 pr-1 text-small whitespace-nowrap outline-none focus-visible:ring-3 focus-visible:ring-ring/50", active && "font-medium")}
                 onFocus={() => warm(tab.id)}
-                onClick={() => {
-                  if (suppressClick.current) {
-                    suppressClick.current = false;
-                    return;
-                  }
-                  open(tab.id);
-                }}
               >
                 <span className="truncate">{tab.title}</span>
               </button>
