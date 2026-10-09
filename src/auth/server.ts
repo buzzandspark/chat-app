@@ -15,6 +15,7 @@ function authSecret(): string {
 
 /** ADR-0004 (amended 2026-10-07): email + password with sign-up disabled, admin plugin for roles and bans; no anonymous path. */
 function createAuth() {
+  const adminPlugin = admin({ defaultRole: "user", adminRoles: ["admin"] });
   return betterAuth({
     appName: "Cadence",
     baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
@@ -48,7 +49,12 @@ function createAuth() {
         costSpentUsd: { type: "number", required: false, input: false },
       },
     },
-    plugins: [admin({ defaultRole: "user", adminRoles: ["admin"] }), nextCookies()],
+    // The admin plugin is here for its schema (role, banned, ban_reason) and its hook that refuses a
+    // banned user's sign-in. Its HTTP endpoints (/admin/create-user, set-role, ban-user, impersonate-user…)
+    // stay off: user management goes through app/api/admin/users, which enforces the cost cap, the
+    // self-demotion guard and stopping a banned user's generations. Server-side auth.api calls are unaffected.
+    disabledPaths: Object.values(adminPlugin.endpoints).map((endpoint) => endpoint.path),
+    plugins: [adminPlugin, nextCookies()],
   });
 }
 
