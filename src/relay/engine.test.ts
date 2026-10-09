@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { generations, messages, usageEvents, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
-import { Engine, ForbiddenError, type StartInput } from "./engine";
+import { Engine, ForbiddenError, type ReplyDoneInfo, type StartInput } from "./engine";
+import { ProviderStatusError } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
+import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { TpsStats } from "./tps";
 import { QuotaExceededError } from "./quota";
 import { scenarioScript, type ScenarioName } from "./scenarios";
@@ -421,5 +423,104 @@ describe("Engine", () => {
     await collectUntilTerminal(store, edited.generationId);
     const rows = db.select({ id: messages.id, content: messages.content }).from(messages).where(eq(messages.chatId, first.chatId)).all();
     expect(rows.map((r) => r.id)).toEqual([edited.userMessageId, edited.assistantMessageId]);
+  });
+});
+
+/** A live-looking provider that fails the first `failures` requests before any event, then streams the normal script. */
+function failingThen(failures: number, status = 500): { provider: Provider; calls: () => number } {
+  let left = failures;
+  let calls = 0;
+  const scripted = new ScriptedProvider((req) => scenarioScript("normal", req), 0);
+  const provider: Provider = {
+    name: "anthropic",
+    async *stream(req: ProviderRequest, opts: ProviderStreamOptions) {
+      calls++;
+      if (left-- > 0) throw new ProviderStatusError(status, "api_error", "boom");
+      yield* scripted.stream(req, opts);
+    },
+  };
+  return { provider, calls: () => calls };
+}
+
+describe("Engine: gate, retry and afterDone (forks)", () => {
+  it("awaits the gate before the upstream request while the buffer already holds `started`", async () => {
+    const live = failingThen(0);
+    engine = new Engine({ db, store, providers: () => live.provider, partialPersistMs: 50 });
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const inp = input({ gate });
+    engine.start(inp);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(store.get(inp.generationId)!.events.map((e) => e.type)).toEqual(["started"]);
+    expect(live.calls()).toBe(0);
+    open();
+    const events = await collectUntilTerminal(store, inp.generationId);
+    expect(events.at(-1)!.type).toBe("done");
+    expect(live.calls()).toBe(1);
+  });
+
+  it("retries a request that fails before the API begins a message, then gives up after the attempts", async () => {
+    const twice = failingThen(2);
+    engine = new Engine({ db, store, providers: () => twice.provider, partialPersistMs: 50 });
+    const inp = input({ retry: { attempts: 3, baseMs: 1 } });
+    engine.start(inp);
+    const events = await collectUntilTerminal(store, inp.generationId);
+    expect(events.at(-1)!.type).toBe("done");
+    expect(twice.calls()).toBe(3);
+
+    const always = failingThen(99);
+    engine = new Engine({ db, store, providers: () => always.provider, partialPersistMs: 50 });
+    const failed = input({ retry: { attempts: 3, baseMs: 1 } });
+    engine.start(failed);
+    const end = await collectUntilTerminal(store, failed.generationId);
+    expect(end.at(-1)!.type).toBe("error");
+    expect(always.calls()).toBe(4);
+    expect(db.select().from(messages).where(eq(messages.id, failed.assistantMessageId)).get()!.status).toBe("error");
+  });
+
+  it("does not retry a failure that is not retryable, nor one after the API began a message", async () => {
+    const bad = failingThen(1, 400);
+    engine = new Engine({ db, store, providers: () => bad.provider, partialPersistMs: 50 });
+    const inp = input({ retry: { attempts: 3, baseMs: 1 } });
+    engine.start(inp);
+    expect((await collectUntilTerminal(store, inp.generationId)).at(-1)!.type).toBe("error");
+    expect(bad.calls()).toBe(1);
+
+    let calls = 0;
+    const midStream = new ScriptedProvider(
+      { model: "claude-sonnet-5-5", parts: [{ kind: "text", text: "partial" }, { kind: "error", error: { type: "api_error", message: "x" } }] },
+      0,
+    );
+    const counting: Provider = {
+      name: "anthropic",
+      stream(req, opts) {
+        calls++;
+        return midStream.stream(req, opts);
+      },
+    };
+    engine = new Engine({ db, store, providers: () => counting, partialPersistMs: 50 });
+    const later = input({ retry: { attempts: 3, baseMs: 1 } });
+    engine.start(later);
+    const events = await collectUntilTerminal(store, later.generationId);
+    expect(events.at(-1)!.type).toBe("error");
+    expect(calls).toBe(1);
+  });
+
+  it("afterDone fires once for a done reply with its text, and not for a refusal", async () => {
+    const seen: ReplyDoneInfo[] = [];
+    engine = makeEngine(0, { afterDone: (info) => seen.push(info) });
+    const inp = input();
+    engine.start(inp);
+    await collectUntilTerminal(store, inp.generationId);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ chatId: inp.chatId, messageId: inp.assistantMessageId, generationId: inp.generationId, userId: USER, scenario: "normal", billable: true });
+    expect(seen[0]!.text.length).toBeGreaterThan(0);
+
+    const refused = input({ scenario: "refusal_empty" });
+    engine.start(refused);
+    await collectUntilTerminal(store, refused.generationId);
+    expect(seen).toHaveLength(1);
   });
 });

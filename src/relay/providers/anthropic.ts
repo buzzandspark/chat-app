@@ -19,6 +19,7 @@ export class AnthropicProvider implements Provider {
       thinking: request.thinking,
       messages: request.messages,
       userId: request.userId,
+      cacheTail: request.cacheTail,
     });
     const stream = this.client.beta.messages.stream(params, { signal });
     for await (const event of stream) {
