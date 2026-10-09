@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption } from "@shared/forks";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
@@ -61,8 +62,13 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
     setError(null);
     const out = await onFork(selected.map(({ title, prompt }) => ({ title: title.trim(), prompt: prompt.trim() })));
     setBusy(false);
-    if (out.ok) onOpenChange(false);
-    else setError(out.error ?? "Forking failed.");
+    if (!out.ok) {
+      setError(out.error ?? "Forking failed.");
+      return;
+    }
+    // The first fork is already being opened: the sheet's history entry must stay, or going back would undo it.
+    markNavigationClose();
+    onOpenChange(false);
   };
 
   return (
