@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CACHE_WARM_MS, type ForkOption } from "@shared/forks";
-import { ExploreOptions, HOLD_MS } from "./explore-options";
+import { CLICK_MS, ExploreOptions, HOLD_MS } from "./explore-options";
 
 const option = (n: number): ForkOption => ({ title: `Option ${n}`, prompt: `Explore ${n}` });
 const options = (n: number) => Array.from({ length: n }, (_, i) => option(i + 1));
@@ -38,16 +38,20 @@ describe("ExploreOptions", () => {
     expect(onFork).not.toHaveBeenCalled();
   });
 
-  it("a release before the hold completes is a click; leaving cancels", () => {
+  it("a quick release is a click; a release after the click window is abandoned; leaving cancels", () => {
     const { onFork, onCustomize, button } = setup();
     fireEvent.pointerDown(button, { button: 0 });
-    act(() => vi.advanceTimersByTime(HOLD_MS / 2));
+    act(() => vi.advanceTimersByTime(CLICK_MS / 2));
     fireEvent.pointerLeave(button);
     act(() => vi.advanceTimersByTime(HOLD_MS));
     expect(onCustomize).not.toHaveBeenCalled();
     expect(onFork).not.toHaveBeenCalled();
     fireEvent.pointerDown(button, { button: 0 });
-    act(() => vi.advanceTimersByTime(HOLD_MS / 2));
+    act(() => vi.advanceTimersByTime(CLICK_MS + 50));
+    fireEvent.pointerUp(button);
+    expect(onFork).not.toHaveBeenCalled();
+    fireEvent.pointerDown(button, { button: 0 });
+    act(() => vi.advanceTimersByTime(CLICK_MS / 2));
     fireEvent.pointerUp(button);
     expect(onFork).toHaveBeenCalledTimes(1);
   });

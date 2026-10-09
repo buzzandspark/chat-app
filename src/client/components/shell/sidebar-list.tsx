@@ -70,17 +70,24 @@ function ChatItemMenuOnIntent({
 const SidebarRow = memo(function SidebarRow({
   chat,
   active,
+  forked,
+  nested,
   currentChatId,
   onNavigate,
   warm,
   show,
+  children,
 }: {
   chat: ChatSummary;
   active: boolean;
+  /** A parent with forks carries the fork mark; its forks list beneath it while one of them is open. */
+  forked: boolean;
+  nested: boolean;
   currentChatId: string | null;
   onNavigate: () => void;
   warm: (chatId: string) => void;
   show: (render: (api: ModalApi) => React.ReactNode) => () => void;
+  children?: React.ReactNode;
 }) {
   const href = `/c/${chat.id}`;
   const intent = useIntent(warmChatItemMenu);
@@ -96,47 +103,46 @@ const SidebarRow = memo(function SidebarRow({
   // moves it back (patchChatOptimistic).
   const onTogglePin = useCallback(() => void patchChatOptimistic(getSidebarStore(), chat.id, { pinned: !chat.pinned }), [chat.id, chat.pinned]);
   return (
-    <li
-      // The browser's own context menu gives way to the row's: a right-click opens the ⋯ menu.
-      onContextMenu={(e) => {
-        e.preventDefault();
-        intent.press("menu");
-      }}
-      className={cn(
-        "group/item flex items-center justify-between gap-1 rounded-lg pr-0.5 transition-colors",
-        // The menu is a portal, so the pointer leaving the row for it ended the hover; the open trigger keeps the row lit.
-        active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/70 active:bg-sidebar-accent has-[[aria-expanded=true]]:bg-sidebar-accent/70",
-      )}
-    >
-      <Link
-        href={href}
-        prefetch={false}
-        onClick={onNavigate}
-        onNavigate={() => setPendingChat(chat.id)}
-        onTouchStart={() => warm(chat.id)}
-        onPointerEnter={() => warm(chat.id)}
-        onFocus={() => warm(chat.id)}
-        aria-current={active ? "page" : undefined}
-        className={cn("flex min-h-11 min-w-0 flex-1 items-center rounded-lg pl-3 text-small", active && "font-medium")}
+    <li>
+      <div
+        // The browser's own context menu gives way to the row's: a right-click opens the ⋯ menu.
+        onContextMenu={(e) => {
+          e.preventDefault();
+          intent.press("menu");
+        }}
+        className={cn(
+          "group/item flex items-center justify-between gap-1 rounded-lg pr-0.5 transition-colors",
+          // The menu is a portal, so the pointer leaving the row for it ended the hover; the open trigger keeps the row lit.
+          active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/70 active:bg-sidebar-accent has-[[aria-expanded=true]]:bg-sidebar-accent/70",
+        )}
       >
-        {chat.forkedFrom ? (
-          <>
-            <GitFork aria-hidden className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" />
-            <span className="sr-only">Fork: </span>
-          </>
-        ) : null}
-        <span className="truncate">{chat.title}</span>
-      </Link>
-      <ChunkBoundary label="chat menu">
-        <ChatItemMenuOnIntent
-          intent={intent}
-          title={chat.title}
-          pinned={Boolean(chat.pinned)}
-          onRename={onRename}
-          onDelete={onDelete}
-          onTogglePin={onTogglePin}
-        />
-      </ChunkBoundary>
+        <Link
+          href={href}
+          prefetch={false}
+          onClick={onNavigate}
+          onNavigate={() => setPendingChat(chat.id)}
+          onTouchStart={() => warm(chat.id)}
+          onPointerEnter={() => warm(chat.id)}
+          onFocus={() => warm(chat.id)}
+          aria-current={active ? "page" : undefined}
+          aria-label={forked ? `Forked: ${chat.title}` : undefined}
+          className={cn("flex min-h-11 min-w-0 flex-1 items-center rounded-lg text-small", nested ? "pl-2" : "pl-3", active && "font-medium")}
+        >
+          {forked ? <GitFork aria-hidden className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" /> : null}
+          <span className="truncate">{chat.title}</span>
+        </Link>
+        <ChunkBoundary label="chat menu">
+          <ChatItemMenuOnIntent
+            intent={intent}
+            title={chat.title}
+            pinned={Boolean(chat.pinned)}
+            onRename={onRename}
+            onDelete={onDelete}
+            onTogglePin={onTogglePin}
+          />
+        </ChunkBoundary>
+      </div>
+      {children}
     </li>
   );
 });
@@ -169,11 +175,32 @@ export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
   }, [open, chats, warm]);
 
   if (chats.length === 0) return <p className="px-2 py-3 text-small text-muted-foreground">No chats yet.</p>;
-  const pinned = chats.filter((c) => c.pinned);
-  const rest = chats.filter((c) => !c.pinned);
-  const row = (chat: ChatSummary) => (
-    <SidebarRow key={chat.id} chat={chat} active={chat.id === activeChatId} currentChatId={currentChatId} onNavigate={onNavigate} warm={warm} show={show} />
-  );
+  // Forks sit under their parent and show only while it, or one of them, is open; a fork whose parent is not listed stands alone.
+  const ids = new Set(chats.map((c) => c.id));
+  const forksOf = new Map<string, ChatSummary[]>();
+  for (const c of chats) {
+    if (!c.forkedFrom || !ids.has(c.forkedFrom)) continue;
+    forksOf.set(c.forkedFrom, [...(forksOf.get(c.forkedFrom) ?? []), c]);
+  }
+  for (const list of forksOf.values()) list.sort((a, b) => (a.forkOrder ?? 0) - (b.forkOrder ?? 0));
+  const topLevel = chats.filter((c) => !(c.forkedFrom && ids.has(c.forkedFrom)));
+  const activeParent = activeChatId ? (chats.find((c) => c.id === activeChatId)?.forkedFrom ?? activeChatId) : null;
+  const pinned = topLevel.filter((c) => c.pinned);
+  const rest = topLevel.filter((c) => !c.pinned);
+  const row = (chat: ChatSummary) => {
+    const forks = forksOf.get(chat.id) ?? [];
+    return (
+      <SidebarRow key={chat.id} chat={chat} active={chat.id === activeChatId} forked={forks.length > 0} nested={false} currentChatId={currentChatId} onNavigate={onNavigate} warm={warm} show={show}>
+        {forks.length > 0 && chat.id === activeParent ? (
+          <ul className="mt-0.5 space-y-0.5 pl-4" aria-label={`Forks of ${chat.title}`}>
+            {forks.map((f) => (
+              <SidebarRow key={f.id} chat={f} active={f.id === activeChatId} forked={false} nested currentChatId={currentChatId} onNavigate={onNavigate} warm={warm} show={show} />
+            ))}
+          </ul>
+        ) : null}
+      </SidebarRow>
+    );
+  };
   const heading = (id: string, text: string) => (
     <h2 id={id} className="px-3 pb-1 text-caption font-medium uppercase tracking-wide text-muted-foreground">
       {text}

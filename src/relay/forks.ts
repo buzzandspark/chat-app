@@ -149,6 +149,8 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
     started.push({ chatId: fork.chatId, generationId: fork.generationId, assistantMessageId: fork.assistantMessageId });
     if (i === 0) gate = upstreamBegun(store, fork.generationId, deps.gateMs ?? FORK_GATE_MS);
   });
+  // The options are spent: the button goes away and stays away.
+  if (lastReply) db.update(messages).set({ forkOptions: [] }).where(eq(messages.id, lastReply.id)).run();
   return started;
 }
 

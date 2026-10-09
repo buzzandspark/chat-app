@@ -100,6 +100,7 @@ describe("createForks", () => {
       expect(prompt!.content).toEqual([{ type: "text", text: f.prompt, citations: null }]);
       expect(reply).toMatchObject({ id: f.assistantMessageId, status: "done", requestedModel: "claude-opus-5-5", thinking: { harder: true } });
     }
+    expect(parentRows.at(-1)!.forkOptions).toEqual([]);
   });
 
   it("starts the first fork alone and the rest once its message has begun", async () => {

@@ -15,6 +15,8 @@ import { lazyChunk } from "../ui/lazy-chunk";
 import { useModals } from "../ui/modal-manager";
 
 export const HOLD_MS = 600;
+/** A press released within this counts as a click; longer, but short of the hold, is abandoned. */
+export const CLICK_MS = 250;
 
 const ForkSheet = lazyChunk(() => dynamic(() => import("./fork-sheet").then((m) => m.ForkSheet), { ssr: false }));
 
@@ -35,6 +37,7 @@ export function ExploreOptions({ options, remaining, requestedAt, now, busy = fa
   const [holding, setHolding] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
+  const downAt = useRef(0);
   const count = Math.min(options.length, remaining);
   const expired = now > 0 && now - requestedAt > CACHE_WARM_MS;
   const activate = useCallback(() => {
@@ -49,6 +52,7 @@ export function ExploreOptions({ options, remaining, requestedAt, now, busy = fa
   const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0 || busy) return;
     held.current = false;
+    downAt.current = Date.now();
     setHolding(true);
     timer.current = setTimeout(() => {
       held.current = true;
@@ -58,8 +62,9 @@ export function ExploreOptions({ options, remaining, requestedAt, now, busy = fa
   };
   const onPointerUp = () => {
     const fired = held.current || timer.current === null;
+    const quick = Date.now() - downAt.current <= CLICK_MS;
     cancelHold();
-    if (!fired && !busy) activate();
+    if (!fired && quick && !busy) activate();
   };
   return (
     <div className="mb-2 flex items-center gap-1">
@@ -123,12 +128,12 @@ export function ExploreOptionsIsland({ chatId, message }: { chatId: string; mess
     async (chosen: readonly ForkOption[]) => {
       setBusy(true);
       setError(null);
-      const out = await forkChat(store, router, chatId, chosen);
+      const out = await forkChat(store, router, chatId, message.id, chosen);
       setBusy(false);
       if (out.error) setError(out.error);
       return out;
     },
-    [store, router, chatId],
+    [store, router, chatId, message.id],
   );
   const customize = useCallback(
     () => show(({ open, close }) => <ForkSheet open={open} onOpenChange={(o) => !o && close()} messageId={message.id} options={options} remaining={remaining} onFork={fork} />),

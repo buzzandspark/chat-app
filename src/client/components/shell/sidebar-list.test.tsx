@@ -4,13 +4,14 @@ import type { ReactNode } from "react";
 import { ModalProvider } from "../ui/modal-manager";
 import { SidebarList } from "./sidebar-list";
 
+const nav = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/",
+  usePathname: () => nav.pathname,
   useRouter: () => ({ prefetch: () => {} }),
 }));
 vi.mock("next/link", () => ({
-  default: ({ href, className, children }: { href: string; className?: string; children: ReactNode }) => (
-    <a href={href} className={className}>
+  default: ({ href, className, children, ...rest }: { href: string; className?: string; children: ReactNode; "aria-current"?: "page"; "aria-label"?: string }) => (
+    <a href={href} className={className} aria-current={rest["aria-current"]} aria-label={rest["aria-label"]}>
       {children}
     </a>
   ),
@@ -88,5 +89,47 @@ describe("SidebarList ⋯ menus", () => {
     // Disarmed (the stand-in is back) without pulling focus to it.
     await waitFor(() => expect(screen.getByRole("button", { name: "Actions for Trip plans" })).not.toHaveAttribute("aria-haspopup"));
     expect(document.activeElement).not.toBe(screen.getByRole("button", { name: "Actions for Trip plans" }));
+  });
+});
+
+
+describe("SidebarList forks", () => {
+  const parent = "33333333-3333-4333-8333-333333333333";
+  const forkA = "44444444-4444-4444-8444-444444444444";
+  const forkB = "55555555-5555-4555-8555-555555555555";
+  const withForks = [
+    ...chats,
+    { id: parent, title: "Databases", updatedAt: 5 },
+    { id: forkB, title: "Postgres", updatedAt: 4, forkedFrom: parent, forkOrder: 1 },
+    { id: forkA, title: "SQLite", updatedAt: 3, forkedFrom: parent, forkOrder: 0 },
+  ];
+  afterEach(() => {
+    cleanup();
+    nav.pathname = "/";
+  });
+
+  it("marks the parent and hides its forks until it or one of them is open", () => {
+    render(
+      <ModalProvider>
+        <SidebarList initialChats={withForks} />
+      </ModalProvider>,
+    );
+    expect(screen.getByRole("link", { name: "Forked: Databases" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "SQLite" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Postgres" })).toBeNull();
+  });
+
+  it("lists the forks nested under the parent, in order, while a fork is open", () => {
+    nav.pathname = `/c/${forkB}`;
+    render(
+      <ModalProvider>
+        <SidebarList initialChats={withForks} />
+      </ModalProvider>,
+    );
+    const nested = screen.getByRole("list", { name: "Forks of Databases" });
+    const links = Array.from(nested.querySelectorAll("a")).map((a) => a.textContent);
+    expect(links).toEqual(["SQLite", "Postgres"]);
+    expect(screen.getByRole("link", { name: "Postgres" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Forked: Databases" })).not.toHaveAttribute("aria-current");
   });
 });

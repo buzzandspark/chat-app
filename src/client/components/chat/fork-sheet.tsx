@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +25,12 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
   const [applying, setApplying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const instructionRef = useRef<HTMLInputElement>(null);
+  // Opens on the instruction: one line there reaches every prompt. After Radix's own open focus, so this one wins.
+  useEffect(() => {
+    const t = setTimeout(() => instructionRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, []);
   const selected = items.filter((it) => it.selected);
   const update = (index: number, patch: Partial<Item>) => setItems((list) => list.map((it, i) => (i === index ? { ...it, ...patch } : it)));
   const toggle = (index: number) => {
@@ -71,10 +77,25 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
     onOpenChange(false);
   };
 
+  // Enter in the instruction applies it; Shift+Enter anywhere forks; Enter in another field does nothing.
+  const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    if (e.shiftKey) {
+      e.preventDefault();
+      void submit();
+    } else if (e.target === instructionRef.current) {
+      e.preventDefault();
+      void apply();
+    } else if ((e.target as HTMLElement).tagName === "INPUT") {
+      e.preventDefault();
+    }
+  };
+
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Explore options" description={`Each option becomes its own chat; ${remaining} more can be forked.`} className="md:max-w-xl">
       <form
         className="flex flex-col gap-3"
+        onKeyDown={onKeyDown}
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
@@ -93,6 +114,7 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
         </ul>
         <div className="flex gap-2">
           <Input
+            ref={instructionRef}
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
             placeholder="Instruction for every prompt, e.g. assess performance"

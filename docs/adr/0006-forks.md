@@ -24,4 +24,4 @@ A reply that lays out alternatives invites the user to dig into each one, but a 
 
 ## Consequences
 
-A fork costs one cache read of the parent plus the new turn; forks after the first also read the parent's final reply from the entry fork 1 wrote. Past 4.5 minutes from the parent reply's request start the entry has expired and the first fork pays for the whole prefix again, which the button's tooltip says. Copied rows appear in search results once per fork. Reordering tabs is a mouse or pen gesture; on touch the strip pans.
+A fork costs one cache read of the parent plus the new turn; forks after the first also read the parent's final reply from the entry fork 1 wrote. Past 4.5 minutes from the parent reply's request start the entry has expired and the first fork pays for the whole prefix again, which the button's tooltip says. Copied rows appear in search results once per fork. Forking spends the reply's options, so a reply can be explored once. Reordering tabs is a mouse or pen gesture; on touch the strip pans.

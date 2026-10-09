@@ -86,7 +86,9 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 404) setError(`Delete failed (${res.status}). Try again.`);
       if (res.ok || res.status === 404) {
-        getSidebarStore().remove(chat.id);
+        const sidebar = getSidebarStore();
+        for (const f of sidebar.get()) if (f.forkedFrom === chat.id) sidebar.patch(f.id, { forkedFrom: null });
+        sidebar.remove(chat.id);
         // The hidden view (and a Back to its URL) shows an empty chat, not the deleted rows.
         store.removeChat(chat.id);
         if (currentChatId === chat.id) markNavigationClose();

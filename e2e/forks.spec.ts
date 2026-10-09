@@ -30,13 +30,24 @@ test.describe("explore options", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     // No forks of forks.
     await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
-    // Its sidebar row names it as a fork (the database is shared across projects, so the row is found by its own link).
-    await expect(page.locator(`aside[aria-label="Chats"] a[href="${forkPath}"]`)).toHaveText("Fork: Keep SQLite");
-    // Back on the main chat the parent's own rows carry no divider.
+    // The sidebar marks the parent and nests the fork under it (rows are found by their own links: the database is shared across projects).
+    const parentPath = new URL(parentUrl).pathname;
+    const aside = page.locator('aside[aria-label="Chats"]');
+    await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveAttribute("aria-label", /^Forked: /);
+    await expect(aside.locator(`a[href="${forkPath}"]`)).toHaveText("Keep SQLite");
+    // Back on the main chat: no divider, and the options are spent, so the button is gone.
     await tabs(page).nth(0).click();
     await expect(page).toHaveURL(parentUrl);
     await expect(page.getByTestId("fork-divider").locator("visible=true")).toHaveCount(0);
     await expect(tabs(page).nth(0)).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
+    await page.reload();
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 15_000 });
+    await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
+    // Elsewhere the forks are not listed.
+    await openNewChat(page);
+    await expect(aside.locator(`a[href="${forkPath}"]`)).toHaveCount(0);
+    await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveCount(1);
   });
 
   test("press and hold opens the sheet: deselect one, retitle one, rewrite all, fork the rest", async ({ page }) => {
@@ -48,14 +59,19 @@ test.describe("explore options", () => {
     await page.mouse.up();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+    const instruction = dialog.getByLabel("Instruction for all prompts");
+    await expect(instruction).toBeFocused();
     const checks = dialog.getByRole("checkbox");
     await expect(checks).toHaveCount(3);
     await checks.nth(2).uncheck();
     await dialog.getByLabel("Tab title").first().fill("SQLite forever");
-    await dialog.getByLabel("Instruction for all prompts").fill("Assess performance");
-    await dialog.getByRole("button", { name: "Apply" }).click();
+    // Enter in the instruction applies it to every prompt; Shift+Enter forks.
+    await instruction.fill("Assess performance");
+    await instruction.press("Enter");
     await expect(dialog.getByLabel("First message").first()).toHaveValue(/^Assess performance/);
-    await dialog.getByRole("button", { name: "Fork 2 chats" }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Fork 2 chats" })).toBeEnabled();
+    await instruction.press("Shift+Enter");
     await expect(tabs(page)).toHaveCount(3, { timeout: 15_000 });
     await expect(tabs(page).nth(1)).toHaveText("Assess SQLite forever");
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("Assess performance");

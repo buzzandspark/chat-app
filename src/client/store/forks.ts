@@ -19,7 +19,13 @@ const MESSAGES: Record<number, string> = {
 };
 
 /** Forks the chat once per option, lists the forks, seeds them (attaching to their replies) and opens the first. */
-export async function forkChat(store: ChatStore, router: { push: (href: string) => void }, chatId: string, options: readonly ForkOption[]): Promise<ForkOutcome> {
+export async function forkChat(
+  store: ChatStore,
+  router: { push: (href: string) => void },
+  chatId: string,
+  messageId: string,
+  options: readonly ForkOption[],
+): Promise<ForkOutcome> {
   const forks = options.slice(0, MAX_FORKS).map((o) => ({
     chatId: uuidv7(),
     generationId: uuidv7(),
@@ -38,6 +44,7 @@ export async function forkChat(store: ChatStore, router: { push: (href: string) 
   const data = (await res.json()) as { forks: { chatId: string }[]; failed?: { error: string } };
   const first = data.forks[0];
   if (!first) return { ok: false, error: "No fork could be started." };
+  store.updateMessage(messageId, { options: [] });
   const sidebar = getSidebarStore();
   const existing = sidebar.get().filter((c) => c.forkedFrom === chatId).length;
   const now = Date.now();
