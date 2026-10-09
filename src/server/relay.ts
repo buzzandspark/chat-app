@@ -2,6 +2,7 @@ import "server-only";
 import { env } from "@shared/env";
 import { getDb } from "@db/client";
 import { Engine } from "@relay/engine";
+import { OptionsService } from "@relay/options/service";
 import { QuotaManager } from "@relay/quota";
 import { createProviderResolver } from "@relay/registry";
 import { EventStore } from "@relay/store";
@@ -11,6 +12,7 @@ interface RelaySingleton {
   engine: Engine;
   store: EventStore;
   quota: QuotaManager;
+  options: OptionsService;
 }
 
 const g = globalThis as unknown as { __cadenceRelay?: RelaySingleton };
@@ -23,12 +25,14 @@ export function getRelay(): RelaySingleton {
   const store = new EventStore({ evictAfterMs: 60_000 });
   store.startSweeper();
   const quota = new QuotaManager(db);
+  const options = new OptionsService({ db, replayMode: env.replayMode });
   const engine = new Engine({
     db,
     store,
     quota,
     providers: createProviderResolver({ replayMode: env.replayMode, record: env.record }),
     isDraining,
+    afterDone: (info) => options.onReplyDone(info),
   });
   // Registered after boot's closeDatabase drain, so it runs before it (LIFO).
   onShutdown(async () => {
@@ -36,6 +40,6 @@ export function getRelay(): RelaySingleton {
     await engine.drain();
     store.stopSweeper();
   });
-  g.__cadenceRelay = { engine, store, quota };
+  g.__cadenceRelay = { engine, store, quota, options };
   return g.__cadenceRelay;
 }

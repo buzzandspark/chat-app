@@ -49,6 +49,22 @@ function table(rows = 40): string {
 const THINKING =
   "The user wants a streaming client that survives disconnects. The key design is sequence-numbered events in a buffer and a resume endpoint. Let me outline the buffer, the resume branches, and what the client does with a snapshot.";
 
+const OPTIONS_REPLY = `There are three ways to take the database from here.
+
+## 1. Keep SQLite
+
+Stay on one file with WAL and nightly backups. Simplest to run; one writer at a time.
+
+## 2. Move to Postgres
+
+A managed instance, connection pooling and real concurrency, at the cost of a migration and a second service to operate.
+
+## 3. Embedded now, managed later
+
+Keep SQLite behind a repository layer so the swap is a deployment change rather than a rewrite.
+
+Pick by how soon you expect more than one writer.`;
+
 export function scenarioScript(name: ScenarioName, request: ProviderRequest): Script {
   const model = request.model;
   switch (name) {
@@ -63,6 +79,8 @@ export function scenarioScript(name: ScenarioName, request: ProviderRequest): Sc
       };
     case "long_reply":
       return { model, ttftMs: 500, parts: [{ kind: "text", text: longMarkdown(), chunk: 8, intervalMs: 12 }] };
+    case "options_reply":
+      return { model, ttftMs: 400, parts: [{ kind: "text", text: OPTIONS_REPLY, chunk: 8, intervalMs: 10 }] };
     case "slow_tokens":
       return { model, ttftMs: 800, parts: [{ kind: "text", text: paragraphs(1), chunk: 3, intervalMs: 400 }] };
     case "bursty_tokens":
