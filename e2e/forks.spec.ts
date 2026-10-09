@@ -127,16 +127,21 @@ test.describe("explore options", () => {
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
     await expect(tabs(page)).toHaveText(["Main chat", "Keep SQLite", "Move to Postgres"]);
     // Right-click: Declare winner keeps that chat alone, with its history, and opens it since this one is deleted.
+    const loserPath = new URL(page.url()).pathname;
+    const parentPath = new URL(parentUrl).pathname;
     await tabs(page).nth(2).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Declare winner" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Declare winner" }).click();
-    await expect(page).not.toHaveURL(parentUrl, { timeout: 15_000 });
+    await expect(page).not.toHaveURL(loserPath, { timeout: 15_000 });
+    const winnerPath = new URL(page.url()).pathname;
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("moving to Postgres", { timeout: 15_000 });
     await expect(tabs(page)).toHaveCount(0);
     await expect(page.getByTestId("fork-divider").locator("visible=true")).toHaveCount(0);
     await expect(page.locator('[data-role="user"]:visible')).toHaveCount(2);
+    // Rows are found by their own links: the database is shared across the run's tests.
     const aside = page.locator('aside[aria-label="Chats"]');
-    await expect(aside.getByRole("link", { name: "Move to Postgres" })).toHaveCount(1);
-    await expect(aside.getByRole("link", { name: /Keep SQLite|Scenario: Reply with options/ })).toHaveCount(0);
+    await expect(aside.locator(`a[href="${winnerPath}"]`)).toHaveText("Move to Postgres");
+    await expect(aside.locator(`a[href="${loserPath}"]`)).toHaveCount(0);
+    await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveCount(0);
   });
 });
