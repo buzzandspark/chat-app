@@ -1,5 +1,5 @@
 "use client";
-import { GitFork, SlidersHorizontal } from "lucide-react";
+import { GitFork } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -10,7 +10,6 @@ import { forkChat } from "@client/store/forks";
 import { useChatStore } from "@client/store/hooks";
 import { useSidebarChats } from "@client/store/sidebar-store";
 import { AUTO_FORK_LIMIT, CACHE_WARM_MS, MAX_FORKS, type ForkOption } from "@shared/forks";
-import { IconButton } from "../ui/icon-button";
 import { lazyChunk } from "../ui/lazy-chunk";
 import { useModals } from "../ui/modal-manager";
 
@@ -31,7 +30,7 @@ export interface ExploreOptionsProps {
   onCustomize: () => void;
 }
 
-/** A click forks every option (up to five); press and hold, or the sliders key, opens the sheet. */
+/** A click forks every option (up to five); press and hold opens the sheet, as does Shift with a click or Enter. */
 export function ExploreOptions({ options, remaining, requestedAt, now, busy = false, onFork, onCustomize }: ExploreOptionsProps) {
   const gradient = useId();
   const [holding, setHolding] = useState(false);
@@ -60,11 +59,13 @@ export function ExploreOptions({ options, remaining, requestedAt, now, busy = fa
       onCustomize();
     }, HOLD_MS);
   };
-  const onPointerUp = () => {
+  const onPointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const fired = held.current || timer.current === null;
     const quick = Date.now() - downAt.current <= CLICK_MS;
     cancelHold();
-    if (!fired && quick && !busy) activate();
+    if (fired || !quick || busy) return;
+    if (e.shiftKey) onCustomize();
+    else activate();
   };
   return (
     <div className="mb-2 flex items-center gap-1">
@@ -84,9 +85,11 @@ export function ExploreOptions({ options, remaining, requestedAt, now, busy = fa
         onPointerLeave={cancelHold}
         onPointerCancel={cancelHold}
         onContextMenu={(e) => e.preventDefault()}
-        // A keyboard press arrives as a click with no pointer sequence before it.
+        // Shift opens the sheet (the hold has no keyboard form); a keyboard press arrives as a click with no pointer sequence before it.
         onClick={(e) => {
-          if (e.detail === 0 && !busy) activate();
+          if (busy) return;
+          if (e.shiftKey) onCustomize();
+          else if (e.detail === 0) activate();
         }}
       >
         <span
@@ -106,9 +109,6 @@ export function ExploreOptions({ options, remaining, requestedAt, now, busy = fa
         <GitFork className="size-4" />
         {busy ? "Forking…" : `Explore ${count} option${count === 1 ? "" : "s"}`}
       </button>
-      <IconButton label="Customize options" tipSide="top" size="icon-sm" className="text-muted-foreground" disabled={busy} onClick={onCustomize}>
-        <SlidersHorizontal />
-      </IconButton>
     </div>
   );
 }

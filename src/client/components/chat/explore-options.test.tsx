@@ -73,12 +73,17 @@ describe("ExploreOptions", () => {
     expect(onFork).not.toHaveBeenCalled();
   });
 
-  it("a keyboard press is a click, and the sliders key opens the sheet", () => {
+  it("a keyboard press is a click; with Shift it opens the sheet, by keyboard or pointer", () => {
     const { onFork, onCustomize, button } = setup();
     fireEvent.click(button, { detail: 0 });
     expect(onFork).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: "Customize options" }));
+    fireEvent.click(button, { detail: 0, shiftKey: true });
     expect(onCustomize).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(button, { button: 0 });
+    fireEvent.pointerUp(button, { shiftKey: true });
+    expect(onCustomize).toHaveBeenCalledTimes(2);
+    expect(onFork).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Customize options" })).toBeNull();
   });
 
   it("past the cache window the button carries the cache-expired tooltip", () => {
