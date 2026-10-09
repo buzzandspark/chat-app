@@ -29,8 +29,12 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
   const now = useNow(60_000);
 
   const refresh = async () => {
-    const res = await fetch("/api/admin/users");
-    if (res.ok) setUsers(((await res.json()) as { users: AdminUserRow[] }).users);
+    try {
+      const res = await fetch("/api/admin/users");
+      if (res.ok) setUsers(((await res.json()) as { users: AdminUserRow[] }).users);
+    } catch {
+      // Offline: keep the list we have; the next action refreshes it.
+    }
   };
 
   const create = async (e: React.FormEvent) => {
@@ -44,13 +48,21 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
     }
     setBusy(true);
     setNotice(null);
-    const res = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, costCapUsd: parsed.cap }),
-    });
-    const body = (await res.json().catch(() => ({}))) as { inviteUrl?: string; error?: string };
-    setBusy(false);
+    let res: Response;
+    let body: { inviteUrl?: string; error?: string };
+    try {
+      res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, costCapUsd: parsed.cap }),
+      });
+      body = (await res.json().catch(() => ({}))) as { inviteUrl?: string; error?: string };
+    } catch {
+      setNotice("Create failed: you seem to be offline.");
+      return;
+    } finally {
+      setBusy(false);
+    }
     if (!res.ok) {
       setNotice(body.error === "email_taken" ? "That email already has an account." : "Could not create the user.");
       return;
@@ -65,8 +77,15 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
   const act = async (label: string, run: () => Promise<Response>) => {
     setBusy(true);
     setNotice(null);
-    const res = await run();
-    setBusy(false);
+    let res: Response;
+    try {
+      res = await run();
+    } catch {
+      setNotice(`${label} failed: you seem to be offline.`);
+      return;
+    } finally {
+      setBusy(false);
+    }
     if (!res.ok) setNotice(`${label} failed (${res.status}).`);
     else {
       const body = (await res.json().catch(() => ({}))) as { inviteUrl?: string };

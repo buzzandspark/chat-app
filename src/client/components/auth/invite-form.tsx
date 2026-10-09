@@ -12,11 +12,17 @@ export function InviteForm({ token, email }: { token: string; email: string }) {
   const router = useRouter();
   const [error, formAction, pending] = useActionState(async (_previous: string | null, form: FormData) => {
     const password = formText(form, "password");
-    const res = await fetch(`/api/invite/${encodeURIComponent(token)}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`/api/invite/${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+    } catch {
+      // Returned, not thrown: a throw inside an action would replace the page with the error boundary.
+      return "Setting the password failed: you seem to be offline.";
+    }
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       return body.error === "weak_password" ? "Use at least 10 characters." : "This invite could not be used.";
