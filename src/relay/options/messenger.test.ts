@@ -19,11 +19,14 @@ describe("options messenger", () => {
       { title: "Postgres", prompt: "Let's move." },
     ]);
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0 });
-    const params = parse.mock.calls[0]![0] as { model: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
+    const params = parse.mock.calls[0]![0] as { model: string; system: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
     expect(params.model).toBe(OPTIONS_MODEL);
     expect(params.output_config.effort).toBe("low");
     expect(params.output_config.format.type).toBe("json_schema");
     expect(params.messages[0]!.content).toContain("Here are two ways");
+    // The fork carries the whole conversation: prompts are the next message there, not an opener for a new chat.
+    expect(params.system).toContain("next in this same conversation");
+    expect(params.system).not.toContain("new chat");
   });
 
   it("no choice, or a single alternative, is an empty list", async () => {
