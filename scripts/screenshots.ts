@@ -85,7 +85,7 @@ async function main(): Promise<void> {
   const dbPath = path.resolve("data/screenshots.db");
   for (const f of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) fs.rmSync(f, { force: true });
   const server = spawn("sh", ["scripts/standalone.sh"], {
-    env: { ...process.env, PORT: String(port), HOSTNAME: "127.0.0.1", REPLAY_MODE: "1", E2E: "1", DATABASE_PATH: dbPath },
+    env: { ...process.env, PORT: String(port), HOSTNAME: "127.0.0.1", REPLAY_MODE: "1", E2E: "1", E2E_ALLOW_PRODUCTION: "1", DATABASE_PATH: dbPath },
     stdio: "ignore",
   });
   try {

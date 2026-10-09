@@ -18,6 +18,7 @@ const schema = z.object({
   RECORD: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
   E2E: z.string().optional(),
+  E2E_ALLOW_PRODUCTION: z.string().optional(),
 });
 
 function flag(v: string | undefined): boolean {
@@ -37,5 +38,7 @@ export const env = {
   replayMode: flag(parsed.REPLAY_MODE) || !parsed.ANTHROPIC_API_KEY,
   record: flag(parsed.RECORD),
   e2e: flag(parsed.E2E),
+  /** The e2e harness runs the standalone (production) server with E2E set; nothing else should. */
+  e2eAllowProduction: flag(parsed.E2E_ALLOW_PRODUCTION),
 };
 export type Env = typeof env;
