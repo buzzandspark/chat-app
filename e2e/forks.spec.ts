@@ -18,6 +18,7 @@ test.describe("explore options", () => {
     const parentUrl = page.url();
     await button.click();
     await expect(page).not.toHaveURL(parentUrl, { timeout: 15_000 });
+    const forkPath = new URL(page.url()).pathname;
     await expect(tabs(page)).toHaveCount(4);
     await expect(tabs(page).nth(0)).toHaveText("Main chat");
     await expect(tabs(page).nth(1)).toHaveText("Keep SQLite");
@@ -29,7 +30,8 @@ test.describe("explore options", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     // No forks of forks.
     await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
-    await expect(page.locator('aside[aria-label="Chats"] a', { hasText: "Keep SQLite" })).toHaveCount(1);
+    // Its sidebar row names it as a fork (the database is shared across projects, so the row is found by its own link).
+    await expect(page.locator(`aside[aria-label="Chats"] a[href="${forkPath}"]`)).toHaveText("Fork: Keep SQLite");
     // Back on the main chat the parent's own rows carry no divider.
     await tabs(page).nth(0).click();
     await expect(page).toHaveURL(parentUrl);
