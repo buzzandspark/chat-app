@@ -1,7 +1,6 @@
 "use client";
 import { MoreHorizontal } from "lucide-react";
 import { useEffect } from "react";
-import dynamic from "next/dynamic";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useMarkdownComponent } from "@client/markdown/ready";
 import { IconButton } from "../ui/icon-button";
@@ -43,9 +42,11 @@ function ActionsStandIn({
 const loadAssistantActions = chunk(() => import("./assistant-actions").then((m) => m.AssistantActions));
 
 // #83: the Markdown renderer (marked, 14 kB gzipped) is its own chunk, fetched when the route's JS
-// evaluates and warmed again by a send. Once it is in, rows render it directly (markdown/ready.ts);
-// this lazy wrapper serves only a live first reply whose tokens beat the chunk.
-const MarkdownLazy = dynamic(() => import("@client/markdown/Markdown").then((m) => m.Markdown), { ssr: true, loading: () => null });
+// evaluates and again on a send. Once it is in, rows render it directly (markdown/ready.ts); until
+// then (a first reply whose tokens beat the chunk, or a chunk that failed to load) the text is plain.
+function PlainText({ text, className }: { text: string; streaming: boolean; className?: string }) {
+  return <div className={cn("min-w-0 max-w-full whitespace-pre-wrap break-words text-body", className)}>{text}</div>;
+}
 
 function AssistantActionsOnIntent(props: { message: MessageState; text: string; canRegenerate: boolean; onRegenerate: () => void }) {
   const intent = useIntent(loadAssistantActions);
@@ -81,7 +82,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
   const store = useChatStore();
   const chat = useChat(chatId);
   const streaming = message.status === "streaming";
-  const Markdown = useMarkdownComponent() ?? MarkdownLazy;
+  const Markdown = useMarkdownComponent() ?? PlainText;
   const text = textOf(message.blocks);
   const hasText = text.length > 0;
 

@@ -9,17 +9,25 @@ type MarkdownComponent = (typeof import("./Markdown"))["Markdown"];
 // task later, and that second commit moved everything below the reply (the cold-load CLS test caught
 // a 154 px shift). The fetch starts as soon as this module evaluates, before hydration on a cold load.
 let component: MarkdownComponent | null = null;
+let failed = false;
 let pending: Promise<unknown> | null = null;
 const listeners = new Set<() => void>();
+const notify = () => {
+  for (const l of listeners) l();
+};
 
 export function ensureMarkdown(): Promise<unknown> {
   if (!pending) {
     pending = import("./Markdown").then((m) => {
       component = m.Markdown;
-      for (const l of listeners) l();
+      notify();
     });
+    // A failure is remembered so the thread stops waiting (rows show plain text); a send, `online`
+    // or the tab being shown again fetches the chunk anew.
     pending.catch(() => {
       pending = null;
+      failed = true;
+      notify();
     });
   }
   return pending;
@@ -42,4 +50,19 @@ export function useMarkdownReady(): boolean {
   return useMarkdownComponent() !== null;
 }
 
-if (typeof window !== "undefined") void ensureMarkdown();
+/** True once a fetch of the chunk has failed, and from then on; false on the server. */
+export function useMarkdownFailed(): boolean {
+  return useSyncExternalStore(subscribe, () => failed, () => false);
+}
+
+if (typeof window !== "undefined") {
+  void ensureMarkdown();
+  // As ChunkBoundary does: the usual reason a chunk failed is the network.
+  const retry = () => {
+    if (!component) void ensureMarkdown();
+  };
+  window.addEventListener("online", retry);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") retry();
+  });
+}

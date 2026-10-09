@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { saveLastChoice } from "@client/hooks/use-last-choice";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { canRetryReply, textOf, type ChatSettings } from "@client/store/chat-store";
-import { ensureMarkdown, useMarkdownReady } from "@client/markdown/ready";
+import { ensureMarkdown, useMarkdownFailed, useMarkdownReady } from "@client/markdown/ready";
 import { useChat, useChatSeeded, useChatStore, useMessage } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
@@ -221,6 +221,8 @@ export function ChatView({ children }: { children: ReactNode }) {
 /**
  * The skeleton stands in until the chat is seeded and, for a chat with rows, until the Markdown chunk is
  * in (#83): rows that paint with empty bodies and fill in later would shift everything below them.
+ * A chat seeded empty (its first send) and a chunk that failed to load do not wait: rows show plain
+ * text until the renderer arrives.
  */
 function Thread({
   chatId,
@@ -234,7 +236,12 @@ function Thread({
   const seeded = useChatSeeded(chatId);
   const chat = useChat(chatId);
   const markdownReady = useMarkdownReady();
-  if (!seeded || (chat.messageIds.length > 0 && !markdownReady)) return <ThreadSkeleton />;
+  const markdownFailed = useMarkdownFailed();
+  // Decided once, when the chat is first seeded here.
+  const [seededEmpty, setSeededEmpty] = useState<boolean | null>(null);
+  if (seeded && seededEmpty === null) setSeededEmpty(chat.messageIds.length === 0);
+  const waitForMarkdown = chat.messageIds.length > 0 && !markdownReady && !markdownFailed && !seededEmpty;
+  if (!seeded || waitForMarkdown) return <ThreadSkeleton />;
   return <MessageList ref={listRef} chatId={chatId} onFollowChange={onFollowChange} />;
 }
 
