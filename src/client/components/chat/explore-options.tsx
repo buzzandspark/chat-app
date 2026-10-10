@@ -69,13 +69,14 @@ export function ExploreOptions({ count, remaining, requestedAt, now, state, reas
                 </linearGradient>
               </defs>
               <rect
+                data-part="border"
                 x="1"
                 y="1"
                 rx="7"
                 className={cn("explore-border", state === "disabled" && "[animation:none]")}
                 style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
                 fill="none"
-                stroke={`url(#${gradient})`}
+                stroke={state === "waiting" || state === "disabled" ? "var(--muted-foreground)" : `url(#${gradient})`}
                 strokeWidth="1.5"
                 strokeDasharray="6 4"
               />
