@@ -216,7 +216,7 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
             <Button
               size="sm"
               variant="outline"
-              className="pointer-events-auto touch-target rounded-full shadow-md"
+              className="pointer-events-auto touch-target rounded-full bg-sidebar-accent shadow-md hover:bg-sidebar-accent hover:brightness-95 dark:bg-sidebar-accent dark:hover:bg-sidebar-accent"
               onClick={engage}
               aria-label="Jump to latest"
             >
