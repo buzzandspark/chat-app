@@ -13,6 +13,7 @@ import { markNavigationClose, useBackGesture } from "@client/hooks/use-back-gest
 import { useIsDesktopOrNull } from "@client/hooks/use-media-query";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useScrollAnchoringFlag } from "@client/hooks/use-scroll-anchoring";
+import { useTypeToFocus } from "@client/hooks/use-type-to-focus";
 import { useVisualViewport } from "@client/hooks/use-visual-viewport";
 import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
@@ -49,11 +50,13 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
   const desktop = desktopOrNull === true;
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [desktopOpen, setDesktopOpen] = useState(true);
-  const { show } = useModals();
+  const { show, openCount } = useModals();
   const newChat = useNewChat();
   const searchCloser = useRef<(() => void) | null>(null);
   useVisualViewport();
   useScrollAnchoringFlag();
+  // Typing with nothing focused goes to the composer; not while a dialog is up or the phone sidebar covers the chat.
+  useTypeToFocus(openCount === 0 && !(!desktop && phoneOpen));
 
   const open = desktop ? desktopOpen : phoneOpen;
   // The phone modal dismissed (X, backdrop, Escape, the back gesture) hands focus back to the menu button
