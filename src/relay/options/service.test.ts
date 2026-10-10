@@ -17,12 +17,13 @@ const TWO: ForkOption[] = [
   { title: "Option B", prompt: "Explore B" },
 ];
 const USAGE = { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0 };
+const TRACE = { model: "claude-haiku-5-5", system: "s", user: "u", response: {}, stopReason: "end_turn", inputTokens: 1000, outputTokens: 200 };
 
 /** A live stand-in that answers after `delayMs` and remembers what it was asked. */
 function fakeLive(delayMs = 0): OptionsMessenger & { asked: string[] } {
   const asked: string[] = [];
   const answer = (options: ForkOption[]): Promise<MessengerResult> =>
-    new Promise((resolve) => setTimeout(() => resolve({ options, usage: USAGE }), delayMs));
+    new Promise((resolve) => setTimeout(() => resolve({ options, usage: USAGE, trace: TRACE }), delayMs));
   return {
     name: "haiku",
     asked,
@@ -71,6 +72,9 @@ describe("OptionsService", () => {
     expect(rows[0]!.costUsd).toBeGreaterThan(0);
     expect(db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd).toBe(rows[0]!.costUsd);
     expect(live.asked).toEqual(["A or B"]);
+    // The call's trace is handed out once.
+    expect(service.takeTrace(info.messageId)).toEqual(TRACE);
+    expect(service.takeTrace(info.messageId)).toBeNull();
   });
 
   it("awaitOptions hands over the answer still in flight, and null when nothing ran", async () => {
@@ -105,7 +109,9 @@ describe("OptionsService", () => {
     const scripted = seedReply(uuidv7());
     service.onReplyDone({ ...scripted, scenario: "options_reply", billable: false });
     expect(await service.awaitOptions(scripted.messageId, 100)).toEqual(SCRIPTED_OPTIONS);
-    expect((await new OptionsService({ db, replayMode: true }).rewrite(USER, scripted.messageId, SCRIPTED_OPTIONS.slice(0, 2), "Assess cost")).map((o) => o.title)).toEqual(SCRIPTED_OPTIONS.slice(0, 2).map((o) => o.title));
+    const rewritten = await new OptionsService({ db, replayMode: true }).rewrite(USER, scripted.messageId, SCRIPTED_OPTIONS.slice(0, 2), "Assess cost");
+    expect(rewritten.options.map((o) => o.title)).toEqual(SCRIPTED_OPTIONS.slice(0, 2).map((o) => o.title));
+    expect(rewritten.trace).toBeNull();
     const plain = seedReply(uuidv7());
     service.onReplyDone({ ...plain, scenario: "normal", billable: false });
     expect(await service.awaitOptions(plain.messageId, 100)).toEqual([]);
@@ -143,7 +149,8 @@ describe("OptionsService", () => {
     const live = fakeLive();
     const service = new OptionsService({ db, replayMode: false, live: () => live });
     const info = seedReply(uuidv7());
-    const out = await service.rewrite(USER, info.messageId, TWO, "Focus on cost");
+    const { options: out, trace } = await service.rewrite(USER, info.messageId, TWO, "Focus on cost");
+    expect(trace).toEqual(TRACE);
     expect(out.map((o) => o.prompt)).toEqual(["Focus on cost: Explore A", "Focus on cost: Explore B"]);
     expect(db.select().from(usageEvents).all()[0]).toMatchObject({ iterationType: "options_rewrite" });
   });

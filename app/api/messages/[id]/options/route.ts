@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@db/client";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
+import { env } from "@shared/env";
 
 /** The reply's fork options: stored, or awaited while Haiku is still answering, else null. */
 export async function GET(_request: NextRequest, ctx: RouteContext<"/api/messages/[id]/options">): Promise<Response> {
@@ -17,8 +18,10 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/message
       .get();
     if (!row) return jsonError(404, { error: "not_found" });
     if (row.userId !== user.id) return jsonError(403, { error: "forbidden" });
-    const options = await getRelay().options.awaitOptions(id, 10_000);
-    return Response.json({ options }, { headers: { "cache-control": "no-store" } });
+    const service = getRelay().options;
+    const options = await service.awaitOptions(id, 10_000);
+    const trace = env.isProd ? null : service.takeTrace(id);
+    return Response.json({ options, trace }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

@@ -1,5 +1,5 @@
 "use client";
-import { MAX_FORKS, type ForkOption } from "@shared/forks";
+import { MAX_FORKS, type ForkOption, type OptionsTrace } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import type { ChatStore } from "./chat-store";
 import { prefetchChat } from "./prefetch";
@@ -58,4 +58,13 @@ export async function forkChat(
   router.push(`/c/${first.chatId}`);
   if (data.failed) return { ok: true, error: data.failed.error === "quota_exceeded" ? CAP : "Some forks could not start." };
   return { ok: true };
+}
+
+/** The Haiku call behind a reply's options (or a rewrite), as sent and answered; development only. */
+export function logOptionsTrace(kind: "detect" | "rewrite", trace: OptionsTrace): void {
+  console.group(`[options] ${kind}: ${trace.model}, stop ${trace.stopReason}, in ${trace.inputTokens} / out ${trace.outputTokens}`);
+  console.log(`system\n${trace.system}`);
+  console.log(`user\n${trace.user}`);
+  console.log("response", trace.response);
+  console.groupEnd();
 }

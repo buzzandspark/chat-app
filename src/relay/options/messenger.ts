@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
-import { MAX_FORKS, MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption } from "@shared/forks";
+import { MAX_FORKS, MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption, type OptionsTrace } from "@shared/forks";
 import type { TokenCounts } from "../anthropic/pricing";
 import { CHOICE, DetectOutput, RewriteOutput } from "./schema";
 
@@ -11,6 +11,7 @@ export interface MessengerResult {
   options: ForkOption[];
   /** Null for a scripted answer. */
   usage: TokenCounts | null;
+  trace?: OptionsTrace;
 }
 
 /** Haiku's own messenger: separate client and request shape from the chat relay, never in its history. */
@@ -33,17 +34,16 @@ export class LiveOptionsMessenger implements OptionsMessenger {
   constructor(private client: Anthropic = new Anthropic({ maxRetries: 2, timeout: 60_000 })) {}
 
   async detect(reply: string): Promise<MessengerResult> {
-    const { parsed, usage } = await this.ask(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`, DetectOutput);
-    return { options: parsed?.kind === CHOICE ? clampOptions(parsed.options) : [], usage };
+    const { parsed, usage, trace } = await this.ask(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`, DetectOutput);
+    return { options: parsed?.kind === CHOICE ? clampOptions(parsed.options) : [], usage, trace };
   }
 
   async rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult> {
-    const { parsed, usage } = await this.ask(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput);
-    return { options: clampOptions(parsed?.options ?? []), usage };
+    const { parsed, usage, trace } = await this.ask(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput);
+    return { options: clampOptions(parsed?.options ?? []), usage, trace };
   }
 
-  private async ask<T extends z.ZodType>(system: string, content: string, output: T): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts }> {
-    console.log(`[options] prompt (${OPTIONS_MODEL})\n--- system ---\n${system}\n--- user ---\n${content}`);
+  private async ask<T extends z.ZodType>(system: string, content: string, output: T): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts; trace: OptionsTrace }> {
     const message = await this.client.messages.parse({
       model: OPTIONS_MODEL,
       max_tokens: 4096,
@@ -59,9 +59,18 @@ export class LiveOptionsMessenger implements OptionsMessenger {
       cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
     };
     const parsed = message.parsed_output as z.infer<T> | null;
-    const raw = parsed === null ? (message.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("") : null;
-    console.log(`[options] response (stop: ${message.stop_reason}, in ${usage.inputTokens}, out ${usage.outputTokens})\n${parsed === null ? `unparsed: ${raw}` : JSON.stringify(parsed, null, 2)}`);
-    return { parsed, usage };
+    // Unparsed (a refusal, a truncated answer): the raw text instead.
+    const response = parsed ?? (message.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
+    const trace: OptionsTrace = {
+      model: OPTIONS_MODEL,
+      system,
+      user: content,
+      response,
+      stopReason: message.stop_reason ?? null,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+    };
+    return { parsed, usage, trace };
   }
 }
 

@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
-import { MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption } from "@shared/forks";
+import { logOptionsTrace } from "@client/store/forks";
+import { MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption, type OptionsTrace } from "@shared/forks";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface ForkSheetProps {
@@ -53,7 +54,8 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
         setError(res.status === 402 ? "You have reached your usage cap." : `Could not apply the instruction (${res.status}).`);
         return;
       }
-      const data = (await res.json()) as { options: ForkOption[] };
+      const data = (await res.json()) as { options: ForkOption[]; trace?: OptionsTrace | null };
+      if (data.trace) logOptionsTrace("rewrite", data.trace);
       setItems((list) => list.map((it, i) => (data.options[i] ? { ...it, ...data.options[i] } : it)));
     } catch {
       setError("You seem to be offline.");

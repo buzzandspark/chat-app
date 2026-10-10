@@ -1,0 +1,17 @@
+import { chromium } from "@playwright/test";
+import { writeFileSync } from "node:fs";
+const out = process.argv[2]; const target = process.argv[3] || "/"; const holdMs = Number(process.argv[4] || 4500);
+const browser = await chromium.launch();
+const page = await (await browser.newContext()).newPage();
+const t0 = Date.now(); const ev = [];
+const log = (s) => ev.push(`+${String(Date.now()-t0).padStart(5)} ${s}`);
+page.on("framenavigated", (f) => { if (f === page.mainFrame()) log(`NAV ${f.url()}`); });
+page.on("request", (r) => { const h = r.headers(); const extra = ["rsc","next-router-prefetch","next-router-segment-prefetch","next-router-state-tree","next-url"].filter(k => h[k]).map(k => `${k}=${h[k].slice(0,40)}`).join(" "); log(`REQ ${r.method()} ${r.resourceType()} ${r.url().replace("http://localhost:3141","")} ${extra}`); });
+page.on("response", (r) => { log(`RES ${r.status()} ${r.url().replace("http://localhost:3141","")}`); });
+page.on("websocket", (ws) => { log(`WS open ${ws.url()}`); ws.on("framesent", (f) => log(`WS>> ${String(f.payload).slice(0,300)}`)); ws.on("framereceived", (f) => log(`WS<< ${String(f.payload).slice(0,300)}`)); ws.on("close", () => log(`WS close`)); });
+page.on("console", (m) => log(`CON ${m.type()} ${m.text().slice(0,160).replace(/\n/g," ")}`));
+page.on("pageerror", (e) => log(`PAGEERR ${String(e.message).slice(0,160)}`));
+await page.goto(`http://localhost:3141${target}`, { waitUntil: "load" }).catch((e) => log(`goto failed: ${e.message.slice(0,100)}`));
+await page.waitForTimeout(holdMs);
+writeFileSync(out, ev.join("\n") + "\n");
+await browser.close();

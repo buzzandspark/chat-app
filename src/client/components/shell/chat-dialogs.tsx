@@ -7,7 +7,8 @@ import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, setPendingChat, type ChatSummary } from "@client/store/sidebar-store";
-import type { ForkOption } from "@shared/forks";
+import type { ForkOption, OptionsTrace } from "@shared/forks";
+import { logOptionsTrace } from "@client/store/forks";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface DialogProps {
@@ -154,7 +155,10 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
       store.setFork(chat.id, { from: null, position: null });
       // Haiku reads the winner's last reply now; waiting for it here means the chat opens with its button.
       if (winner.lastMessageId) {
-        const found = await fetch(`/api/messages/${winner.lastMessageId}/options`).then((r) => (r.ok ? (r.json() as Promise<{ options: ForkOption[] | null }>) : null)).catch(() => null);
+        const found = await fetch(`/api/messages/${winner.lastMessageId}/options`)
+          .then((r) => (r.ok ? (r.json() as Promise<{ options: ForkOption[] | null; trace?: OptionsTrace | null }>) : null))
+          .catch(() => null);
+        if (found?.trace) logOptionsTrace("detect", found.trace);
         if (found?.options) store.updateMessage(winner.lastMessageId, { options: found.options });
       }
       const leaving = currentChatId !== null && winner.deleted.includes(currentChatId);

@@ -9,7 +9,8 @@ import { ensureMarkdown, useMarkdownReady } from "@client/markdown/ready";
 import { useChat, useChatSeeded, useChatStore, useMessage } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
-import type { ForkOption } from "@shared/forks";
+import type { ForkOption, OptionsTrace } from "@shared/forks";
+import { logOptionsTrace } from "@client/store/forks";
 import { isUuid, uuidv7 } from "@shared/id";
 import { isModelId } from "@shared/models";
 import { ChatActionsContext, ChatLiveStateContext, type EditingState } from "./chat-context";
@@ -138,8 +139,9 @@ export function ChatView({ children }: { children: ReactNode }) {
     previousStatus.current = lastStatus;
     if (was !== "streaming" || lastStatus !== "done" || !lastId || chat.forkedFrom) return;
     void fetch(`/api/messages/${lastId}/options`)
-      .then((res) => (res.ok ? (res.json() as Promise<{ options: ForkOption[] | null }>) : null))
+      .then((res) => (res.ok ? (res.json() as Promise<{ options: ForkOption[] | null; trace?: OptionsTrace | null }>) : null))
       .then((data) => {
+        if (data?.trace) logOptionsTrace("detect", data.trace);
         if (data?.options) store.updateMessage(lastId, { options: data.options });
       })
       .catch(() => {});

@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages, usageEvents, users } from "@db/schema";
-import type { ForkOption } from "@shared/forks";
+import type { ForkOption, OptionsTrace } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import { costOf, type TokenCounts } from "../anthropic/pricing";
 import type { ReplyDoneInfo } from "../engine";
@@ -24,6 +24,7 @@ export class OptionsService {
   private live: OptionsMessenger | null = null;
   private now: () => number;
   private inflight = new Map<string, Promise<ForkOption[] | null>>();
+  private traces = new Map<string, OptionsTrace>();
 
   constructor(options: OptionsServiceOptions) {
     this.db = options.db;
@@ -54,6 +55,7 @@ export class OptionsService {
     const messenger = this.messenger(info.scenario, info.billable);
     const result = await messenger.detect(info.text);
     this.record(info.userId, info.generationId, "options", result.usage, messenger.name === "haiku");
+    if (result.trace) this.keepTrace(info.messageId, result.trace);
     this.db.update(messages).set({ forkOptions: result.options }).where(eq(messages.id, info.messageId)).run();
     return result.options;
   }
@@ -102,7 +104,7 @@ export class OptionsService {
   }
 
   /** The sheet's "apply to all": rewritten through the same messenger the reply would use. */
-  async rewrite(userId: string, messageId: string, options: readonly ForkOption[], instruction: string): Promise<ForkOption[]> {
+  async rewrite(userId: string, messageId: string, options: readonly ForkOption[], instruction: string): Promise<{ options: ForkOption[]; trace: OptionsTrace | null }> {
     const gen = this.db
       .select({ id: generations.id, scenario: generations.scenario, provider: generations.provider })
       .from(messages)
@@ -116,7 +118,19 @@ export class OptionsService {
     }
     const result = await messenger.rewrite(options, instruction);
     this.record(userId, gen?.id ?? null, "options_rewrite", result.usage, messenger.name === "haiku");
-    return result.options;
+    return { options: result.options, trace: result.trace ?? null };
+  }
+
+  /** The detection trace for a reply, handed out once. */
+  takeTrace(messageId: string): OptionsTrace | null {
+    const trace = this.traces.get(messageId) ?? null;
+    this.traces.delete(messageId);
+    return trace;
+  }
+
+  private keepTrace(messageId: string, trace: OptionsTrace): void {
+    this.traces.set(messageId, trace);
+    if (this.traces.size > 50) this.traces.delete(this.traces.keys().next().value!);
   }
 
   private capRow(userId: string): { cap: number | null; spent: number } | undefined {
