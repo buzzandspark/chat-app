@@ -7,6 +7,7 @@ import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, setPendingChat, type ChatSummary } from "@client/store/sidebar-store";
+import type { ForkOption } from "@shared/forks";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface DialogProps {
@@ -143,7 +144,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
         setError(res.status === 404 ? "This chat is no longer a fork." : `Could not declare the winner (${res.status}).`);
         return;
       }
-      const winner = (await res.json()) as { id: string; deleted: string[] };
+      const winner = (await res.json()) as { id: string; deleted: string[]; lastMessageId: string | null };
       const sidebar = getSidebarStore();
       for (const id of winner.deleted) {
         sidebar.remove(id);
@@ -151,6 +152,11 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
       }
       sidebar.patch(chat.id, { forkedFrom: null, forkOrder: null, tabHidden: false });
       store.setFork(chat.id, { from: null, position: null });
+      // Haiku reads the winner's last reply now; waiting for it here means the chat opens with its button.
+      if (winner.lastMessageId) {
+        const found = await fetch(`/api/messages/${winner.lastMessageId}/options`).then((r) => (r.ok ? (r.json() as Promise<{ options: ForkOption[] | null }>) : null)).catch(() => null);
+        if (found?.options) store.updateMessage(winner.lastMessageId, { options: found.options });
+      }
       const leaving = currentChatId !== null && winner.deleted.includes(currentChatId);
       if (leaving) markNavigationClose();
       onOpenChange(false);
@@ -169,7 +175,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
       open={open}
       onOpenChange={onOpenChange}
       title="Declare the winner?"
-      description={`"${chat.title}" stays, with its history. The main chat and the other forks will be deleted. This cannot be undone.`}
+      description={`"${chat.title}" stays, with its history, and can be forked again from here. The main chat and the other forks will be deleted. This cannot be undone.`}
     >
       {error ? (
         <p role="alert" className="text-small text-destructive">

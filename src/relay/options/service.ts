@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages, usageEvents, users } from "@db/schema";
 import type { ForkOption } from "@shared/forks";
@@ -56,6 +56,32 @@ export class OptionsService {
     this.record(info.userId, info.generationId, "options", result.usage, messenger.name === "haiku");
     this.db.update(messages).set({ forkOptions: result.options }).where(eq(messages.id, info.messageId)).run();
     return result.options;
+  }
+
+  /** A chat that just stopped being a fork: its last reply was skipped then, so it is read now. Returns that reply's id. */
+  detectLastReply(chatId: string, userId: string): string | null {
+    const row = this.db
+      .select({ id: messages.id, content: messages.content, status: messages.status, options: messages.forkOptions, generationId: messages.generationId })
+      .from(messages)
+      .where(eq(messages.chatId, chatId))
+      .orderBy(desc(messages.position))
+      .all()
+      .find((m) => m.status === "done" || m.status === "refused");
+    if (!row || row.status !== "done") return null;
+    if (row.options !== null) return row.id;
+    const gen = row.generationId
+      ? this.db.select({ scenario: generations.scenario, provider: generations.provider }).from(generations).where(eq(generations.id, row.generationId)).get()
+      : undefined;
+    this.onReplyDone({
+      chatId,
+      messageId: row.id,
+      generationId: row.generationId ?? "",
+      userId,
+      scenario: gen?.scenario ?? null,
+      billable: gen ? isBillableProvider(gen.provider) : true,
+      text: row.content.filter((b) => b.type === "text").map((b) => b.text).join(""),
+    });
+    return row.id;
   }
 
   /** The stored list, else the one being computed (up to `waitMs`), else null when nothing ran. */

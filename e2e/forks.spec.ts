@@ -77,7 +77,7 @@ test.describe("explore options", () => {
     await expect(dialog.getByRole("button", { name: "Fork 2 chats" })).toBeEnabled();
     await instruction.press("Shift+Enter");
     await expect(tabs(page)).toHaveCount(3, { timeout: 15_000 });
-    await expect(tabs(page).nth(1)).toHaveText("Assess SQLite forever");
+    await expect(tabs(page).nth(1)).toHaveText("SQLite forever");
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("Assess performance");
   });
 

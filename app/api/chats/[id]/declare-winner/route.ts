@@ -9,9 +9,12 @@ export async function POST(_request: NextRequest, ctx: RouteContext<"/api/chats/
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
-    const winner = await declareWinner(getDb(), getRelay().engine, user.id, id);
+    const { engine, options } = getRelay();
+    const winner = await declareWinner(getDb(), engine, user.id, id);
     if (!winner) return jsonError(404, { error: "not_found" });
-    return Response.json(winner, { headers: { "cache-control": "no-store" } });
+    // Its last reply was skipped while it was a fork: read it now, so the winner can be forked at once.
+    const lastMessageId = options.detectLastReply(winner.id, user.id);
+    return Response.json({ ...winner, lastMessageId }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

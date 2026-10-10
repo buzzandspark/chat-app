@@ -105,6 +105,7 @@ describe("OptionsService", () => {
     const scripted = seedReply(uuidv7());
     service.onReplyDone({ ...scripted, scenario: "options_reply", billable: false });
     expect(await service.awaitOptions(scripted.messageId, 100)).toEqual(SCRIPTED_OPTIONS);
+    expect((await new OptionsService({ db, replayMode: true }).rewrite(USER, scripted.messageId, SCRIPTED_OPTIONS.slice(0, 2), "Assess cost")).map((o) => o.title)).toEqual(SCRIPTED_OPTIONS.slice(0, 2).map((o) => o.title));
     const plain = seedReply(uuidv7());
     service.onReplyDone({ ...plain, scenario: "normal", billable: false });
     expect(await service.awaitOptions(plain.messageId, 100)).toEqual([]);
@@ -114,6 +115,17 @@ describe("OptionsService", () => {
     expect(await replay.awaitOptions(replayed.messageId, 100)).toEqual([]);
     expect(live.asked).toEqual([]);
     expect(db.select().from(usageEvents).all()).toHaveLength(0);
+  });
+
+  it("detectLastReply reads a chat's last reply after the fact, once", async () => {
+    const live = fakeLive();
+    const service = new OptionsService({ db, replayMode: false, live: () => live });
+    const info = seedReply(uuidv7());
+    expect(service.detectLastReply(info.chatId, USER)).toBe(info.messageId);
+    expect(await service.awaitOptions(info.messageId, 1000)).toEqual(TWO);
+    expect(service.detectLastReply(info.chatId, USER)).toBe(info.messageId);
+    expect(live.asked).toHaveLength(1);
+    expect(service.detectLastReply(uuidv7(), USER)).toBeNull();
   });
 
   it("keeps the spend when the chat was deleted while Haiku answered", async () => {

@@ -1,8 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type { z } from "zod";
 import { MAX_FORKS, MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption } from "@shared/forks";
 import type { TokenCounts } from "../anthropic/pricing";
-import { OptionsOutput } from "./schema";
+import { CHOICE, DetectOutput, RewriteOutput } from "./schema";
 
 export const OPTIONS_MODEL = "claude-haiku-5-5";
 
@@ -19,36 +20,39 @@ export interface OptionsMessenger {
   rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult>;
 }
 
-const DETECT_SYSTEM = `You read one assistant reply from a chat app and decide whether it presents the user with a choice: two or more distinct, mutually exclusive alternatives the user is meant to pick between, such as approaches, tools, designs, plans or versions of one thing.
-Most replies do not. The steps of one procedure, a list of tips, features or facts, the pros and cons of one thing, a ranked list that ends in a single recommendation, follow-up suggestions, and questions back to the user are not a choice. When in doubt, it is not a choice.
-Set is_choice accordingly. When it is a choice, list one item per alternative in the reply's order: a title of at most four words for a tab, and the message the user would send next in this same conversation, which continues with the reply above in view, to explore that alternative in depth: written in the user's voice, naming the alternative, and not restating what the reply already says. When it is not a choice, leave the list empty.`;
+const DETECT_SYSTEM = `You classify one assistant reply from a chat app and, only when it is a genuine choice, draft what the user would send next in this same conversation to explore each alternative.
 
-const REWRITE_SYSTEM = `You revise a list of chat prompts, each with a tab title, under one instruction from the user. Each prompt is the user's next message in a conversation that already contains the reply the prompts explore, so it stays in the user's voice and need not restate that reply. Keep one item per input item in the same order, apply the instruction to every prompt, keep each title at most four words, and set is_choice to true.`;
+A choice is a reply built around two or more alternatives, each explained in its own right, that the user could pick between: the user would take one and drop the others. It is still a choice when the reply recommends one of them. Ask: could the user reasonably do all of these? Then it is not a choice. The steps of one procedure, tips, features, facts, examples, parts of one plan, and the pros and cons of one thing are not a choice; neither are alternatives mentioned only in passing. A question asking the user for a fact about their situation is not a choice, even when it lists possible answers; a reply that lays out alternatives and then asks which the user prefers still is one. Most replies are not a choice; when in doubt, it is not.
+
+Decide kind first. Fill options only for alternatives; otherwise leave it empty.`;
+
+const REWRITE_SYSTEM = `You revise a list of chat prompts under one instruction from the user. Each prompt is the user's next message in a conversation that already contains the reply the prompts explore, so it keeps the user's first-person voice and keeps naming its alternative. Apply the instruction to every prompt and return exactly one item per input item, in the same order. Leave titles as they are unless the instruction is about titles.`;
 
 export class LiveOptionsMessenger implements OptionsMessenger {
   readonly name = "haiku" as const;
   constructor(private client: Anthropic = new Anthropic({ maxRetries: 2, timeout: 60_000 })) {}
 
-  detect(reply: string): Promise<MessengerResult> {
-    return this.ask(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`);
+  async detect(reply: string): Promise<MessengerResult> {
+    const { parsed, usage } = await this.ask(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`, DetectOutput);
+    return { options: parsed?.kind === CHOICE ? clampOptions(parsed.options) : [], usage };
   }
 
-  rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult> {
-    return this.ask(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`);
+  async rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult> {
+    const { parsed, usage } = await this.ask(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput);
+    return { options: clampOptions(parsed?.options ?? []), usage };
   }
 
-  private async ask(system: string, content: string): Promise<MessengerResult> {
+  private async ask<T extends z.ZodType>(system: string, content: string, output: T): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts }> {
     const message = await this.client.messages.parse({
       model: OPTIONS_MODEL,
       max_tokens: 4096,
       system,
       messages: [{ role: "user", content }],
-      output_config: { effort: "low", format: zodOutputFormat(OptionsOutput) },
+      output_config: { effort: "low", format: zodOutputFormat(output) },
     });
     const u = message.usage;
-    const parsed = message.parsed_output;
     return {
-      options: parsed?.is_choice ? clampOptions(parsed.options) : [],
+      parsed: message.parsed_output as z.infer<T> | null,
       usage: {
         inputTokens: u.input_tokens,
         outputTokens: u.output_tokens,
@@ -87,10 +91,6 @@ export class ScriptedOptionsMessenger implements OptionsMessenger {
   }
 
   async rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult> {
-    const word = instruction.trim().split(/\s+/)[0] ?? "";
-    return {
-      options: clampOptions(options.map((o) => ({ title: `${word} ${o.title}`, prompt: `${instruction.trim()} ${o.prompt}` }))),
-      usage: null,
-    };
+    return { options: clampOptions(options.map((o) => ({ title: o.title, prompt: `${instruction.trim()} ${o.prompt}` }))), usage: null };
   }
 }
