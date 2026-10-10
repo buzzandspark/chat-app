@@ -12,11 +12,19 @@ async function replyWithOptions(page: Page) {
   return button;
 }
 
+/** The sheet is the default: a click opens it with every option picked; its button forks them. */
+async function forkAll(page: Page) {
+  await visible(page, "explore-options").click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /^Fork \d+ chats?$/ }).click();
+}
+
 test.describe("explore options", () => {
-  test("a click forks each option into its own chat with tabs, a divider and the prompt as the first own message", async ({ page }) => {
-    const button = await replyWithOptions(page);
+  test("forking from the sheet puts each option in its own chat with tabs, a divider and the prompt as the first own message", async ({ page }) => {
+    await replyWithOptions(page);
     const parentUrl = page.url();
-    await button.click();
+    await forkAll(page);
     await expect(page).not.toHaveURL(parentUrl, { timeout: 15_000 });
     const forkPath = new URL(page.url()).pathname;
     await expect(tabs(page)).toHaveCount(4);
@@ -54,13 +62,9 @@ test.describe("explore options", () => {
     await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveCount(1);
   });
 
-  test("press and hold opens the sheet: deselect one, retitle one, rewrite all, fork the rest", async ({ page }) => {
+  test("the sheet: deselect one, retitle one, rewrite all with Enter, fork the rest with Shift+Enter", async ({ page }) => {
     const button = await replyWithOptions(page);
-    const box = (await button.boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.waitForTimeout(900);
-    await page.mouse.up();
+    await button.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     const instruction = dialog.getByLabel("Instruction for all prompts");
@@ -83,8 +87,8 @@ test.describe("explore options", () => {
 
   test("tabs reorder by dragging and the order survives a reload", async ({ page, isMobile }) => {
     test.skip(isMobile, "reordering is a mouse or pen gesture; on touch the strip pans");
-    const button = await replyWithOptions(page);
-    await button.click();
+    await replyWithOptions(page);
+    await forkAll(page);
     await expect(tabs(page)).toHaveCount(4, { timeout: 15_000 });
     const third = (await tabs(page).nth(3).boundingBox())!;
     const first = (await tabs(page).nth(1).boundingBox())!;
@@ -100,9 +104,9 @@ test.describe("explore options", () => {
 
   test("tabs close and reopen from the sidebar, cycle with Ctrl+Shift+brackets, and a right-click menu deletes or declares a winner", async ({ page, isMobile }) => {
     test.skip(isMobile, "keyboard and right-click are desktop gestures");
-    const button = await replyWithOptions(page);
+    await replyWithOptions(page);
     const parentUrl = page.url();
-    await button.click();
+    await forkAll(page);
     await expect(tabs(page)).toHaveCount(4, { timeout: 15_000 });
     // Close a tab: it leaves the strip and stays out across a reload; opening its chat from the sidebar brings it back.
     await page.getByRole("button", { name: "Close tab Move to Postgres" }).click();
@@ -147,9 +151,9 @@ test.describe("explore options", () => {
 
   test("Delete forks on the main tab removes every fork and keeps the main chat", async ({ page, isMobile }) => {
     test.skip(isMobile, "right-click is a desktop gesture");
-    const button = await replyWithOptions(page);
+    await replyWithOptions(page);
     const parentUrl = page.url();
-    await button.click();
+    await forkAll(page);
     await expect(tabs(page)).toHaveCount(4, { timeout: 15_000 });
     const forkPath = new URL(page.url()).pathname;
     await tabs(page).nth(0).click({ button: "right" });
