@@ -4,6 +4,9 @@ import { createMessageState } from "@client/store/chat-store";
 import { CACHE_WARM_MS, MAX_FORKS } from "@shared/forks";
 import { ExploreOptions, unavailableReason } from "./explore-options";
 
+const dimmed = (b: HTMLElement) => b.querySelector('[data-part="dim"]')!.classList.contains("opacity-50");
+const pulsing = (b: HTMLElement) => b.querySelector('[data-part="pulse"]')!.classList.contains("animate-pulse");
+
 function setup(props: Partial<Parameters<typeof ExploreOptions>[0]> = {}) {
   const onOpen = vi.fn();
   render(<ExploreOptions count={3} remaining={10} requestedAt={1_000_000} now={1_000_000 + 1000} state="ready" onOpen={onOpen} {...props} />);
@@ -19,7 +22,8 @@ describe("ExploreOptions", () => {
     expect(button).toHaveAttribute("aria-haspopup", "dialog");
     expect(button).not.toHaveAttribute("aria-disabled");
     expect(button).not.toHaveAttribute("data-tip");
-    expect(button).not.toHaveClass("animate-pulse");
+    expect(dimmed(button)).toBe(false);
+    expect(pulsing(button)).toBe(false);
     fireEvent.click(button);
     fireEvent.click(button, { detail: 0 });
     expect(onOpen).toHaveBeenCalledTimes(2);
@@ -31,8 +35,10 @@ describe("ExploreOptions", () => {
     expect(button).toHaveTextContent("Explore options");
     expect(button).toHaveAttribute("aria-disabled", "true");
     expect(button).not.toBeDisabled();
-    expect(button).toHaveClass("tip", "opacity-50");
-    expect(button).not.toHaveClass("animate-pulse");
+    expect(button).toHaveClass("tip");
+    expect(button).not.toHaveClass("opacity-50");
+    expect(dimmed(button)).toBe(true);
+    expect(pulsing(button)).toBe(false);
     expect(button).toHaveAttribute("data-tip", "No options to explore in the last reply");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();
@@ -42,7 +48,8 @@ describe("ExploreOptions", () => {
     const { onOpen, button } = setup({ count: null, state: "waiting" });
     expect(button).toHaveTextContent("Explore options");
     expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(button).toHaveClass("animate-pulse", "opacity-50");
+    expect(dimmed(button)).toBe(true);
+    expect(pulsing(button)).toBe(true);
     expect(button).toHaveAttribute("data-tip", "Looking for options…");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();
@@ -50,8 +57,8 @@ describe("ExploreOptions", () => {
 
   it("clicked before the options finished: pulses, lit, and ignores more clicks", () => {
     const { onOpen, button } = setup({ state: "awaiting" });
-    expect(button).toHaveClass("animate-pulse");
-    expect(button).not.toHaveClass("opacity-50");
+    expect(pulsing(button)).toBe(true);
+    expect(dimmed(button)).toBe(false);
     expect(button).toHaveAttribute("aria-busy", "true");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();

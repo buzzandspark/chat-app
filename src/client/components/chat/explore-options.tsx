@@ -47,10 +47,8 @@ export function ExploreOptions({ count, remaining, requestedAt, now, state, reas
         aria-busy={state === "waiting" || state === "awaiting" || state === "busy"}
         aria-haspopup="dialog"
         className={cn(
-          "relative isolate flex h-11 items-center gap-1.5 overflow-hidden rounded-lg px-3 text-small font-medium text-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          (state === "waiting" || state === "disabled") && "cursor-default opacity-50",
-          (state === "waiting" || state === "awaiting") && "animate-pulse",
-          state === "busy" && "cursor-default opacity-60",
+          "relative isolate flex h-11 items-center rounded-lg px-3 text-small font-medium text-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          inactive && "cursor-default",
           tip && "tip",
         )}
         data-tip={tip ?? undefined}
@@ -59,28 +57,33 @@ export function ExploreOptions({ count, remaining, requestedAt, now, state, reas
           if (state === "ready") onOpen();
         }}
       >
-        <svg aria-hidden className="pointer-events-none absolute inset-0 -z-10 size-full">
-          <defs>
-            <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="var(--primary)" />
-              <stop offset="0.5" stopColor="var(--chart-2)" />
-              <stop offset="1" stopColor="var(--chart-3)" />
-            </linearGradient>
-          </defs>
-          <rect
-            x="1"
-            y="1"
-            rx="7"
-            className={cn("explore-border", state === "disabled" && "[animation:none]")}
-            style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
-            fill="none"
-            stroke={`url(#${gradient})`}
-            strokeWidth="1.5"
-            strokeDasharray="6 4"
-          />
-        </svg>
-        <GitFork className="size-4" />
-        {label}
+        {/* Dimmed and pulsing inside, so the tooltip (the button's ::after) stays opaque; nested, a dull button still visibly pulses. */}
+        <span className={cn("flex items-center", (state === "waiting" || state === "disabled") && "opacity-50", state === "busy" && "opacity-60")} data-part="dim">
+          <span className={cn("flex items-center gap-1.5", (state === "waiting" || state === "awaiting") && "animate-pulse")} data-part="pulse">
+            <svg aria-hidden className="pointer-events-none absolute inset-0 -z-10 size-full">
+              <defs>
+                <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stopColor="var(--primary)" />
+                  <stop offset="0.5" stopColor="var(--chart-2)" />
+                  <stop offset="1" stopColor="var(--chart-3)" />
+                </linearGradient>
+              </defs>
+              <rect
+                x="1"
+                y="1"
+                rx="7"
+                className={cn("explore-border", state === "disabled" && "[animation:none]")}
+                style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
+                fill="none"
+                stroke={`url(#${gradient})`}
+                strokeWidth="1.5"
+                strokeDasharray="6 4"
+              />
+            </svg>
+            <GitFork className="size-4" />
+            {label}
+          </span>
+        </span>
       </button>
     </div>
   );
