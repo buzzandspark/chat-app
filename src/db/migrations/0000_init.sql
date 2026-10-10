@@ -20,13 +20,20 @@ CREATE TABLE `chats` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
 	`title` text DEFAULT 'New chat' NOT NULL,
+	`pinned` integer DEFAULT false NOT NULL,
+	`forked_from` text,
+	`fork_position` integer,
+	`fork_order` integer,
+	`tab_hidden` integer DEFAULT false NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	`last_message_at` integer,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`forked_from`) REFERENCES `chats`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `chats_user_updated_idx` ON `chats` (`user_id`,`updated_at`);--> statement-breakpoint
+CREATE INDEX `chats_forked_from_idx` ON `chats` (`forked_from`);--> statement-breakpoint
 CREATE TABLE `feedback` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text,
@@ -40,6 +47,7 @@ CREATE TABLE `feedback` (
 );
 --> statement-breakpoint
 CREATE INDEX `feedback_created_idx` ON `feedback` (`created_at`);--> statement-breakpoint
+CREATE INDEX `feedback_user_idx` ON `feedback` (`user_id`);--> statement-breakpoint
 CREATE TABLE `generations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`chat_id` text NOT NULL,
@@ -63,6 +71,8 @@ CREATE TABLE `generations` (
 --> statement-breakpoint
 CREATE INDEX `generations_chat_idx` ON `generations` (`chat_id`);--> statement-breakpoint
 CREATE INDEX `generations_status_idx` ON `generations` (`status`);--> statement-breakpoint
+CREATE INDEX `generations_user_idx` ON `generations` (`user_id`);--> statement-breakpoint
+CREATE INDEX `generations_message_idx` ON `generations` (`message_id`);--> statement-breakpoint
 CREATE TABLE `invites` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -90,6 +100,10 @@ CREATE TABLE `messages` (
 	`error` text,
 	`generation_id` text,
 	`timings` text,
+	`thinking` text,
+	`fork_options` text,
+	`last_seq` integer,
+	`search_text` text,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`) ON UPDATE no action ON DELETE cascade
@@ -113,7 +127,7 @@ CREATE UNIQUE INDEX `sessions_token_unique` ON `sessions` (`token`);--> statemen
 CREATE INDEX `sessions_user_idx` ON `sessions` (`user_id`);--> statement-breakpoint
 CREATE TABLE `usage_events` (
 	`id` text PRIMARY KEY NOT NULL,
-	`generation_id` text NOT NULL,
+	`generation_id` text,
 	`user_id` text NOT NULL,
 	`model` text NOT NULL,
 	`iteration_type` text DEFAULT 'message' NOT NULL,
@@ -124,7 +138,7 @@ CREATE TABLE `usage_events` (
 	`cost_usd` real DEFAULT 0 NOT NULL,
 	`estimated` integer DEFAULT false NOT NULL,
 	`created_at` integer NOT NULL,
-	FOREIGN KEY (`generation_id`) REFERENCES `generations`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`generation_id`) REFERENCES `generations`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
@@ -150,6 +164,7 @@ CREATE TABLE `users` (
 CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);--> statement-breakpoint
 CREATE INDEX `users_role_idx` ON `users` (`role`);--> statement-breakpoint
 CREATE INDEX `users_last_active_idx` ON `users` (`last_active_at`);--> statement-breakpoint
+CREATE INDEX `users_created_idx` ON `users` (`created_at`);--> statement-breakpoint
 CREATE TABLE `verifications` (
 	`id` text PRIMARY KEY NOT NULL,
 	`identifier` text NOT NULL,
@@ -159,4 +174,22 @@ CREATE TABLE `verifications` (
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `verifications_identifier_idx` ON `verifications` (`identifier`);
+CREATE INDEX `verifications_identifier_idx` ON `verifications` (`identifier`);--> statement-breakpoint
+-- #60: a plain-text shadow of each message's text blocks, kept by triggers, indexed by FTS5 (external content).
+CREATE TRIGGER IF NOT EXISTS `messages_search_text_ai` AFTER INSERT ON `messages` BEGIN
+  UPDATE `messages` SET `search_text` = (SELECT group_concat(json_extract(j.value, '$.text'), ' ') FROM json_each(NEW.`content`) AS j WHERE json_extract(j.value, '$.type') = 'text') WHERE `id` = NEW.`id`;
+END;--> statement-breakpoint
+CREATE TRIGGER IF NOT EXISTS `messages_search_text_au` AFTER UPDATE OF `content` ON `messages` BEGIN
+  UPDATE `messages` SET `search_text` = (SELECT group_concat(json_extract(j.value, '$.text'), ' ') FROM json_each(NEW.`content`) AS j WHERE json_extract(j.value, '$.type') = 'text') WHERE `id` = NEW.`id`;
+END;--> statement-breakpoint
+CREATE VIRTUAL TABLE IF NOT EXISTS `messages_fts` USING fts5(`search_text`, content='messages', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2');--> statement-breakpoint
+CREATE TRIGGER IF NOT EXISTS `messages_fts_ai` AFTER INSERT ON `messages` BEGIN
+  INSERT INTO `messages_fts`(`rowid`, `search_text`) VALUES (NEW.`rowid`, coalesce(NEW.`search_text`, ''));
+END;--> statement-breakpoint
+CREATE TRIGGER IF NOT EXISTS `messages_fts_ad` AFTER DELETE ON `messages` BEGIN
+  INSERT INTO `messages_fts`(`messages_fts`, `rowid`, `search_text`) VALUES ('delete', OLD.`rowid`, coalesce(OLD.`search_text`, ''));
+END;--> statement-breakpoint
+CREATE TRIGGER IF NOT EXISTS `messages_fts_au` AFTER UPDATE OF `search_text` ON `messages` BEGIN
+  INSERT INTO `messages_fts`(`messages_fts`, `rowid`, `search_text`) VALUES ('delete', OLD.`rowid`, coalesce(OLD.`search_text`, ''));
+  INSERT INTO `messages_fts`(`rowid`, `search_text`) VALUES (NEW.`rowid`, coalesce(NEW.`search_text`, ''));
+END;

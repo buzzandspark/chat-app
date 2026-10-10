@@ -1,1 +1,0 @@
-ALTER TABLE `chats` ADD `tab_hidden` integer DEFAULT false NOT NULL;

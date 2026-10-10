@@ -1,1 +1,0 @@
-ALTER TABLE `chats` ADD `pinned` integer DEFAULT false NOT NULL;
