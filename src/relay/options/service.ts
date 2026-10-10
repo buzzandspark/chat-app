@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages, usageEvents, users } from "@db/schema";
-import type { ForkOption, OptionsTrace } from "@shared/forks";
+import { MAX_FORKS, type ForkOption, type OptionsTrace } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import { costOf, type TokenCounts } from "../anthropic/pricing";
 import type { ReplyDoneInfo } from "../engine";
@@ -92,7 +92,7 @@ export class OptionsService {
   private async detect(info: ReplyDoneInfo, onProgress: (progress: DetectProgress) => void): Promise<ForkOption[] | null> {
     const chat = this.db.select({ forkedFrom: chats.forkedFrom }).from(chats).where(eq(chats.id, info.chatId)).get();
     const startedAt = performance.now();
-    if (!chat || chat.forkedFrom || !info.text.trim() || this.atCap(info.userId)) return null;
+    if (!chat || chat.forkedFrom || !info.text.trim() || this.atCap(info.userId) || !this.canFork(info.chatId)) return null;
     const messenger = this.messenger(info.scenario, info.billable);
     const result = await messenger.detect(info.text, onProgress);
     this.record(info.userId, info.generationId, "options", result.usage, messenger.name === "haiku");
@@ -176,6 +176,11 @@ export class OptionsService {
 
   private capRow(userId: string): { cap: number | null; spent: number } | undefined {
     return this.db.select({ cap: users.costCapUsd, spent: users.costSpentUsd }).from(users).where(eq(users.id, userId)).get();
+  }
+
+  /** A chat with its full share of forks can't be forked again, so there is nothing to detect. */
+  private canFork(chatId: string): boolean {
+    return this.db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, chatId)).all().length < MAX_FORKS;
   }
 
   private atCap(userId: string): boolean {

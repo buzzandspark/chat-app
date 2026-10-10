@@ -10,6 +10,7 @@ import { useChat, useChatSeeded, useChatStore, useMessage } from "@client/store/
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
 import { watchOptions } from "@client/store/forks";
+import { MAX_FORKS } from "@shared/forks";
 import { isUuid, uuidv7 } from "@shared/id";
 import { isModelId } from "@shared/models";
 import { ChatActionsContext, ChatLiveStateContext, type EditingState } from "./chat-context";
@@ -137,8 +138,10 @@ export function ChatView({ children }: { children: ReactNode }) {
     const was = previousStatus.current;
     previousStatus.current = lastStatus;
     if (was !== "streaming" || lastStatus !== "done" || !lastId || chat.forkedFrom) return;
+    // A chat with all its forks can't take another, so there are no options to wait for.
+    if (getSidebarStore().get().filter((c) => c.forkedFrom === chatId).length >= MAX_FORKS) return;
     void watchOptions(store, lastId);
-  }, [lastStatus, lastId, chat.forkedFrom, store]);
+  }, [lastStatus, lastId, chat.forkedFrom, store, chatId]);
 
   const editQueued = useCallback(
     (id: string) => {

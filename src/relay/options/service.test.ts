@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@db/client";
 import { chats, generations, messages, usageEvents, users } from "@db/schema";
-import type { ForkOption } from "@shared/forks";
+import { MAX_FORKS, type ForkOption } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import type { ReplyDoneInfo } from "../engine";
 import { createTestDb, seedUser } from "../test-utils";
@@ -88,7 +88,7 @@ describe("OptionsService", () => {
     expect(await service.awaitOptions(uuidv7(), 10)).toBeNull();
   });
 
-  it("skips forks, empty replies and users at their cap", async () => {
+  it("skips forks, empty replies, chats with all their forks, and users at their cap", async () => {
     const live = fakeLive();
     const service = new OptionsService({ db, replayMode: false, live: () => live });
     const fork = seedReply(uuidv7(), uuidv7());
@@ -97,6 +97,11 @@ describe("OptionsService", () => {
     const empty = seedReply(uuidv7());
     service.onReplyDone({ ...empty, text: "   " });
     expect(await service.awaitOptions(empty.messageId, 100)).toBeNull();
+    const full = seedReply(uuidv7());
+    const t = new Date();
+    for (let i = 0; i < MAX_FORKS; i++) db.insert(chats).values({ id: uuidv7(), userId: USER, title: `fork ${i}`, forkedFrom: full.chatId, createdAt: t, updatedAt: t }).run();
+    service.onReplyDone(full);
+    expect(await service.awaitOptions(full.messageId, 100)).toBeNull();
     db.update(users).set({ costCapUsd: 1, costSpentUsd: 1 }).where(eq(users.id, USER)).run();
     const capped = seedReply(uuidv7());
     service.onReplyDone(capped);
