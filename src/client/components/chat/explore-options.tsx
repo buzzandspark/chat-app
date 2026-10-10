@@ -73,7 +73,8 @@ export function ExploreOptions({ count, remaining, requestedAt, now, state, reas
                 x="1"
                 y="1"
                 rx="7"
-                className={cn("explore-border", !(state === "waiting" || state === "awaiting" || state === "busy") && "[animation:none]")}
+                // The animation lives in an unlayered rule that no utility can override, so the class itself is the switch.
+                className={state === "waiting" || state === "awaiting" || state === "busy" ? "explore-border" : undefined}
                 style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
                 fill="none"
                 stroke={state === "waiting" || state === "disabled" ? "var(--muted-foreground)" : `url(#${gradient})`}

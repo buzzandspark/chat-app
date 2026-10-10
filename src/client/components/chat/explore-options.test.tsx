@@ -6,7 +6,7 @@ import { ExploreOptions, unavailableReason } from "./explore-options";
 
 const dimmed = (b: HTMLElement) => b.querySelector('[data-part="dim"]')!.classList.contains("opacity-50");
 const colored = (b: HTMLElement) => b.querySelector('[data-part="border"]')!.getAttribute("stroke")!.startsWith("url(");
-const marching = (b: HTMLElement) => !b.querySelector('[data-part="border"]')!.classList.contains("[animation:none]");
+const marching = (b: HTMLElement) => b.querySelector('[data-part="border"]')!.classList.contains("explore-border");
 const pulsing = (b: HTMLElement) => b.querySelector('[data-part="pulse"]')!.classList.contains("animate-pulse");
 
 function setup(props: Partial<Parameters<typeof ExploreOptions>[0]> = {}) {
