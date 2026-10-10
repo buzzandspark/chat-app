@@ -141,7 +141,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
 
   return (
     <>
-      <div role="tablist" aria-label="Chat and its forks" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-2 pt-1.5 [touch-action:pan-x] safe-x" data-testid="fork-tabs">
+      <div role="tablist" aria-label="Chat and its forks" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-sidebar-accent px-2 pt-1.5 [touch-action:pan-x] safe-x" data-testid="fork-tabs">
         {tabs.map((tab) => {
           const active = tab.id === chatId;
           const isMain = tab.id === model.parentId;
@@ -151,7 +151,8 @@ export function ForkTabs({ chatId }: { chatId: string }) {
               data-fork-tab={isMain ? undefined : tab.id}
               className={cn(
                 "group/tab flex h-9 max-w-56 shrink-0 items-center rounded-t-lg border border-b-0 pr-1 select-none",
-                active ? "border-border bg-background" : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+                // The open tab takes the page's colour and covers the strip's bottom border, joining the chat below.
+                active ? "relative -mb-px border-border bg-background" : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10",
                 dragging?.id === tab.id && "opacity-60",
               )}
               onPointerEnter={() => warm(tab.id)}
