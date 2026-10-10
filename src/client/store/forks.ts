@@ -60,9 +60,42 @@ export async function forkChat(
   return { ok: true };
 }
 
-/** The Haiku call behind a reply's options (or a rewrite), as sent and answered; development only. */
-export function logOptionsTrace(kind: "detect" | "rewrite", trace: OptionsTrace): void {
-  console.group(`[options] ${kind}: ${trace.model}, stop ${trace.stopReason}, in ${trace.inputTokens} / out ${trace.outputTokens}`);
+export type RewriteOutcome = { ok: true; options: ForkOption[] } | { ok: false; error: string };
+
+/** The sheet's instruction applied to every prompt; the call's trace goes to the console in development. */
+export async function rewriteOptions(messageId: string, instruction: string, options: readonly ForkOption[]): Promise<RewriteOutcome> {
+  const asked = performance.now();
+  try {
+    const res = await fetch(`/api/messages/${messageId}/options/rewrite`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ instruction, options }),
+    });
+    if (!res.ok) return { ok: false, error: res.status === 402 ? CAP : `Could not apply the instruction (${res.status}).` };
+    const data = (await res.json()) as { options: ForkOption[]; trace?: OptionsTrace | null };
+    if (data.trace) logOptionsTrace("rewrite", data.trace, performance.now() - asked);
+    return { ok: true, options: data.options };
+  } catch {
+    return { ok: false, error: "You seem to be offline." };
+  }
+}
+
+const seconds = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
+
+/** The timing line: the page's wait, the Haiku call, the server's detection, the held request; whichever are known. */
+export function traceTimings(trace: OptionsTrace, pageMs?: number): string {
+  const parts: string[] = [];
+  if (pageMs !== undefined) parts.push(`${seconds(pageMs)} in the page`);
+  parts.push(`Haiku ${seconds(trace.apiMs)}`);
+  if (trace.totalMs !== undefined) parts.push(`server ${seconds(trace.totalMs)}`);
+  if (trace.waitedMs !== undefined) parts.push(`request held ${seconds(trace.waitedMs)}`);
+  return parts.join(", ");
+}
+
+/** The Haiku call behind a reply's options (or a rewrite), as sent and answered, with its timings; development only. */
+export function logOptionsTrace(kind: "detect" | "rewrite", trace: OptionsTrace, pageMs?: number): void {
+  console.group(`[options] ${kind}: ${traceTimings(trace, pageMs)}`);
+  console.log(`${trace.model}, stop ${trace.stopReason}, in ${trace.inputTokens} / out ${trace.outputTokens} tokens`);
   console.log(`system\n${trace.system}`);
   console.log(`user\n${trace.user}`);
   console.log("response", trace.response);

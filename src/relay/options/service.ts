@@ -51,12 +51,13 @@ export class OptionsService {
 
   private async detect(info: ReplyDoneInfo): Promise<ForkOption[] | null> {
     const chat = this.db.select({ forkedFrom: chats.forkedFrom }).from(chats).where(eq(chats.id, info.chatId)).get();
+    const startedAt = performance.now();
     if (!chat || chat.forkedFrom || !info.text.trim() || this.atCap(info.userId)) return null;
     const messenger = this.messenger(info.scenario, info.billable);
     const result = await messenger.detect(info.text);
     this.record(info.userId, info.generationId, "options", result.usage, messenger.name === "haiku");
-    if (result.trace) this.keepTrace(info.messageId, result.trace);
     this.db.update(messages).set({ forkOptions: result.options }).where(eq(messages.id, info.messageId)).run();
+    if (result.trace) this.keepTrace(info.messageId, { ...result.trace, totalMs: Math.round(performance.now() - startedAt) });
     return result.options;
   }
 

@@ -138,10 +138,11 @@ export function ChatView({ children }: { children: ReactNode }) {
     const was = previousStatus.current;
     previousStatus.current = lastStatus;
     if (was !== "streaming" || lastStatus !== "done" || !lastId || chat.forkedFrom) return;
+    const asked = performance.now();
     void fetch(`/api/messages/${lastId}/options`)
       .then((res) => (res.ok ? (res.json() as Promise<{ options: ForkOption[] | null; trace?: OptionsTrace | null }>) : null))
       .then((data) => {
-        if (data?.trace) logOptionsTrace("detect", data.trace);
+        if (data?.trace) logOptionsTrace("detect", data.trace, performance.now() - asked);
         if (data?.options) store.updateMessage(lastId, { options: data.options });
       })
       .catch(() => {});

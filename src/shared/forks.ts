@@ -18,4 +18,10 @@ export interface OptionsTrace {
   stopReason: string | null;
   inputTokens: number;
   outputTokens: number;
+  /** Milliseconds: the API call alone. */
+  apiMs: number;
+  /** The server's whole detection, from the reply settling to the options being stored. */
+  totalMs?: number;
+  /** How long the options request was held waiting for the detection. */
+  waitedMs?: number;
 }

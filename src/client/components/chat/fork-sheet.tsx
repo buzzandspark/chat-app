@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
-import { logOptionsTrace } from "@client/store/forks";
-import { MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption, type OptionsTrace } from "@shared/forks";
+import { rewriteOptions } from "@client/store/forks";
+import { MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption } from "@shared/forks";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface ForkSheetProps {
@@ -44,24 +44,13 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
     if (!instruction.trim() || applying) return;
     setApplying(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/messages/${messageId}/options/rewrite`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ instruction: instruction.trim(), options: items.map(({ title, prompt }) => ({ title, prompt })) }),
-      });
-      if (!res.ok) {
-        setError(res.status === 402 ? "You have reached your usage cap." : `Could not apply the instruction (${res.status}).`);
-        return;
-      }
-      const data = (await res.json()) as { options: ForkOption[]; trace?: OptionsTrace | null };
-      if (data.trace) logOptionsTrace("rewrite", data.trace);
-      setItems((list) => list.map((it, i) => (data.options[i] ? { ...it, ...data.options[i] } : it)));
-    } catch {
-      setError("You seem to be offline.");
-    } finally {
-      setApplying(false);
+    const out = await rewriteOptions(messageId, instruction.trim(), items.map(({ title, prompt }) => ({ title, prompt })));
+    setApplying(false);
+    if (!out.ok) {
+      setError(out.error);
+      return;
     }
+    setItems((list) => list.map((it, i) => (out.options[i] ? { ...it, ...out.options[i] } : it)));
   };
 
   const submit = async () => {

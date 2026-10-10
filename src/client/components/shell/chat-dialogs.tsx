@@ -155,10 +155,11 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
       store.setFork(chat.id, { from: null, position: null });
       // Haiku reads the winner's last reply now; waiting for it here means the chat opens with its button.
       if (winner.lastMessageId) {
+        const asked = performance.now();
         const found = await fetch(`/api/messages/${winner.lastMessageId}/options`)
           .then((r) => (r.ok ? (r.json() as Promise<{ options: ForkOption[] | null; trace?: OptionsTrace | null }>) : null))
           .catch(() => null);
-        if (found?.trace) logOptionsTrace("detect", found.trace);
+        if (found?.trace) logOptionsTrace("detect", found.trace, performance.now() - asked);
         if (found?.options) store.updateMessage(winner.lastMessageId, { options: found.options });
       }
       const leaving = currentChatId !== null && winner.deleted.includes(currentChatId);

@@ -17,7 +17,7 @@ const TWO: ForkOption[] = [
   { title: "Option B", prompt: "Explore B" },
 ];
 const USAGE = { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0 };
-const TRACE = { model: "claude-haiku-5-5", system: "s", user: "u", response: {}, stopReason: "end_turn", inputTokens: 1000, outputTokens: 200 };
+const TRACE = { model: "claude-haiku-5-5", system: "s", user: "u", response: {}, stopReason: "end_turn", inputTokens: 1000, outputTokens: 200, apiMs: 900 };
 
 /** A live stand-in that answers after `delayMs` and remembers what it was asked. */
 function fakeLive(delayMs = 0): OptionsMessenger & { asked: string[] } {
@@ -73,7 +73,9 @@ describe("OptionsService", () => {
     expect(db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd).toBe(rows[0]!.costUsd);
     expect(live.asked).toEqual(["A or B"]);
     // The call's trace is handed out once.
-    expect(service.takeTrace(info.messageId)).toEqual(TRACE);
+    const trace = service.takeTrace(info.messageId)!;
+    expect(trace).toMatchObject(TRACE);
+    expect(trace.totalMs).toBeGreaterThanOrEqual(0);
     expect(service.takeTrace(info.messageId)).toBeNull();
   });
 

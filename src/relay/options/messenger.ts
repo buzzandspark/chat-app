@@ -44,6 +44,7 @@ export class LiveOptionsMessenger implements OptionsMessenger {
   }
 
   private async ask<T extends z.ZodType>(system: string, content: string, output: T): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts; trace: OptionsTrace }> {
+    const started = performance.now();
     const message = await this.client.messages.parse({
       model: OPTIONS_MODEL,
       max_tokens: 4096,
@@ -51,6 +52,7 @@ export class LiveOptionsMessenger implements OptionsMessenger {
       messages: [{ role: "user", content }],
       output_config: { effort: "low", format: zodOutputFormat(output) },
     });
+    const apiMs = Math.round(performance.now() - started);
     const u = message.usage;
     const usage = {
       inputTokens: u.input_tokens,
@@ -69,6 +71,7 @@ export class LiveOptionsMessenger implements OptionsMessenger {
       stopReason: message.stop_reason ?? null,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
+      apiMs,
     };
     return { parsed, usage, trace };
   }

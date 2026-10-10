@@ -19,9 +19,10 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/message
     if (!row) return jsonError(404, { error: "not_found" });
     if (row.userId !== user.id) return jsonError(403, { error: "forbidden" });
     const service = getRelay().options;
+    const asked = performance.now();
     const options = await service.awaitOptions(id, 10_000);
     const trace = env.isProd ? null : service.takeTrace(id);
-    return Response.json({ options, trace }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ options, trace: trace && { ...trace, waitedMs: Math.round(performance.now() - asked) } }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

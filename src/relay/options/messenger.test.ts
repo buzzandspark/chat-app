@@ -23,6 +23,7 @@ describe("options messenger", () => {
     expect(result.trace).toMatchObject({ model: OPTIONS_MODEL, user: expect.stringContaining("Here are two ways"), inputTokens: 10, outputTokens: 5 });
     expect(result.trace!.system).toContain("next in this same conversation");
     expect(result.trace!.response).toMatchObject({ kind: "alternatives" });
+    expect(result.trace!.apiMs).toBeGreaterThanOrEqual(0);
     const params = parse.mock.calls[0]![0] as { model: string; system: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
     expect(params.model).toBe(OPTIONS_MODEL);
     expect(params.output_config.effort).toBe("low");
