@@ -21,11 +21,9 @@ export interface OptionsMessenger {
   rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult>;
 }
 
-const DETECT_SYSTEM = `Decide whether this assistant reply offers a real choice between alternatives worth exploring separately.
+const DETECT_SYSTEM = `Decide whether this assistant reply lays out distinct alternatives the user might weigh against each other.
 
-It's a choice only if the reply explains two or more mutually exclusive alternatives (approaches, tools, designs, strategies) and the user would pick one and drop the rest. Recommending one still counts. If the user could reasonably do all of them, it's not a choice.
-
-Return no options for everything else: steps, tips, features, facts, examples, pros and cons of one thing, alternatives mentioned only in passing, or a question asking the user about their situation. When unsure, return none.`;
+Return none for parts of one whole (steps, tips, features, facts, examples, pros and cons), alternatives mentioned in passing, or questions about the user's situation. When unsure, return none.`;
 
 interface Effort {
   thinking: { type: "adaptive" } | { type: "disabled" };

@@ -20,7 +20,7 @@ describe("options messenger", () => {
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0 });
     // What was sent and what came back travel with the result, for the browser console in development.
     expect(result.trace).toMatchObject({ model: OPTIONS_MODEL, user: expect.stringContaining("Here are two ways"), inputTokens: 10, outputTokens: 5 });
-    expect(result.trace!.system).toContain("real choice between alternatives");
+    expect(result.trace!.system).toContain("weigh against each other");
     expect(result.trace!.response).toMatchObject({ options: expect.any(Array) });
     expect(result.trace!.apiMs).toBeGreaterThanOrEqual(0);
     const params = parse.mock.calls[0]![0] as { model: string; system: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
@@ -30,7 +30,7 @@ describe("options messenger", () => {
     expect(params.output_config.format.type).toBe("json_schema");
     expect(params.messages[0]!.content).toContain("Here are two ways");
     // The fork carries the whole conversation: prompts are the next message there, not an opener for a new chat.
-    expect(params.system).toContain("Recommending one still counts");
+    expect(params.system).toContain("parts of one whole");
     // The prompt-writing rules ride in the schema: each prompt is the next message in the same conversation.
     expect(JSON.stringify(params.output_config.format)).toContain("next message in this same conversation");
   });
