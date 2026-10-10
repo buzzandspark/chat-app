@@ -219,7 +219,6 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   const scenario = settings.scenario;
   const editingText = editing ? textOf(store.getMessage(editing.userMessageId)?.blocks ?? []) : "";
-  const explorable = !editing && !chat.forkedFrom && lastMessage?.role === "assistant" && lastMessage.status === "done" && ((lastMessage.options?.length ?? 0) > 0 || lastMessage.optionsStream !== null);
 
   return (
     <div
@@ -246,7 +245,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
             </IconButton>
           </div>
         ) : null}
-        {explorable && lastMessage ? <ExploreOptionsIsland chatId={chatId} message={lastMessage} /> : null}
+        <ExploreOptionsIsland chatId={chatId} message={lastMessage} isFork={chat.forkedFrom !== null} editing={editing !== null} />
         <div className="flex flex-col rounded-xl border border-input bg-card shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
           <textarea
             ref={textareaRef}

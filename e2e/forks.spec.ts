@@ -12,6 +12,14 @@ async function replyWithOptions(page: Page) {
   return button;
 }
 
+/** The button stays on screen when it can't be used, dull, with the reason as its tooltip. */
+async function expectExploreUnavailable(page: Page, reason: string) {
+  const button = visible(page, "explore-options");
+  await expect(button).toHaveAttribute("data-state", "disabled", { timeout: 15_000 });
+  await expect(button).toHaveAttribute("aria-disabled", "true");
+  await expect(button).toHaveAttribute("data-tip", reason);
+}
+
 /** The sheet is the default: a click opens it with every option picked; its button forks them. */
 async function forkAll(page: Page) {
   await visible(page, "explore-options").click();
@@ -38,8 +46,8 @@ test.describe("explore options", () => {
     await expect(page.locator('[data-role="user"]:visible')).toHaveCount(2);
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("keeping SQLite");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    // No forks of forks.
-    await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
+    // No forks of forks: the button stays, unavailable, and says why.
+    await expectExploreUnavailable(page, "A fork can't be forked again");
     // The sidebar marks the parent and nests the fork under it (rows are found by their own links: the database is shared across projects).
     const parentPath = new URL(parentUrl).pathname;
     const aside = page.locator('aside[aria-label="Chats"]');
@@ -54,10 +62,10 @@ test.describe("explore options", () => {
     await expect(page).toHaveURL(parentUrl);
     await expect(page.getByTestId("fork-divider").locator("visible=true")).toHaveCount(0);
     await expect(tabs(page).nth(0)).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
+    await expectExploreUnavailable(page, "No options to explore in the last reply");
     await page.reload();
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 15_000 });
-    await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
+    await expectExploreUnavailable(page, "No options to explore in the last reply");
     // Elsewhere the forks are not listed.
     await openNewChat(page);
     await expect(aside.locator(`a[href="${forkPath}"]`)).toHaveCount(0);
@@ -167,15 +175,17 @@ test.describe("explore options", () => {
     const aside = page.locator('aside[aria-label="Chats"]');
     await expect(aside.locator(`a[href="${forkPath}"]`)).toHaveCount(0);
     await expect(aside.locator(`a[href="${new URL(parentUrl).pathname}"]`)).toHaveCount(1);
-    await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
+    await expectExploreUnavailable(page, "No options to explore in the last reply");
   });
 
-  test("the button waits dull for the count, lights up with it, and a click before the options finish waits for them", async ({ page }) => {
+  test("the button is there before any reply, waits dull for the count, lights up with it, and a click before the options finish waits for them", async ({ page }) => {
     await openNewChat(page);
+    await expectExploreUnavailable(page, "Available after a reply");
     await runScenario(page, "options_reply");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     const button = visible(page, "explore-options");
     await expect(button).toHaveAttribute("data-state", "waiting");
+    await expect(button).toHaveAttribute("data-tip", "Looking for options…");
     await expect(button).toBeDisabled();
     await expect(button).toHaveText(/Explore options/);
     // The count arrives about 0.4 s in; the full list about 1.5 s after that.

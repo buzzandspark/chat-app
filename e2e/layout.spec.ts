@@ -21,7 +21,7 @@ test.describe("phone layout", () => {
 
   test("composer controls are at least 44 px tall", async ({ page }) => {
     await openNewChat(page);
-    for (const name of ["Send message", "Choose model", "Show sidebar"]) {
+    for (const name of ["Send message", "Choose model", "Show sidebar", "Explore options"]) {
       const box = await page.getByRole("button", { name }).boundingBox();
       expect(box, name).not.toBeNull();
       expect(box!.height, name).toBeGreaterThanOrEqual(44);

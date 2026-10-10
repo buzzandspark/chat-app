@@ -15,8 +15,8 @@ import { useModals } from "../ui/modal-manager";
 
 const ForkSheet = lazyChunk(() => dynamic(() => import("./fork-sheet").then((m) => m.ForkSheet), { ssr: false }));
 
-/** waiting: no count yet; ready: clickable; awaiting: clicked before the options finished; busy: forking. */
-export type ExploreState = "waiting" | "ready" | "awaiting" | "busy";
+/** waiting: looking for options; disabled: unavailable (the reason is the tooltip); ready: clickable; awaiting: clicked early; busy: forking. */
+export type ExploreState = "waiting" | "disabled" | "ready" | "awaiting" | "busy";
 
 export interface ExploreOptionsProps {
   count: number | null;
@@ -25,15 +25,17 @@ export interface ExploreOptionsProps {
   requestedAt: number;
   now: number;
   state: ExploreState;
+  reason?: string | null;
   onOpen: () => void;
 }
 
-/** Opens the sheet, where the options are picked and forked; dull and pulsing until the count arrives. */
-export function ExploreOptions({ count, remaining, requestedAt, now, state, onOpen }: ExploreOptionsProps) {
+/** Always shown above the composer; aria-disabled rather than disabled so hover and focus still show why. */
+export function ExploreOptions({ count, remaining, requestedAt, now, state, reason = null, onOpen }: ExploreOptionsProps) {
   const gradient = useId();
-  const shown = count === null ? null : Math.min(count, remaining);
-  const waiting = state === "waiting";
-  const expired = !waiting && now > 0 && now - requestedAt > CACHE_WARM_MS;
+  const inactive = state === "waiting" || state === "disabled" || state === "busy";
+  const shown = count === null || state === "disabled" ? null : Math.min(count, remaining);
+  const expired = state === "ready" && now > 0 && now - requestedAt > CACHE_WARM_MS;
+  const tip = state === "waiting" ? "Looking for options…" : state === "disabled" ? reason : expired ? "Cache expired: the first fork re-sends the whole chat" : null;
   const label = state === "busy" ? "Forking…" : shown === null ? "Explore options" : `Explore ${shown} option${shown === 1 ? "" : "s"}`;
   return (
     <div className="mb-2 flex items-center gap-1">
@@ -41,17 +43,17 @@ export function ExploreOptions({ count, remaining, requestedAt, now, state, onOp
         type="button"
         data-testid="explore-options"
         data-state={state}
-        disabled={waiting || state === "busy"}
-        aria-busy={state !== "ready"}
+        aria-disabled={inactive || undefined}
+        aria-busy={state === "waiting" || state === "awaiting" || state === "busy"}
         aria-haspopup="dialog"
         className={cn(
-          "relative isolate flex h-9 items-center gap-1.5 overflow-hidden rounded-lg px-3 text-small font-medium text-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          waiting && "animate-pulse opacity-50",
-          state === "awaiting" && "animate-pulse",
-          state === "busy" && "opacity-60",
-          expired && "tip",
+          "relative isolate flex h-11 items-center gap-1.5 overflow-hidden rounded-lg px-3 text-small font-medium text-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          (state === "waiting" || state === "disabled") && "cursor-default opacity-50",
+          (state === "waiting" || state === "awaiting") && "animate-pulse",
+          state === "busy" && "cursor-default opacity-60",
+          tip && "tip",
         )}
-        data-tip={expired ? "Cache expired: the first fork re-sends the whole chat" : undefined}
+        data-tip={tip ?? undefined}
         data-tip-side="top"
         onClick={() => {
           if (state === "ready") onOpen();
@@ -65,7 +67,17 @@ export function ExploreOptions({ count, remaining, requestedAt, now, state, onOp
               <stop offset="1" stopColor="var(--chart-3)" />
             </linearGradient>
           </defs>
-          <rect x="1" y="1" rx="7" className="explore-border" style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }} fill="none" stroke={`url(#${gradient})`} strokeWidth="1.5" strokeDasharray="6 4" />
+          <rect
+            x="1"
+            y="1"
+            rx="7"
+            className={cn("explore-border", state === "disabled" && "[animation:none]")}
+            style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
+            fill="none"
+            stroke={`url(#${gradient})`}
+            strokeWidth="1.5"
+            strokeDasharray="6 4"
+          />
         </svg>
         <GitFork className="size-4" />
         {label}
@@ -74,8 +86,22 @@ export function ExploreOptions({ count, remaining, requestedAt, now, state, onOp
   );
 }
 
+/** Why the button can't be used for this chat and reply, or null when it can (or is still looking). */
+export function unavailableReason(message: MessageState | undefined, chat: { isFork: boolean; remaining: number; editing: boolean }): string | null {
+  if (chat.isFork) return "A fork can't be forked again";
+  if (chat.remaining <= 0) return `This chat already has ${MAX_FORKS} forks`;
+  if (chat.editing) return "Not while editing a message";
+  if (!message || message.role !== "assistant") return "Available after a reply";
+  if (message.status === "streaming") return "Available when the reply finishes";
+  if (message.status !== "done") return "Only after a finished reply";
+  const stream = message.optionsStream;
+  if (stream && stream.count === null) return null;
+  const count = stream ? (stream.count ?? 0) : (message.options?.length ?? 0);
+  return count < 2 ? "No options to explore in the last reply" : null;
+}
+
 /** The composer's slot: wires the button to the options stream, the router, the sidebar's fork count and the sheet. */
-export function ExploreOptionsIsland({ chatId, message }: { chatId: string; message: MessageState }) {
+export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { chatId: string; message: MessageState | undefined; isFork: boolean; editing: boolean }) {
   const store = useChatStore();
   const router = useRouter();
   const { show } = useModals();
@@ -90,34 +116,36 @@ export function ExploreOptionsIsland({ chatId, message }: { chatId: string; mess
     return () => wait.current?.();
   }, []);
   const remaining = MAX_FORKS - forks;
-  const stream = message.optionsStream;
-  const count = stream ? stream.count : (message.options?.length ?? 0);
+  const messageId = message?.id ?? "";
+  const stream = message?.optionsStream ?? null;
+  const count = stream ? stream.count : (message?.options?.length ?? 0);
+  const reason = unavailableReason(message, { isFork, remaining, editing });
   const fork = useCallback(
     async (chosen: readonly ForkOption[]) => {
       setBusy(true);
       setError(null);
-      const out = await forkChat(store, router, chatId, message.id, chosen);
+      const out = await forkChat(store, router, chatId, messageId, chosen);
       setBusy(false);
       if (out.error) setError(out.error);
       return out;
     },
-    [store, router, chatId, message.id],
+    [store, router, chatId, messageId],
   );
   const openWith = useCallback(
     (options: readonly ForkOption[]) =>
-      show(({ open, close }) => <ForkSheet open={open} onOpenChange={(o) => !o && close()} messageId={message.id} options={options} remaining={remaining} onFork={fork} />),
-    [show, message.id, remaining, fork],
+      show(({ open, close }) => <ForkSheet open={open} onOpenChange={(o) => !o && close()} messageId={messageId} options={options} remaining={remaining} onFork={fork} />),
+    [show, messageId, remaining, fork],
   );
   // Whatever has arrived: the final list, else the options complete so far; none means an error instead of the sheet.
   const openCurrent = useCallback(() => {
-    const m = store.getMessage(message.id);
+    const m = store.getMessage(messageId);
     const options = m?.optionsStream ? m.optionsStream.partial : (m?.options ?? []);
     if (options.length > 0) openWith(options);
     else setError("Couldn't load the options. Try again in a moment.");
-  }, [store, message.id, openWith]);
+  }, [store, messageId, openWith]);
   // A click before the options finish waits for them (at most OPTIONS_CLICK_WAIT_MS), then opens.
   const onOpen = useCallback(() => {
-    const m = store.getMessage(message.id);
+    const m = store.getMessage(messageId);
     if (!m?.optionsStream || m.optionsStream.failed) {
       openCurrent();
       return;
@@ -130,8 +158,8 @@ export function ExploreOptionsIsland({ chatId, message }: { chatId: string; mess
       setAwaiting(false);
       openCurrent();
     };
-    const unsubscribe = store.subscribeMessage(message.id, () => {
-      const s = store.getMessage(message.id)?.optionsStream;
+    const unsubscribe = store.subscribeMessage(messageId, () => {
+      const s = store.getMessage(messageId)?.optionsStream;
       if (!s || s.failed) finish();
     });
     const timer = setTimeout(finish, OPTIONS_CLICK_WAIT_MS);
@@ -141,12 +169,19 @@ export function ExploreOptionsIsland({ chatId, message }: { chatId: string; mess
       waitRef.current = null;
     };
     waitRef.current = stop;
-  }, [store, message.id, openCurrent]);
-  if (remaining <= 0 || (count !== null && count < 2)) return null;
-  const state: ExploreState = busy ? "busy" : awaiting ? "awaiting" : count === null ? "waiting" : "ready";
+  }, [store, messageId, openCurrent]);
+  const state: ExploreState = busy ? "busy" : reason ? "disabled" : awaiting ? "awaiting" : count === null ? "waiting" : "ready";
   return (
     <>
-      <ExploreOptions count={count} remaining={remaining} requestedAt={message.timings?.client?.sent ?? message.createdAt} now={now} state={state} onOpen={onOpen} />
+      <ExploreOptions
+        count={count}
+        remaining={remaining}
+        requestedAt={message?.timings?.client?.sent ?? message?.createdAt ?? 0}
+        now={now}
+        state={state}
+        reason={reason}
+        onOpen={onOpen}
+      />
       {error ? (
         <p role="alert" className="mb-2 text-caption text-destructive">
           {error}
