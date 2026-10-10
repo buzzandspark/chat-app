@@ -186,7 +186,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
         <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
-        <Button type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
+        <Button type="button" className="touch-target bg-warning text-warning-foreground hover:bg-warning/85" disabled={busy} onClick={() => void confirm()}>
           Declare winner
         </Button>
       </div>

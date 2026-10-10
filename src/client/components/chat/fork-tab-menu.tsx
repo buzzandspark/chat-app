@@ -70,7 +70,7 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
       onKeyDown={onKeyDown}
     >
       <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={isMain ? onDeleteForks : onDeclareWinner}>
-        <Trophy className="size-4" />
+        <Trophy className={isMain ? "size-4" : "size-4 text-warning"} />
         {isMain ? "Delete forks" : "Declare winner"}
       </button>
       <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small text-destructive hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={onDelete}>

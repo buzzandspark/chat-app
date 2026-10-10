@@ -26,7 +26,7 @@ A choice is a reply built around two or more alternatives, each explained in its
 
 Decide kind first. Fill options only for alternatives; otherwise leave it empty.`;
 
-const REWRITE_SYSTEM = `You revise a list of chat prompts under one instruction from the user. Each prompt is the user's next message in a conversation that already contains the reply the prompts explore, so it keeps the user's first-person voice and keeps naming its alternative. Apply the instruction to every prompt and return exactly one item per input item, in the same order. Leave titles as they are unless the instruction is about titles.`;
+const REWRITE_SYSTEM = `You revise a list of chat prompts under one instruction from the user. Each prompt is the user's next message in a conversation that already contains the reply the prompts explore, so it keeps the user's first-person voice and keeps naming its alternative. Apply the instruction to each prompt on its own, as if it were the only one: a prompt never mentions, compares with or depends on the other prompts unless the instruction explicitly asks for that. Return exactly one item per input item, in the same order. Leave titles as they are unless the instruction is about titles.`;
 
 export class LiveOptionsMessenger implements OptionsMessenger {
   readonly name = "haiku" as const;

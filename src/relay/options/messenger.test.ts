@@ -40,6 +40,15 @@ describe("options messenger", () => {
     expect(clampOptions(two.slice(0, 1))).toEqual([]);
   });
 
+  it("the rewrite applies an instruction to each prompt on its own", async () => {
+    const parse = vi.fn().mockResolvedValue({ parsed_output: { options: [] }, usage: { input_tokens: 1, output_tokens: 1 } });
+    await new LiveOptionsMessenger({ messages: { parse } } as unknown as Anthropic).rewrite([{ title: "A", prompt: "a" }], "assess performance");
+    const params = parse.mock.calls[0]![0] as { system: string; messages: { content: string }[] };
+    expect(params.system).toContain("on its own");
+    expect(params.system).toContain("unless the instruction explicitly asks");
+    expect(params.messages[0]!.content).toContain("assess performance");
+  });
+
   it("clamps titles and prompts and caps the list", () => {
     const many = Array.from({ length: MAX_FORKS + 3 }, (_, i) => ({ title: `t${i}`.padEnd(MAX_OPTION_TITLE + 5, "x"), prompt: `p${i}` }));
     const out = clampOptions(many);

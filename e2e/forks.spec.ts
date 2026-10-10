@@ -18,6 +18,8 @@ async function forkAll(page: Page) {
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /^Fork \d+ chats?$/ }).click();
+  // Its exit animation would catch raw mouse events meant for the tabs.
+  await expect(dialog).toBeHidden();
 }
 
 test.describe("explore options", () => {
