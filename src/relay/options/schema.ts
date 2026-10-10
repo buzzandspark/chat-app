@@ -6,11 +6,11 @@ export const DetectOutput = z.object({
   options: z
     .array(
       z.object({
-        title: z.string().describe("Names this alternative in at most four words, for a tab beside the others: distinct, specific, never numbered like 'Option 1'."),
+        title: z.string().describe("At most four words naming this alternative; distinct, never 'Option 1'."),
         prompt: z
           .string()
           .describe(
-            "The user's next message in this same conversation, first person, one to three sentences: picks this alternative by name, then asks for the depth the reply did not give, such as a concrete plan, the trade-offs or what would change. The reply is already in view, so no summary of it. Shape: 'Let's go with the managed service. What would the setup, running cost and failure modes look like for us?'",
+            "One short sentence, the user's next message in this same conversation: picks this alternative by name and asks for a concrete plan. Example: 'Let's go with the managed service: what would setup, cost and failure modes look like for us?'",
           ),
       }),
     )

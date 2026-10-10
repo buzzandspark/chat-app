@@ -4,7 +4,7 @@ import { MAX_FORKS, MAX_OPTION_TITLE } from "@shared/forks";
 import { clampOptions, LiveOptionsMessenger, OPTIONS_MODEL } from "./messenger";
 
 describe("options messenger", () => {
-  it("asks Haiku with a structured output format at low effort and maps the parsed answer", async () => {
+  it("asks Haiku with a structured output format, thinking at high effort, and maps the parsed answer", async () => {
     const parse = vi.fn().mockResolvedValue({
       parsed_output: {
         options: [{ title: " Keep SQLite ", prompt: " Let's keep SQLite. " }, { title: "", prompt: "dropped" }, { title: "Postgres", prompt: "Let's move." }],
@@ -25,8 +25,8 @@ describe("options messenger", () => {
     expect(result.trace!.apiMs).toBeGreaterThanOrEqual(0);
     const params = parse.mock.calls[0]![0] as { model: string; system: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
     expect(params.model).toBe(OPTIONS_MODEL);
-    expect(params.output_config.effort).toBe("low");
-    expect((params as unknown as { thinking: unknown }).thinking).toEqual({ type: "disabled" });
+    expect(params.output_config.effort).toBe("high");
+    expect((params as unknown as { thinking: unknown }).thinking).toEqual({ type: "adaptive" });
     expect(params.output_config.format.type).toBe("json_schema");
     expect(params.messages[0]!.content).toContain("Here are two ways");
     // The fork carries the whole conversation: prompts are the next message there, not an opener for a new chat.
@@ -52,6 +52,9 @@ describe("options messenger", () => {
     expect(params.system).toContain("on its own");
     expect(params.system).toContain("unless the instruction explicitly asks");
     expect(params.messages[0]!.content).toContain("assess performance");
+    // A rewrite needs no judgement: thinking off, low effort.
+    expect((params as unknown as { thinking: unknown }).thinking).toEqual({ type: "disabled" });
+    expect((params as unknown as { output_config: { effort: string } }).output_config.effort).toBe("low");
   });
 
   it("clamps titles and prompts and caps the list", () => {

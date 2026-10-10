@@ -27,6 +27,15 @@ It's a choice only if the reply explains two or more mutually exclusive alternat
 
 Return no options for everything else: steps, tips, features, facts, examples, pros and cons of one thing, alternatives mentioned only in passing, or a question asking the user about their situation. When unsure, return none.`;
 
+interface Effort {
+  thinking: { type: "adaptive" } | { type: "disabled" };
+  effort: "low" | "high";
+}
+// Measured 2026-10-09: with thinking, Haiku talks itself out of lists of ideas (a fast empty answer); plain replies and real choices cost the same.
+const DETECT_EFFORT: Effort = { thinking: { type: "adaptive" }, effort: "high" };
+// Applying one instruction to every prompt needs no judgement.
+const REWRITE_EFFORT: Effort = { thinking: { type: "disabled" }, effort: "low" };
+
 const REWRITE_SYSTEM = `You revise a list of chat prompts under one instruction from the user. Each prompt is the user's next message in a conversation that already contains the reply the prompts explore, so it keeps the user's first-person voice and keeps naming its alternative. Apply the instruction to each prompt on its own, as if it were the only one: a prompt never mentions, compares with or depends on the other prompts unless the instruction explicitly asks for that. Return exactly one item per input item, in the same order. Leave titles as they are unless the instruction is about titles.`;
 
 export class LiveOptionsMessenger implements OptionsMessenger {
@@ -34,25 +43,24 @@ export class LiveOptionsMessenger implements OptionsMessenger {
   constructor(private client: Anthropic = new Anthropic({ maxRetries: 2, timeout: 60_000 })) {}
 
   async detect(reply: string): Promise<MessengerResult> {
-    const { parsed, usage, trace } = await this.ask(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`, DetectOutput);
+    const { parsed, usage, trace } = await this.ask(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`, DetectOutput, DETECT_EFFORT);
     return { options: clampOptions(parsed?.options ?? []), usage, trace };
   }
 
   async rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult> {
-    const { parsed, usage, trace } = await this.ask(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput);
+    const { parsed, usage, trace } = await this.ask(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput, REWRITE_EFFORT);
     return { options: clampOptions(parsed?.options ?? []), usage, trace };
   }
 
-  private async ask<T extends z.ZodType>(system: string, content: string, output: T): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts; trace: OptionsTrace }> {
+  private async ask<T extends z.ZodType>(system: string, content: string, output: T, mode: Effort): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts; trace: OptionsTrace }> {
     const started = performance.now();
     const message = await this.client.messages.parse({
       model: OPTIONS_MODEL,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system,
       messages: [{ role: "user", content }],
-      // Haiku 5.5 thinks adaptively unless told not to; a short classification doesn't need it.
-      thinking: { type: "disabled" },
-      output_config: { effort: "low", format: zodOutputFormat(output) },
+      thinking: mode.thinking,
+      output_config: { effort: mode.effort, format: zodOutputFormat(output) },
     });
     const apiMs = Math.round(performance.now() - started);
     const u = message.usage;

@@ -8,6 +8,7 @@ All notable changes, newest first. Dates are the day the work landed.
 - The per-user running cap (3) and the send window (20 a minute, 300 a day) are removed: the cost cap is the only limit. The feedback and long-chat seed endpoints keep their windows.
 - The migration history is collapsed into one initial migration (`0000_init`: the schema plus the search index and its triggers), since nothing has shipped. Every existing database must be recreated: delete the file and let boot rebuild it.
 - In development the browser console shows each Haiku call behind Explore options: the system prompt, the user turn, the parsed answer (or the raw text), tokens, and timings (the page's wait from the reply ending to the options arriving, the Haiku call, the server's whole detection, and how long the options request was held). Production sends none of it.
+- Explore options detection runs Claude Haiku 5.5 with adaptive thinking at high effort: in measurements it then answered "none" for a list of ideas it had read as ten alternatives (faster and cheaper than writing ten prompts), at the same cost for plain replies and real choices. The prompts it writes are one sentence each. The sheet's rewrite stays at low effort with thinking off.
 - Typing a character with nothing focused goes to the composer: it takes focus on the keydown so the character lands in it, at the end of any draft. Not with a modifier held, not for Space or special keys, and not while a dialog, a menu or the phone sidebar is open.
 
 ## 2026-10-08
