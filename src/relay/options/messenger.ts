@@ -3,7 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 import { MAX_FORKS, MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption, type OptionsTrace } from "@shared/forks";
 import type { TokenCounts } from "../anthropic/pricing";
-import { CHOICE, DetectOutput, RewriteOutput } from "./schema";
+import { DetectOutput, RewriteOutput } from "./schema";
 
 export const OPTIONS_MODEL = "claude-haiku-5-5";
 
@@ -25,7 +25,7 @@ const DETECT_SYSTEM = `You classify one assistant reply from a chat app and, onl
 
 A choice is a reply built around two or more alternatives, each explained in its own right, that the user could pick between: the user would take one and drop the others. It is still a choice when the reply recommends one of them. Ask: could the user reasonably do all of these? Then it is not a choice. The steps of one procedure, tips, features, facts, examples, parts of one plan, and the pros and cons of one thing are not a choice; neither are alternatives mentioned only in passing. A question asking the user for a fact about their situation is not a choice, even when it lists possible answers; a reply that lays out alternatives and then asks which the user prefers still is one. Most replies are not a choice; when in doubt, it is not.
 
-Decide kind first. Fill options only for alternatives; otherwise leave it empty.`;
+List options only when the reply is a choice; otherwise return an empty list.`;
 
 const REWRITE_SYSTEM = `You revise a list of chat prompts under one instruction from the user. Each prompt is the user's next message in a conversation that already contains the reply the prompts explore, so it keeps the user's first-person voice and keeps naming its alternative. Apply the instruction to each prompt on its own, as if it were the only one: a prompt never mentions, compares with or depends on the other prompts unless the instruction explicitly asks for that. Return exactly one item per input item, in the same order. Leave titles as they are unless the instruction is about titles.`;
 
@@ -35,7 +35,7 @@ export class LiveOptionsMessenger implements OptionsMessenger {
 
   async detect(reply: string): Promise<MessengerResult> {
     const { parsed, usage, trace } = await this.ask(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`, DetectOutput);
-    return { options: parsed?.kind === CHOICE ? clampOptions(parsed.options) : [], usage, trace };
+    return { options: clampOptions(parsed?.options ?? []), usage, trace };
   }
 
   async rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult> {

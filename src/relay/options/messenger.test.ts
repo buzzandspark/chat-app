@@ -7,7 +7,6 @@ describe("options messenger", () => {
   it("asks Haiku with a structured output format at low effort and maps the parsed answer", async () => {
     const parse = vi.fn().mockResolvedValue({
       parsed_output: {
-        kind: "alternatives",
         options: [{ title: " Keep SQLite ", prompt: " Let's keep SQLite. " }, { title: "", prompt: "dropped" }, { title: "Postgres", prompt: "Let's move." }],
       },
       usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: null, cache_creation_input_tokens: null },
@@ -22,7 +21,7 @@ describe("options messenger", () => {
     // What was sent and what came back travel with the result, for the browser console in development.
     expect(result.trace).toMatchObject({ model: OPTIONS_MODEL, user: expect.stringContaining("Here are two ways"), inputTokens: 10, outputTokens: 5 });
     expect(result.trace!.system).toContain("next in this same conversation");
-    expect(result.trace!.response).toMatchObject({ kind: "alternatives" });
+    expect(result.trace!.response).toMatchObject({ options: expect.any(Array) });
     expect(result.trace!.apiMs).toBeGreaterThanOrEqual(0);
     const params = parse.mock.calls[0]![0] as { model: string; system: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
     expect(params.model).toBe(OPTIONS_MODEL);
@@ -38,8 +37,8 @@ describe("options messenger", () => {
   it("no choice, or a single alternative, is an empty list", async () => {
     const answer = (parsed_output: unknown) => ({ messages: { parse: vi.fn().mockResolvedValue({ parsed_output, usage: { input_tokens: 1, output_tokens: 1 } }) } }) as unknown as Anthropic;
     const two = [{ title: "A", prompt: "a" }, { title: "B", prompt: "b" }];
-    expect((await new LiveOptionsMessenger(answer({ kind: "list", options: two })).detect("x")).options).toEqual([]);
-    expect((await new LiveOptionsMessenger(answer({ kind: "alternatives", options: two.slice(0, 1) })).detect("x")).options).toEqual([]);
+    expect((await new LiveOptionsMessenger(answer({ options: [] })).detect("x")).options).toEqual([]);
+    expect((await new LiveOptionsMessenger(answer({ options: two.slice(0, 1) })).detect("x")).options).toEqual([]);
     expect((await new LiveOptionsMessenger(answer({ options: two })).rewrite(two, "shorter")).options).toEqual(two);
     expect((await new LiveOptionsMessenger(answer(null)).detect("x")).options).toEqual([]);
     expect(clampOptions(two.slice(0, 1))).toEqual([]);
