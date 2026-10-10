@@ -50,6 +50,8 @@ export class LiveOptionsMessenger implements OptionsMessenger {
       max_tokens: 4096,
       system,
       messages: [{ role: "user", content }],
+      // Haiku 5.5 thinks adaptively unless told not to; a short classification doesn't need it.
+      thinking: { type: "disabled" },
       output_config: { effort: "low", format: zodOutputFormat(output) },
     });
     const apiMs = Math.round(performance.now() - started);
