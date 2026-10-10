@@ -43,6 +43,7 @@ export class LiveOptionsMessenger implements OptionsMessenger {
   }
 
   private async ask<T extends z.ZodType>(system: string, content: string, output: T): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts }> {
+    console.log(`[options] prompt (${OPTIONS_MODEL})\n--- system ---\n${system}\n--- user ---\n${content}`);
     const message = await this.client.messages.parse({
       model: OPTIONS_MODEL,
       max_tokens: 4096,
@@ -51,15 +52,16 @@ export class LiveOptionsMessenger implements OptionsMessenger {
       output_config: { effort: "low", format: zodOutputFormat(output) },
     });
     const u = message.usage;
-    return {
-      parsed: message.parsed_output as z.infer<T> | null,
-      usage: {
-        inputTokens: u.input_tokens,
-        outputTokens: u.output_tokens,
-        cacheReadTokens: u.cache_read_input_tokens ?? 0,
-        cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
-      },
+    const usage = {
+      inputTokens: u.input_tokens,
+      outputTokens: u.output_tokens,
+      cacheReadTokens: u.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
     };
+    const parsed = message.parsed_output as z.infer<T> | null;
+    const raw = parsed === null ? (message.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("") : null;
+    console.log(`[options] response (stop: ${message.stop_reason}, in ${usage.inputTokens}, out ${usage.outputTokens})\n${parsed === null ? `unparsed: ${raw}` : JSON.stringify(parsed, null, 2)}`);
+    return { parsed, usage };
   }
 }
 
