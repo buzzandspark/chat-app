@@ -29,10 +29,10 @@ Return no options for everything else: steps, tips, features, facts, examples, p
 
 interface Effort {
   thinking: { type: "adaptive" } | { type: "disabled" };
-  effort: "low" | "high";
+  effort: "low" | "medium";
 }
-// Measured 2026-10-09: with thinking, Haiku talks itself out of lists of ideas (a fast empty answer); plain replies and real choices cost the same.
-const DETECT_EFFORT: Effort = { thinking: { type: "adaptive" }, effort: "high" };
+// Measured 2026-10-09: at low effort Haiku never thinks; medium thinks on borderline replies and was as accurate as high, and faster.
+const DETECT_EFFORT: Effort = { thinking: { type: "adaptive" }, effort: "medium" };
 // Applying one instruction to every prompt needs no judgement.
 const REWRITE_EFFORT: Effort = { thinking: { type: "disabled" }, effort: "low" };
 

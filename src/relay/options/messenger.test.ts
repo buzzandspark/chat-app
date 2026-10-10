@@ -4,7 +4,7 @@ import { MAX_FORKS, MAX_OPTION_TITLE } from "@shared/forks";
 import { clampOptions, LiveOptionsMessenger, OPTIONS_MODEL } from "./messenger";
 
 describe("options messenger", () => {
-  it("asks Haiku with a structured output format, thinking at high effort, and maps the parsed answer", async () => {
+  it("asks Haiku with a structured output format, thinking at medium effort, and maps the parsed answer", async () => {
     const parse = vi.fn().mockResolvedValue({
       parsed_output: {
         options: [{ title: " Keep SQLite ", prompt: " Let's keep SQLite. " }, { title: "", prompt: "dropped" }, { title: "Postgres", prompt: "Let's move." }],
@@ -25,7 +25,7 @@ describe("options messenger", () => {
     expect(result.trace!.apiMs).toBeGreaterThanOrEqual(0);
     const params = parse.mock.calls[0]![0] as { model: string; system: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
     expect(params.model).toBe(OPTIONS_MODEL);
-    expect(params.output_config.effort).toBe("high");
+    expect(params.output_config.effort).toBe("medium");
     expect((params as unknown as { thinking: unknown }).thinking).toEqual({ type: "adaptive" });
     expect(params.output_config.format.type).toBe("json_schema");
     expect(params.messages[0]!.content).toContain("Here are two ways");
