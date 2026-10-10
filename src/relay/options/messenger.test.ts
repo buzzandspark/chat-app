@@ -1,48 +1,75 @@
 import { describe, expect, it, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { MAX_FORKS, MAX_OPTION_TITLE } from "@shared/forks";
-import { clampOptions, LiveOptionsMessenger, OPTIONS_MODEL } from "./messenger";
+import { clampOptions, completeOptions, LiveOptionsMessenger, OPTIONS_MODEL } from "./messenger";
+
+/** A client whose messages.stream emits `text` in small pieces, then resolves the final message. */
+function streaming(text: string) {
+  const stream = vi.fn(() => {
+    const handlers: ((delta: string) => void)[] = [];
+    return {
+      on(event: string, handler: (delta: string) => void) {
+        if (event === "text") handlers.push(handler);
+        return this;
+      },
+      async finalMessage() {
+        for (let i = 0; i < text.length; i += 7) for (const h of handlers) h(text.slice(i, i + 7));
+        return { content: [{ type: "text", text }], stop_reason: "end_turn", usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: null, cache_creation_input_tokens: null } };
+      },
+    };
+  });
+  return { client: { messages: { stream } } as unknown as Anthropic, stream };
+}
 
 describe("options messenger", () => {
-  it("asks Haiku with a structured output format, thinking at medium effort, and maps the parsed answer", async () => {
-    const parse = vi.fn().mockResolvedValue({
-      parsed_output: {
-        options: [{ title: " Keep SQLite ", prompt: " Let's keep SQLite. " }, { title: "", prompt: "dropped" }, { title: "Postgres", prompt: "Let's move." }],
-      },
-      usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: null, cache_creation_input_tokens: null },
+  it("streams the detection at medium effort with thinking, reporting the count first and each option as it completes", async () => {
+    const answer = JSON.stringify({
+      count: 3,
+      options: [{ title: " Keep SQLite ", prompt: " Let's keep SQLite. " }, { title: "", prompt: "dropped" }, { title: "Postgres", prompt: "Let's move." }],
     });
-    const client = { messages: { parse } } as unknown as Anthropic;
-    const result = await new LiveOptionsMessenger(client).detect("Here are two ways");
+    const { client, stream } = streaming(answer);
+    const progress: unknown[] = [];
+    const result = await new LiveOptionsMessenger(client).detect("Here are two ways", (p) => progress.push(p));
     expect(result.options).toEqual([
       { title: "Keep SQLite", prompt: "Let's keep SQLite." },
       { title: "Postgres", prompt: "Let's move." },
     ]);
+    // The count before any option, then the options as each one closes.
+    expect(progress[0]).toEqual({ count: 3 });
+    expect(progress.slice(1)).toEqual([{ options: [{ title: "Keep SQLite", prompt: "Let's keep SQLite." }] }, { options: result.options }]);
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0 });
-    // What was sent and what came back travel with the result, for the browser console in development.
-    expect(result.trace).toMatchObject({ model: OPTIONS_MODEL, user: expect.stringContaining("Here are two ways"), inputTokens: 10, outputTokens: 5 });
+    expect(result.trace).toMatchObject({ model: OPTIONS_MODEL, user: expect.stringContaining("Here are two ways"), inputTokens: 10, outputTokens: 5, stopReason: "end_turn" });
     expect(result.trace!.system).toContain("weigh against each other");
-    expect(result.trace!.response).toMatchObject({ options: expect.any(Array) });
-    expect(result.trace!.apiMs).toBeGreaterThanOrEqual(0);
-    const params = parse.mock.calls[0]![0] as { model: string; system: string; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
+    expect(result.trace!.response).toMatchObject({ count: 3 });
+    const params = (stream.mock.calls[0] as unknown as [unknown])[0] as { model: string; system: string; thinking: unknown; output_config: { effort: string; format: { type: string } }; messages: { content: string }[] };
     expect(params.model).toBe(OPTIONS_MODEL);
     expect(params.output_config.effort).toBe("medium");
-    expect((params as unknown as { thinking: unknown }).thinking).toEqual({ type: "adaptive" });
+    expect(params.thinking).toEqual({ type: "adaptive" });
     expect(params.output_config.format.type).toBe("json_schema");
     expect(params.messages[0]!.content).toContain("Here are two ways");
-    // The fork carries the whole conversation: prompts are the next message there, not an opener for a new chat.
     expect(params.system).toContain("parts of one whole");
-    // The prompt-writing rules ride in the schema: each prompt is the next message in the same conversation.
-    expect(JSON.stringify(params.output_config.format)).toContain("next message in this same conversation");
+    // The count comes first in the schema; the prompt-writing rules ride in it too.
+    const format = JSON.stringify(params.output_config.format);
+    expect(format.indexOf('"count"')).toBeLessThan(format.indexOf('"options"'));
+    expect(format).toContain("next message in this same conversation");
   });
 
-  it("no choice, or a single alternative, is an empty list", async () => {
-    const answer = (parsed_output: unknown) => ({ messages: { parse: vi.fn().mockResolvedValue({ parsed_output, usage: { input_tokens: 1, output_tokens: 1 } }) } }) as unknown as Anthropic;
+  it("no choice, a single alternative, or an unparsable answer is an empty list", async () => {
     const two = [{ title: "A", prompt: "a" }, { title: "B", prompt: "b" }];
-    expect((await new LiveOptionsMessenger(answer({ options: [] })).detect("x")).options).toEqual([]);
-    expect((await new LiveOptionsMessenger(answer({ options: two.slice(0, 1) })).detect("x")).options).toEqual([]);
-    expect((await new LiveOptionsMessenger(answer({ options: two })).rewrite(two, "shorter")).options).toEqual(two);
-    expect((await new LiveOptionsMessenger(answer(null)).detect("x")).options).toEqual([]);
+    expect((await new LiveOptionsMessenger(streaming(JSON.stringify({ count: 0, options: [] })).client).detect("x")).options).toEqual([]);
+    expect((await new LiveOptionsMessenger(streaming(JSON.stringify({ count: 1, options: two.slice(0, 1) })).client).detect("x")).options).toEqual([]);
+    const refused = await new LiveOptionsMessenger(streaming("I can't help with that.").client).detect("x");
+    expect(refused.options).toEqual([]);
+    expect(refused.trace!.response).toBe("I can't help with that.");
+    const parse = vi.fn().mockResolvedValue({ parsed_output: { options: two }, usage: { input_tokens: 1, output_tokens: 1 } });
+    expect((await new LiveOptionsMessenger({ messages: { parse } } as unknown as Anthropic).rewrite(two, "shorter")).options).toEqual(two);
     expect(clampOptions(two.slice(0, 1))).toEqual([]);
+  });
+
+  it("completeOptions reads the options finished so far from a partial answer", () => {
+    expect(completeOptions('{"count":2,"opt')).toEqual([]);
+    expect(completeOptions('{"count":2,"options":[{"title":"A","prompt":"a {b}"},{"title":"B","pro')).toEqual([{ title: "A", prompt: "a {b}" }]);
+    expect(completeOptions('{"count":2,"options":[{"title":"A","prompt":"a"},{"title":"B","prompt":"b"}]}')).toHaveLength(2);
   });
 
   it("the rewrite applies an instruction to each prompt on its own", async () => {

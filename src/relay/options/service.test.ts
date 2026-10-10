@@ -110,7 +110,7 @@ describe("OptionsService", () => {
     const service = new OptionsService({ db, replayMode: false, live: () => live });
     const scripted = seedReply(uuidv7());
     service.onReplyDone({ ...scripted, scenario: "options_reply", billable: false });
-    expect(await service.awaitOptions(scripted.messageId, 100)).toEqual(SCRIPTED_OPTIONS);
+    expect(await service.awaitOptions(scripted.messageId, 3000)).toEqual(SCRIPTED_OPTIONS);
     const rewritten = await new OptionsService({ db, replayMode: true }).rewrite(USER, scripted.messageId, SCRIPTED_OPTIONS.slice(0, 2), "Assess cost");
     expect(rewritten.options.map((o) => o.title)).toEqual(SCRIPTED_OPTIONS.slice(0, 2).map((o) => o.title));
     expect(rewritten.trace).toBeNull();
@@ -134,6 +134,41 @@ describe("OptionsService", () => {
     expect(service.detectLastReply(info.chatId, USER)).toBe(info.messageId);
     expect(live.asked).toHaveLength(1);
     expect(service.detectLastReply(uuidv7(), USER)).toBeNull();
+  });
+
+  it("watch follows a detection: the count, the options so far, then done; a failure ends it as failed", async () => {
+    const progressive: OptionsMessenger = {
+      name: "haiku",
+      async detect(_reply, onProgress) {
+        onProgress?.({ count: 2 });
+        await new Promise((r) => setTimeout(r, 5));
+        onProgress?.({ options: TWO.slice(0, 1) });
+        await new Promise((r) => setTimeout(r, 5));
+        return { options: TWO, usage: USAGE, trace: TRACE };
+      },
+      rewrite: async () => ({ options: [], usage: null }),
+    };
+    const service = new OptionsService({ db, replayMode: false, live: () => progressive });
+    const info = seedReply(uuidv7());
+    service.onReplyDone(info);
+    const seen: string[] = [];
+    const watched = service.watch(info.messageId, (s) => seen.push(`${s.count}:${s.options.length}:${s.done}`))!;
+    expect(watched.state).toMatchObject({ count: 2, done: false });
+    await service.awaitOptions(info.messageId, 1000);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(seen).toEqual(["2:1:false", "2:2:true"]);
+    watched.stop();
+    expect(service.watch(uuidv7(), () => {})).toBeNull();
+
+    const broken: OptionsMessenger = { name: "haiku", detect: async () => Promise.reject(new Error("boom")), rewrite: async () => ({ options: [], usage: null }) };
+    const failing = new OptionsService({ db, replayMode: false, live: () => broken });
+    const other = seedReply(uuidv7());
+    failing.onReplyDone(other);
+    const states: boolean[] = [];
+    failing.watch(other.messageId, (s) => states.push(s.failed));
+    await failing.awaitOptions(other.messageId, 1000);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(states).toEqual([true]);
   });
 
   it("keeps the spend when the chat was deleted while Haiku answered", async () => {

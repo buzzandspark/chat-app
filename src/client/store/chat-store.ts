@@ -50,6 +50,14 @@ export interface MessageState {
   position: number | null;
   /** Fork prompts for a reply: null = not run or unknown, [] = none. */
   options: ForkOption[] | null;
+  /** While the options stream: the count once known, the options complete so far, and whether the stream failed. */
+  optionsStream: OptionsStream | null;
+}
+
+export interface OptionsStream {
+  count: number | null;
+  partial: ForkOption[];
+  failed: boolean;
 }
 
 /** Per-chat composer settings (ADR-0005): kept here so a remount or an Activity eviction never resets them. */
@@ -148,6 +156,7 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
     scenario: null,
     position: null,
     options: null,
+    optionsStream: null,
     ...partial,
   };
 }

@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { MAX_FORKS, MAX_OPTION_PROMPT, MAX_OPTION_TITLE } from "@shared/forks";
 
-/** What Haiku returns for a reply: empty when it is not a choice. Plain strings: the SDK folds length limits into descriptions, and a limit would reject the whole answer. */
+/** What Haiku returns for a reply: the count first, so it can be shown while the options stream; empty when it is not a choice. Plain strings: the SDK folds length limits into descriptions, and a limit would reject the whole answer. */
 export const DetectOutput = z.object({
+  count: z.number().describe("How many alternatives the reply lays out; 0 when none."),
   options: z
     .array(
       z.object({

@@ -169,4 +169,22 @@ test.describe("explore options", () => {
     await expect(aside.locator(`a[href="${new URL(parentUrl).pathname}"]`)).toHaveCount(1);
     await expect(page.getByTestId("explore-options").locator("visible=true")).toHaveCount(0);
   });
+
+  test("the button waits dull for the count, lights up with it, and a click before the options finish waits for them", async ({ page }) => {
+    await openNewChat(page);
+    await runScenario(page, "options_reply");
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    const button = visible(page, "explore-options");
+    await expect(button).toHaveAttribute("data-state", "waiting");
+    await expect(button).toBeDisabled();
+    await expect(button).toHaveText(/Explore options/);
+    // The count arrives about 0.4 s in; the full list about 1.5 s after that.
+    await expect(button).toHaveAttribute("data-state", "ready", { timeout: 10_000 });
+    await expect(button).toHaveText(/Explore 3 options/);
+    await button.click();
+    await expect(button).toHaveAttribute("data-state", "awaiting");
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByRole("checkbox")).toHaveCount(3);
+  });
 });

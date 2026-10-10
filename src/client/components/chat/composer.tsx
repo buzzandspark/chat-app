@@ -219,7 +219,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   const scenario = settings.scenario;
   const editingText = editing ? textOf(store.getMessage(editing.userMessageId)?.blocks ?? []) : "";
-  const explorable = !editing && !chat.forkedFrom && lastMessage?.role === "assistant" && lastMessage.status === "done" && (lastMessage.options?.length ?? 0) > 0;
+  const explorable = !editing && !chat.forkedFrom && lastMessage?.role === "assistant" && lastMessage.status === "done" && ((lastMessage.options?.length ?? 0) > 0 || lastMessage.optionsStream !== null);
 
   return (
     <div

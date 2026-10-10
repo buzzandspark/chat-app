@@ -7,7 +7,17 @@ import { costOf, type TokenCounts } from "../anthropic/pricing";
 import type { ReplyDoneInfo } from "../engine";
 import { isBillableProvider } from "../providers/types";
 import { QuotaExceededError, QuotaManager } from "../quota";
-import { LiveOptionsMessenger, OPTIONS_MODEL, ScriptedOptionsMessenger, type OptionsMessenger } from "./messenger";
+import { LiveOptionsMessenger, OPTIONS_MODEL, ScriptedOptionsMessenger, type DetectProgress, type OptionsMessenger } from "./messenger";
+
+/** A reply's detection as it runs: the count once known, the options complete so far, then done or failed. */
+export interface OptionsProgress {
+  count: number | null;
+  options: ForkOption[];
+  done: boolean;
+  failed: boolean;
+}
+
+type Tracked = OptionsProgress & { listeners: Set<() => void> };
 
 export interface OptionsServiceOptions {
   db: Db;
@@ -25,6 +35,7 @@ export class OptionsService {
   private now: () => number;
   private inflight = new Map<string, Promise<ForkOption[] | null>>();
   private traces = new Map<string, OptionsTrace>();
+  private progress = new Map<string, Tracked>();
 
   constructor(options: OptionsServiceOptions) {
     this.db = options.db;
@@ -41,20 +52,49 @@ export class OptionsService {
 
   /** Engine `afterDone`: detached; a failure is logged and leaves the reply without options. */
   onReplyDone(info: ReplyDoneInfo): void {
-    const pending = this.detect(info).catch((err: unknown) => {
+    const tracked: Tracked = { count: null, options: [], done: false, failed: false, listeners: new Set() };
+    this.progress.set(info.messageId, tracked);
+    const notify = () => {
+      for (const listener of tracked.listeners) listener();
+    };
+    const pending = this.detect(info, (p) => {
+      if (p.count !== undefined) tracked.count = p.count;
+      if (p.options) tracked.options = p.options;
+      notify();
+    }).catch((err: unknown) => {
       console.error(`[options] detect failed for ${info.messageId}`, err);
+      tracked.failed = true;
       return null;
     });
     this.inflight.set(info.messageId, pending);
-    void pending.finally(() => this.inflight.delete(info.messageId));
+    void pending.then((options) => {
+      this.inflight.delete(info.messageId);
+      if (!tracked.failed) tracked.options = options ?? [];
+      tracked.done = true;
+      notify();
+      // Readers within a minute get the outcome from here; later ones from the row.
+      const timer = setTimeout(() => {
+        if (this.progress.get(info.messageId) === tracked) this.progress.delete(info.messageId);
+      }, 60_000);
+      timer.unref?.();
+    });
   }
 
-  private async detect(info: ReplyDoneInfo): Promise<ForkOption[] | null> {
+  /** Follows a reply's detection while it runs, and for a minute after; null when none is known here. */
+  watch(messageId: string, listener: (state: OptionsProgress) => void): { state: OptionsProgress; stop: () => void } | null {
+    const tracked = this.progress.get(messageId);
+    if (!tracked) return null;
+    const onChange = () => listener(tracked);
+    tracked.listeners.add(onChange);
+    return { state: tracked, stop: () => void tracked.listeners.delete(onChange) };
+  }
+
+  private async detect(info: ReplyDoneInfo, onProgress: (progress: DetectProgress) => void): Promise<ForkOption[] | null> {
     const chat = this.db.select({ forkedFrom: chats.forkedFrom }).from(chats).where(eq(chats.id, info.chatId)).get();
     const startedAt = performance.now();
     if (!chat || chat.forkedFrom || !info.text.trim() || this.atCap(info.userId)) return null;
     const messenger = this.messenger(info.scenario, info.billable);
-    const result = await messenger.detect(info.text);
+    const result = await messenger.detect(info.text, onProgress);
     this.record(info.userId, info.generationId, "options", result.usage, messenger.name === "haiku");
     this.db.update(messages).set({ forkOptions: result.options }).where(eq(messages.id, info.messageId)).run();
     if (result.trace) this.keepTrace(info.messageId, { ...result.trace, totalMs: Math.round(performance.now() - startedAt) });
