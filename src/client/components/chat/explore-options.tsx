@@ -73,7 +73,7 @@ export function ExploreOptions({ count, remaining, requestedAt, now, state, reas
                 x="1"
                 y="1"
                 rx="7"
-                className={cn("explore-border", state === "disabled" && "[animation:none]")}
+                className={cn("explore-border", !(state === "waiting" || state === "awaiting" || state === "busy") && "[animation:none]")}
                 style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
                 fill="none"
                 stroke={state === "waiting" || state === "disabled" ? "var(--muted-foreground)" : `url(#${gradient})`}

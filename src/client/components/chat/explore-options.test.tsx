@@ -6,6 +6,7 @@ import { ExploreOptions, unavailableReason } from "./explore-options";
 
 const dimmed = (b: HTMLElement) => b.querySelector('[data-part="dim"]')!.classList.contains("opacity-50");
 const colored = (b: HTMLElement) => b.querySelector('[data-part="border"]')!.getAttribute("stroke")!.startsWith("url(");
+const marching = (b: HTMLElement) => !b.querySelector('[data-part="border"]')!.classList.contains("[animation:none]");
 const pulsing = (b: HTMLElement) => b.querySelector('[data-part="pulse"]')!.classList.contains("animate-pulse");
 
 function setup(props: Partial<Parameters<typeof ExploreOptions>[0]> = {}) {
@@ -26,6 +27,7 @@ describe("ExploreOptions", () => {
     expect(dimmed(button)).toBe(false);
     expect(pulsing(button)).toBe(false);
     expect(colored(button)).toBe(true);
+    expect(marching(button)).toBe(false);
     fireEvent.click(button);
     fireEvent.click(button, { detail: 0 });
     expect(onOpen).toHaveBeenCalledTimes(2);
@@ -42,6 +44,7 @@ describe("ExploreOptions", () => {
     expect(dimmed(button)).toBe(true);
     expect(pulsing(button)).toBe(false);
     expect(colored(button)).toBe(false);
+    expect(marching(button)).toBe(false);
     expect(button).toHaveAttribute("data-tip", "No options to explore in the last reply");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();
@@ -54,6 +57,7 @@ describe("ExploreOptions", () => {
     expect(dimmed(button)).toBe(true);
     expect(pulsing(button)).toBe(true);
     expect(colored(button)).toBe(false);
+    expect(marching(button)).toBe(true);
     expect(button).toHaveAttribute("data-tip", "Looking for options…");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();
@@ -64,6 +68,7 @@ describe("ExploreOptions", () => {
     expect(pulsing(button)).toBe(true);
     expect(dimmed(button)).toBe(false);
     expect(colored(button)).toBe(true);
+    expect(marching(button)).toBe(true);
     expect(button).toHaveAttribute("aria-busy", "true");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();
@@ -74,6 +79,7 @@ describe("ExploreOptions", () => {
     cleanup();
     const { onOpen, button } = setup({ state: "busy" });
     expect(button).toHaveTextContent("Forking…");
+    expect(marching(button)).toBe(true);
     expect(button).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();
