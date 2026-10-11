@@ -79,6 +79,21 @@ describe("OptionsService", () => {
     expect(service.takeTrace(info.messageId)).toBeNull();
   });
 
+  it("leaves the options spent when the chat was forked before Haiku answered", async () => {
+    const service = new OptionsService({ db, replayMode: false, live: () => fakeLive(20) });
+    const info = seedReply(uuidv7());
+    service.onReplyDone(info);
+    db.update(messages).set({ forkOptions: [] }).where(eq(messages.id, info.messageId)).run();
+    await new Promise<void>((resolve) => {
+      const watched = service.watch(info.messageId, (state) => {
+        if (!state.done) return;
+        watched?.stop();
+        resolve();
+      });
+    });
+    expect(db.select().from(messages).where(eq(messages.id, info.messageId)).get()!.forkOptions).toEqual([]);
+  });
+
   it("awaitOptions hands over the answer still in flight, and null when nothing ran", async () => {
     const service = new OptionsService({ db, replayMode: false, live: () => fakeLive(30) });
     const info = seedReply(uuidv7());

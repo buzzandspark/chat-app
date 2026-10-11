@@ -92,4 +92,16 @@ describe("options stream", () => {
     expect(store.getMessage("m1")!.optionsStream).toEqual({ count: 3, partial: two, failed: true });
     vi.unstubAllGlobals();
   });
+
+  it("a fork while the list is still arriving spends the options for good", async () => {
+    const store = new ChatStore({ schedule: () => 0, cancel: () => {} });
+    store.addMessage(createMessageState({ id: "m1", chatId: "c1", role: "assistant" }));
+    store.subscribeMessage("m1", () => {
+      if (store.getMessage("m1")!.optionsStream?.count === 2) store.updateMessage("m1", { options: [], optionsStream: null });
+    });
+    vi.stubGlobal("fetch", linesFetch([{ count: 2 }, { options: two.slice(0, 1) }, { count: 2, options: two, done: true }]));
+    await watchOptions(store, "m1");
+    expect(store.getMessage("m1")).toMatchObject({ options: [], optionsStream: null });
+    vi.unstubAllGlobals();
+  });
 });

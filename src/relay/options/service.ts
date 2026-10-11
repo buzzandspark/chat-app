@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages, usageEvents, users } from "@db/schema";
 import { MAX_FORKS, type ForkOption, type OptionsTrace } from "@shared/forks";
@@ -96,7 +96,8 @@ export class OptionsService {
     const messenger = this.messenger(info.scenario, info.billable);
     const result = await messenger.detect(info.text, onProgress);
     this.record(info.userId, info.generationId, "options", result.usage, messenger.name === "haiku");
-    this.db.update(messages).set({ forkOptions: result.options }).where(eq(messages.id, info.messageId)).run();
+    // A fork made before detection finished spent the options ([]); they stay spent.
+    this.db.update(messages).set({ forkOptions: result.options }).where(and(eq(messages.id, info.messageId), isNull(messages.forkOptions))).run();
     if (result.trace) this.keepTrace(info.messageId, { ...result.trace, totalMs: Math.round(performance.now() - startedAt) });
     return result.options;
   }

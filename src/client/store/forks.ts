@@ -44,7 +44,7 @@ export async function forkChat(
   const data = (await res.json()) as { forks: { chatId: string }[]; failed?: { error: string } };
   const first = data.forks[0];
   if (!first) return { ok: false, error: "No fork could be started." };
-  store.updateMessage(messageId, { options: [] });
+  store.updateMessage(messageId, { options: [], optionsStream: null });
   const sidebar = getSidebarStore();
   const existing = sidebar.get().filter((c) => c.forkedFrom === chatId).length;
   const now = Date.now();
@@ -111,6 +111,8 @@ export async function watchOptions(store: ChatStore, messageId: string): Promise
     });
   try {
     await streamOptions(messageId, (event) => {
+      // A fork from a list still arriving spent the options; the rest of the stream is ignored.
+      if (!store.getMessage(messageId)?.optionsStream) return;
       if (event.done) {
         if (event.trace) logOptionsTrace("detect", event.trace, performance.now() - asked);
         store.updateMessage(messageId, { options: event.options ?? [], optionsStream: null });
