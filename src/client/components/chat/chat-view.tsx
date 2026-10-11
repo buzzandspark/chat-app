@@ -217,7 +217,7 @@ export function ChatView({ children }: { children: ReactNode }) {
   return (
     <ChatActionsContext.Provider value={actions}>
       <ChatLiveStateContext.Provider value={live}>
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="group/chat flex min-h-0 flex-1 flex-col">
           {children}
           <ForkTabs chatId={chatId} />
           <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />

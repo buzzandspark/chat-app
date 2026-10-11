@@ -1,64 +1,44 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMessageState } from "@client/store/chat-store";
-import { CACHE_WARM_MS, MAX_FORKS } from "@shared/forks";
-import { ExploreOptions, unavailableReason } from "./explore-options";
+import { CACHE_WARM_MS } from "@shared/forks";
+import { ExploreOptions, optionsFound } from "./explore-options";
 
-const dimmed = (b: HTMLElement) => b.querySelector('[data-part="dim"]')!.classList.contains("opacity-50");
-const colored = (b: HTMLElement) => b.querySelector('[data-part="border"]')!.getAttribute("stroke")!.startsWith("url(");
+const dimmed = (b: HTMLElement) => b.querySelector('[data-part="label"]')!.classList.contains("opacity-60");
 const marching = (b: HTMLElement) => b.querySelector('[data-part="border"]')!.classList.contains("explore-border");
-const pulsing = (b: HTMLElement) => b.querySelector('[data-part="pulse"]')!.classList.contains("animate-pulse");
+const pulsing = (b: HTMLElement) => b.querySelector('[data-part="label"]')!.classList.contains("animate-pulse");
 
 function setup(props: Partial<Parameters<typeof ExploreOptions>[0]> = {}) {
   const onOpen = vi.fn();
-  render(<ExploreOptions count={3} remaining={10} requestedAt={1_000_000} now={1_000_000 + 1000} state="ready" onOpen={onOpen} {...props} />);
+  render(<ExploreOptions shown count={3} requestedAt={1_000_000} now={1_000_000 + 1000} state="ready" onOpen={onOpen} {...props} />);
   return { onOpen, button: screen.getByTestId("explore-options") };
 }
 
 afterEach(cleanup);
 
 describe("ExploreOptions", () => {
-  it("ready: lit and clickable, by pointer or keyboard, with no tooltip", () => {
+  it("ready: up, lit and clickable, by pointer or keyboard, with no tooltip", () => {
     const { onOpen, button } = setup();
     expect(button).toHaveTextContent("Explore 3 options");
     expect(button).toHaveAttribute("aria-haspopup", "dialog");
     expect(button).not.toHaveAttribute("aria-disabled");
     expect(button).not.toHaveAttribute("data-tip");
-    expect(dimmed(button)).toBe(false);
+    expect(button.parentElement).toHaveAttribute("data-explore", "shown");
+    expect(button.parentElement).not.toHaveAttribute("inert");
+    expect(button).not.toHaveClass("invisible");
     expect(pulsing(button)).toBe(false);
-    expect(colored(button)).toBe(true);
     expect(marching(button)).toBe(false);
     fireEvent.click(button);
     fireEvent.click(button, { detail: 0 });
     expect(onOpen).toHaveBeenCalledTimes(2);
   });
 
-  it("disabled: still shown, dull, ignores clicks, and says why on hover", () => {
-    const { onOpen, button } = setup({ count: 0, state: "disabled", reason: "No options to explore in the last reply" });
-    expect(button).toBeVisible();
-    expect(button).toHaveTextContent("Explore options");
-    expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(button).not.toBeDisabled();
-    expect(button).toHaveClass("tip");
-    expect(button).not.toHaveClass("opacity-50");
-    expect(dimmed(button)).toBe(true);
-    expect(pulsing(button)).toBe(false);
-    expect(colored(button)).toBe(false);
-    expect(marching(button)).toBe(false);
-    expect(button).toHaveAttribute("data-tip", "No options to explore in the last reply");
-    fireEvent.click(button);
-    expect(onOpen).not.toHaveBeenCalled();
-  });
-
-  it("waiting for the count: dull and pulsing, no number, and says it is looking", () => {
-    const { onOpen, button } = setup({ count: null, state: "waiting" });
-    expect(button).toHaveTextContent("Explore options");
-    expect(button).toHaveAttribute("aria-disabled", "true");
-    expect(dimmed(button)).toBe(true);
-    expect(pulsing(button)).toBe(true);
-    expect(colored(button)).toBe(false);
-    expect(marching(button)).toBe(true);
-    expect(button).toHaveAttribute("data-tip", "Looking for options…");
+  it("not shown: tucked behind the border, inert, keeps its label, and ignores clicks", () => {
+    const { onOpen, button } = setup({ shown: false, count: 2 });
+    expect(button.parentElement).toHaveAttribute("data-explore", "hidden");
+    expect(button.parentElement).toHaveAttribute("inert");
+    expect(button).toHaveClass("invisible");
+    expect(button).toHaveTextContent("Explore 2 options");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();
   });
@@ -67,18 +47,16 @@ describe("ExploreOptions", () => {
     const { onOpen, button } = setup({ state: "awaiting" });
     expect(pulsing(button)).toBe(true);
     expect(dimmed(button)).toBe(false);
-    expect(colored(button)).toBe(true);
     expect(marching(button)).toBe(true);
     expect(button).toHaveAttribute("aria-busy", "true");
     fireEvent.click(button);
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it("counts only what can still be forked, and ignores clicks while forking", () => {
-    expect(setup({ count: 3, remaining: 2 }).button).toHaveTextContent("Explore 2 options");
-    cleanup();
+  it("ignores clicks while forking", () => {
     const { onOpen, button } = setup({ state: "busy" });
     expect(button).toHaveTextContent("Forking…");
+    expect(dimmed(button)).toBe(true);
     expect(marching(button)).toBe(true);
     expect(button).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(button);
@@ -94,27 +72,27 @@ describe("ExploreOptions", () => {
   });
 });
 
-describe("unavailableReason", () => {
+describe("optionsFound", () => {
   const ok = { isFork: false, remaining: 10, editing: false };
   const reply = (patch: Parameters<typeof createMessageState>[0] extends infer P ? Partial<P> : never = {}) =>
     createMessageState({ id: "m", chatId: "c", role: "assistant", status: "done", options: [{ title: "A", prompt: "a" }, { title: "B", prompt: "b" }], ...patch });
 
-  it("names why the chat or the reply can't be explored, in order", () => {
-    expect(unavailableReason(reply(), { ...ok, isFork: true })).toBe("A fork can't be forked again");
-    expect(unavailableReason(reply(), { ...ok, remaining: 0 })).toBe(`This chat already has ${MAX_FORKS} forks`);
-    expect(unavailableReason(reply(), { ...ok, editing: true })).toBe("Not while editing a message");
-    expect(unavailableReason(undefined, ok)).toBe("Available after a reply");
-    expect(unavailableReason(createMessageState({ id: "u", chatId: "c", role: "user" }), ok)).toBe("Available after a reply");
-    expect(unavailableReason(reply({ status: "streaming" }), ok)).toBe("Available when the reply finishes");
-    expect(unavailableReason(reply({ status: "stopped" }), ok)).toBe("Only after a finished reply");
-    expect(unavailableReason(reply({ options: [] }), ok)).toBe("No options to explore in the last reply");
-    expect(unavailableReason(reply({ options: null }), ok)).toBe("No options to explore in the last reply");
-    expect(unavailableReason(reply({ options: null, optionsStream: { count: 1, partial: [], failed: false } }), ok)).toBe("No options to explore in the last reply");
+  it("is false whenever the chat or the reply can't be explored", () => {
+    expect(optionsFound(reply(), { ...ok, isFork: true })).toBe(false);
+    expect(optionsFound(reply(), { ...ok, remaining: 0 })).toBe(false);
+    expect(optionsFound(reply(), { ...ok, editing: true })).toBe(false);
+    expect(optionsFound(undefined, ok)).toBe(false);
+    expect(optionsFound(createMessageState({ id: "u", chatId: "c", role: "user" }), ok)).toBe(false);
+    expect(optionsFound(reply({ status: "streaming" }), ok)).toBe(false);
+    expect(optionsFound(reply({ status: "stopped" }), ok)).toBe(false);
+    expect(optionsFound(reply({ options: [] }), ok)).toBe(false);
+    expect(optionsFound(reply({ options: null }), ok)).toBe(false);
+    expect(optionsFound(reply({ options: null, optionsStream: { count: 1, partial: [], failed: false } }), ok)).toBe(false);
   });
 
-  it("is null when the button can be used, or is still looking", () => {
-    expect(unavailableReason(reply(), ok)).toBeNull();
-    expect(unavailableReason(reply({ options: null, optionsStream: { count: null, partial: [], failed: false } }), ok)).toBeNull();
-    expect(unavailableReason(reply({ options: null, optionsStream: { count: 3, partial: [], failed: false } }), ok)).toBeNull();
+  it("is false while the count is still coming, true once it says two or more", () => {
+    expect(optionsFound(reply({ options: null, optionsStream: { count: null, partial: [], failed: false } }), ok)).toBe(false);
+    expect(optionsFound(reply({ options: null, optionsStream: { count: 3, partial: [], failed: false } }), ok)).toBe(true);
+    expect(optionsFound(reply(), ok)).toBe(true);
   });
 });

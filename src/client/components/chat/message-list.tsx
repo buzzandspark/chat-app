@@ -208,11 +208,13 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
             {chat.queue.map((item) => (
               <QueuedRow key={item.id} item={item} />
             ))}
-            <div ref={endRef} className="h-px" />
+            {/* Taller while Explore options floats over the thread's end, so the last reply's actions stay clear. */}
+            <div ref={endRef} className="h-px group-has-[[data-explore=shown]]/chat:h-8" />
           </div>
         </div>
         {!engaged ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+          // Stacked above Explore options while that button is up in the same spot.
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center transition-[bottom] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-has-[[data-explore=shown]]/chat:bottom-16 motion-reduce:transition-none">
             <Button
               size="sm"
               variant="outline"
