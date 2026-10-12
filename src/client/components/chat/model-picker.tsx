@@ -1,6 +1,6 @@
 "use client";
 import { Check, ChevronDown } from "lucide-react";
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { DropdownMenu as MenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -56,12 +56,15 @@ interface ModelPickerProps {
   onChange: (patch: { model?: ModelId; thinking?: ThinkingOptions }) => void;
   /** True when the user pressed the stand-in before this chunk had loaded. */
   defaultOpen?: boolean;
+  /** Called instead of returning focus to the trigger when the menu closes because a model was picked. */
+  onPicked?: () => void;
 }
 
 /** One picker (D0): a bottom sheet on phones, a menu at `md`. */
-export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: ModelPickerProps) {
+export function ModelPicker({ model, thinking, onChange, defaultOpen = false, onPicked }: ModelPickerProps) {
   const desktop = useIsDesktop();
   const [open, setOpen] = useState(defaultOpen);
+  const picked = useRef(false);
   useBackGesture(open && !desktop, () => setOpen(false));
   const info = MODELS[model];
 
@@ -81,10 +84,23 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false }: 
     return (
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="flex w-80 flex-col gap-1 px-1 py-2 outline-none">
+        <DropdownMenuContent
+          align="start"
+          className="flex w-80 flex-col gap-1 px-1 py-2 outline-none"
+          // A picked model sends focus on to the input, ready to type; Escape or a click away returns it to the trigger.
+          onCloseAutoFocus={(e) => {
+            if (!picked.current || !onPicked) return;
+            picked.current = false;
+            e.preventDefault();
+            onPicked();
+          }}
+        >
           <MenuPrimitive.RadioGroup value={model} className="flex flex-col gap-1">
             {MODEL_IDS.map((id) => (
-              <MenuPrimitive.RadioItem key={id} value={id} onSelect={() => onChange({ model: id })} className={cn(ROW, rowTone(id === model))}>
+              <MenuPrimitive.RadioItem key={id} value={id} onSelect={() => {
+                  picked.current = true;
+                  onChange({ model: id });
+                }} className={cn(ROW, rowTone(id === model))}>
                 <RowText title={MODELS[id].name} blurb={MODEL_BLURBS[id]} />
                 {id === model ? <Check className="size-4 shrink-0" /> : null}
               </MenuPrimitive.RadioItem>

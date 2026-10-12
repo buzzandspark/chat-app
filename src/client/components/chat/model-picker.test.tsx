@@ -52,6 +52,26 @@ describe("ModelPicker", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   });
 
+  it("on desktop, picking a model hands focus to the input; Escape returns it to the trigger", async () => {
+    layout(true);
+    const input = document.body.appendChild(document.createElement("textarea"));
+    const focusInput = () => input.focus();
+    render(<ModelPicker model="claude-sonnet-5-5" thinking={{ harder: false }} onChange={() => {}} onPicked={focusInput} />);
+    const trigger = screen.getByRole("button", { name: "Choose model" });
+    act(() => trigger.focus());
+    press("Enter");
+    const opus = await screen.findByRole("menuitemradio", { name: /Claude Opus 5.5/ });
+    fireEvent.click(opus);
+    await waitFor(() => expect(input).toHaveFocus());
+
+    act(() => trigger.focus());
+    press("Enter");
+    await screen.findByRole("menu");
+    press("Escape");
+    await waitFor(() => expect(trigger).toHaveFocus());
+    input.remove();
+  });
+
   it("on desktop, the Think harder toggle is a menu item the arrows reach, and Space keeps the menu open", async () => {
     layout(true);
     const onChange = vi.fn();

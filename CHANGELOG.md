@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- Picking a model from the desktop menu puts focus in the message input, ready to type (Escape or a click away still returns it to the picker).
 - The keyboard hint line under the composer is gone; the Search and New chat buttons show their shortcuts (⌘K, ⌘⇧O) in their hover tooltips.
 - Once the Explore button has popped up, a light runs once round its border (none with reduced motion).
 - In the Explore options sheet, a click or tap anywhere on an option outside its title and message fields picks or drops it.

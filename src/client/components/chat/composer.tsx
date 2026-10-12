@@ -97,7 +97,7 @@ function PickerStandIn({
 }
 const loadModelPicker = chunk(() => import("./model-picker").then((m) => m.ModelPicker));
 
-function ModelPickerOnIntent({ known, ...props }: { model: ModelId; thinking: ThinkingOptions; known: boolean; onChange: (patch: Partial<ChatSettings>) => void }) {
+function ModelPickerOnIntent({ known, ...props }: { model: ModelId; thinking: ThinkingOptions; known: boolean; onChange: (patch: Partial<ChatSettings>) => void; onPicked: () => void }) {
   const intent = useIntent(loadModelPicker);
   if (intent.failed) throw intent.failed.error;
   if (!known) return <PickerStandIn model={props.model} thinking={props.thinking} known={false} />;
@@ -260,7 +260,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
                 </span>
               ) : null}
               <ChunkBoundary label="model picker">
-                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} known={settingsKnown} onChange={(patch) => setSettings(patch)} />
+                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} known={settingsKnown} onChange={(patch) => setSettings(patch)} onPicked={() => textareaRef.current?.focus()} />
               </ChunkBoundary>
               {scenarioPanel ? (
                 <ChunkBoundary label="scenario panel">
