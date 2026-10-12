@@ -270,14 +270,15 @@ export async function declareWinner(db: Db, engine: Engine, userId: string, chat
 }
 
 
-/** Every fork of a main chat is deleted; the main chat stays. */
-export async function deleteForks(db: Db, engine: Engine, userId: string, parentId: string): Promise<{ deleted: string[] } | null> {
+/** Every fork of a main chat is deleted; the main chat stays, unless `withMain` (the sidebar's Delete all chats). */
+export async function deleteForks(db: Db, engine: Engine, userId: string, parentId: string, withMain = false): Promise<{ deleted: string[] } | null> {
   const parent = db.select().from(chats).where(and(eq(chats.id, parentId), eq(chats.userId, userId))).get();
   if (!parent || parent.forkedFrom) return null;
   const forks = db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, parent.id)).all().map((c) => c.id);
-  await Promise.all(forks.map((id) => engine.stopChat(id)));
+  const doomed = withMain ? [...forks, parent.id] : forks;
+  await Promise.all(doomed.map((id) => engine.stopChat(id)));
   db.transaction((tx) => {
-    for (const id of forks) tx.delete(chats).where(and(eq(chats.id, id), eq(chats.userId, userId))).run();
+    for (const id of doomed) tx.delete(chats).where(and(eq(chats.id, id), eq(chats.userId, userId))).run();
   });
-  return { deleted: forks };
+  return { deleted: doomed };
 }

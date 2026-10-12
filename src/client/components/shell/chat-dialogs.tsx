@@ -285,3 +285,65 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
     </ResponsiveDialog>
   );
 }
+
+/** The sidebar's Delete all chats on a main chat with forks: the main chat and every fork go. */
+export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
+  const store = useChatStore();
+  const newChat = useNewChat();
+  const deleteRef = useRef<HTMLButtonElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirm = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/delete-all`, { method: "POST" });
+      if (!res.ok && res.status !== 404) {
+        setError(`Could not delete the chats (${res.status}).`);
+        return;
+      }
+      const deleted = res.ok ? ((await res.json()) as { deleted: string[] }).deleted : [chat.id];
+      const sidebar = getSidebarStore();
+      for (const id of deleted) {
+        sidebar.remove(id);
+        store.removeChat(id);
+      }
+      const leaving = currentChatId !== null && deleted.includes(currentChatId);
+      if (leaving) markNavigationClose();
+      onOpenChange(false);
+      if (leaving) newChat();
+    } catch {
+      setError("You seem to be offline.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Delete all chats?"
+      description={`"${chat.title}" and every fork of it will be removed, with their messages. This cannot be undone.`}
+      // Opens on Delete, so Enter confirms.
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        deleteRef.current?.focus();
+      }}
+    >
+      {error ? (
+        <p role="alert" className="text-small text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button ref={deleteRef} type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
+          Delete all
+        </Button>
+      </div>
+    </ResponsiveDialog>
+  );
+}

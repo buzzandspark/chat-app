@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- A main chat with forks has Delete all chats in its sidebar menu: it removes the main chat and every fork in one transaction (`POST /api/chats/:id/delete-all`), after a confirmation that opens on Delete all.
 - The spending cap no longer reserves each reply's worst case up front (16k output tokens at the long-prompt rate, which let a guest start only four of ten forks). A reply starts while its estimated input fits under the cap and is metered as it streams; when spend plus the user's live replies reaches the cap, every running reply of theirs ends with "quota exceeded", keeping its text. The real usage is what is charged, so the cap can be overshot by about one streamed chunk per reply. D22 amended.
 - The header's usage bar picks up the new account's figures after signing in.
 - The usage bar's tooltip shows over the fork tab strip (the strip covered it), the New chat tooltip opens leftward instead of being cut off at the sidebar's edge, and Declare winner opens focused on its button (Enter confirms) with white text.

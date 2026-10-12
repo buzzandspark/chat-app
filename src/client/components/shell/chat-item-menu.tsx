@@ -1,5 +1,5 @@
 "use client";
-import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { ListX, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { Ref } from "react";
 import { IconButton } from "../ui/icon-button";
@@ -13,6 +13,7 @@ export function ChatItemMenu({
   onRename,
   onDelete,
   onTogglePin,
+  onDeleteAll,
   defaultOpen,
   triggerRef,
   onCloseAutoFocus,
@@ -22,6 +23,8 @@ export function ChatItemMenu({
   onRename: () => void;
   onDelete: () => void;
   onTogglePin?: () => void;
+  /** A main chat with forks: deletes it and every fork. */
+  onDeleteAll?: () => void;
   /** True when the user pressed the stand-in before this chunk had loaded. */
   defaultOpen?: boolean;
   /** The row's intent: it swaps back to the stand-in once Radix has returned focus here (useIntent's `closed`). */
@@ -50,6 +53,12 @@ export function ChatItemMenu({
           <Trash2 />
           Delete
         </DropdownMenuItem>
+        {onDeleteAll ? (
+          <DropdownMenuItem className="min-h-11" variant="destructive" onSelect={onDeleteAll}>
+            <ListX />
+            Delete all chats
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

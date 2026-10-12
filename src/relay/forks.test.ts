@@ -213,6 +213,17 @@ describe("createForks", () => {
     expect(await deleteForks(db, engine, USER, parentId)).toEqual({ deleted: [] });
   });
 
+  it("deleteForks with the main chat removes it and every fork, and nothing else", async () => {
+    const parentId = await parentChat();
+    const other = await parentChat();
+    const forks = [fork("A"), fork("B")];
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
+    await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
+    expect(await deleteForks(db, engine, USER, parentId, true)).toEqual({ deleted: [...forks.map((f) => f.chatId), parentId] });
+    expect(db.select().from(chats).where(eq(chats.userId, USER)).all().map((c) => c.id)).toEqual([other]);
+    expect(db.select().from(messages).where(eq(messages.chatId, parentId)).all()).toHaveLength(0);
+  });
+
   it("setForkOrder stores the given order and keeps unnamed forks after it", async () => {
     const parentId = await parentChat();
     const forks = [fork("A"), fork("B"), fork("C")];
