@@ -26,7 +26,6 @@ export function ComposerSkeleton() {
             <Skeleton className="touch-target rounded-full" />
           </div>
         </div>
-        <p className="mt-1 hidden text-caption md:[@media(hover:hover)]:block">&nbsp;</p>
       </div>
     </div>
   );

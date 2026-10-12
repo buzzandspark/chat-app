@@ -78,7 +78,7 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
             <span className="truncate px-1 text-small font-semibold tracking-tight">Cadence</span>
           </div>
           <div className="flex items-center">
-            <IconButton label="Search chats" onClick={onSearch}>
+            <IconButton label="Search chats" shortcut="⌘K" aria-keyshortcuts="Meta+K Control+K" onClick={onSearch}>
               <Search />
             </IconButton>
             {/* href keeps open-in-new-tab working through the /c/new alias; a plain click goes straight to a fresh id. */}
@@ -86,7 +86,8 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               href="/c/new"
               prefetch={false}
               aria-label="New chat"
-              data-tip="New chat"
+              data-tip="New chat  ⌘⇧O"
+              aria-keyshortcuts="Meta+Shift+O Control+Shift+O"
               data-tip-side="bottom"
               className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "tip touch-target")}
               onClick={onNavigate}
