@@ -92,7 +92,8 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
             Try again
           </button>
         ) : null;
-        const headline = message.retryAttempt >= MAX_AUTO_RETRIES ? `Still rate limited after ${MAX_AUTO_RETRIES} tries.` : "Rate limited.";
+        const exhausted = message.retryAttempt >= MAX_AUTO_RETRIES;
+        const headline = exhausted ? `Still rate limited after ${MAX_AUTO_RETRIES} tries.` : "Rate limited.";
         // No retry offered means no countdown either: the automatic retry stops along with Try again.
         const auto = tryAgain !== null && message.local && message.retryAttempt < MAX_AUTO_RETRIES;
         text = auto ? (
@@ -100,11 +101,12 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
             Rate limited. Retrying in <Countdown until={message.createdAt + rateLimitDelayMs(message.retryAttempt, e.retryAfterMs)} /> (try{" "}
             {message.retryAttempt + 1} of {MAX_AUTO_RETRIES}), or {tryAgain} now.
           </>
-        ) : tryAgain ? (
+        ) : tryAgain && !exhausted ? (
           <>
             {headline} {tryAgain}.
           </>
         ) : (
+          // After every automatic try, no more retries are offered: a new message is the way on.
           headline
         );
         break;
