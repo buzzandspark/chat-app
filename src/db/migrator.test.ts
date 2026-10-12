@@ -73,6 +73,17 @@ function seed(): void {
     .run("g1", "c1", "u1", "m2", "m1", "test-model", t);
 }
 
+/** The real migrations up to and including `tag`, as a database that last booted then has them. */
+function migrationsThrough(tag: string): string {
+  const folder = path.join(dir, `through-${tag}`);
+  fs.cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
+  const journalPath = path.join(folder, "meta/_journal.json");
+  const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
+  journal.entries = journal.entries.slice(0, journal.entries.findIndex((e) => e.tag === tag) + 1);
+  fs.writeFileSync(journalPath, JSON.stringify(journal));
+  return folder;
+}
+
 const count = (table: string) => sqlite.prepare(`SELECT count(*) FROM ${table}`).pluck().get() as number;
 const journalRows = () => count("__drizzle_migrations");
 
@@ -132,7 +143,7 @@ describe("applyMigrations", () => {
 // plus the search index and its triggers, which drizzle-kit cannot express.
 describe("the initial migration", () => {
   it("builds the whole schema with the search index and its triggers in one step", () => {
-    applyMigrations(sqlite);
+    applyMigrations(sqlite, migrationsThrough("0000_init"));
     expect(journalRows()).toBe(1);
     const chatColumns = (sqlite.pragma("table_info(chats)") as { name: string }[]).map((c) => c.name);
     expect(chatColumns).toEqual(expect.arrayContaining(["forked_from", "fork_position", "fork_order", "tab_hidden", "pinned"]));
@@ -146,7 +157,17 @@ describe("the initial migration", () => {
     expect(count("messages")).toBe(0);
     expect(sqlite.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'quokka'").all()).toHaveLength(0);
     // Applying again is a no-op.
-    applyMigrations(sqlite);
+    applyMigrations(sqlite, migrationsThrough("0000_init"));
     expect(journalRows()).toBe(1);
+  });
+});
+
+describe("0001_explore_options", () => {
+  it("turns Explore options on for the users a database already has", () => {
+    applyMigrations(sqlite, migrationsThrough("0000_init"));
+    seed();
+    applyMigrations(sqlite);
+    expect(journalRows()).toBe(2);
+    expect(sqlite.prepare("SELECT explore_options FROM users WHERE id = 'u1'").pluck().get()).toBe(1);
   });
 });

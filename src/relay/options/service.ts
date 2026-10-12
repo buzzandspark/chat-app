@@ -92,7 +92,7 @@ export class OptionsService {
   private async detect(info: ReplyDoneInfo, onProgress: (progress: DetectProgress) => void): Promise<ForkOption[] | null> {
     const chat = this.db.select({ forkedFrom: chats.forkedFrom }).from(chats).where(eq(chats.id, info.chatId)).get();
     const startedAt = performance.now();
-    if (!chat || chat.forkedFrom || !info.text.trim() || this.atCap(info.userId) || !this.canFork(info.chatId)) return null;
+    if (!chat || chat.forkedFrom || !info.text.trim() || !this.exploreOn(info.userId) || this.atCap(info.userId) || !this.canFork(info.chatId)) return null;
     const messenger = this.messenger(info.scenario, info.billable);
     const result = await messenger.detect(info.text, onProgress);
     this.record(info.userId, info.generationId, "options", result.usage, messenger.name === "haiku");
@@ -102,8 +102,9 @@ export class OptionsService {
     return result.options;
   }
 
-  /** A chat that just stopped being a fork: its last reply was skipped then, so it is read now. Returns that reply's id. */
+  /** A chat that just stopped being a fork: its last reply was skipped then, so it is read now. Returns that reply's id; null with Explore off. */
   detectLastReply(chatId: string, userId: string): string | null {
+    if (!this.exploreOn(userId)) return null;
     const row = this.db
       .select({ id: messages.id, content: messages.content, status: messages.status, options: messages.forkOptions, generationId: messages.generationId })
       .from(messages)
@@ -182,6 +183,11 @@ export class OptionsService {
   /** A chat with its full share of forks can't be forked again, so there is nothing to detect. */
   private canFork(chatId: string): boolean {
     return this.db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, chatId)).all().length < MAX_FORKS;
+  }
+
+  /** Explore options turned off in Settings: no Haiku call, so no spend. */
+  private exploreOn(userId: string): boolean {
+    return this.db.select({ on: users.exploreOptions }).from(users).where(eq(users.id, userId)).get()?.on ?? true;
   }
 
   private atCap(userId: string): boolean {

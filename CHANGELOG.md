@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-11
 
+- Settings page (`/settings`, the gear in the sidebar footer): usage split between chats and Explore (Haiku), this month and all time, with the cap when there is one, and a switch to turn Explore options off. Off, the server skips the Haiku detection (no spend) and no button shows. Migration 0001 adds `users.explore_options` (default on); the chat route is 204.9 kB of 205.
 - The sidebar list no longer scrolls sideways: each row's hidden ⋯ tooltip kept its full width centred on the button, past the list's right edge. Hidden tooltips now have zero size (they keep their width for alignment) everywhere.
 - Closing the open fork tab really closes it; it used to reopen itself before the next tab loaded, and on phones, where only the open tab shows its ×, no tab could be closed. The open tab scrolls into view clear of the strip's fade, and its × is 32 px on touch screens.
 

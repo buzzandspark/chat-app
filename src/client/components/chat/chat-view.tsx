@@ -28,7 +28,7 @@ export function ChatView({ children }: { children: ReactNode }) {
   const params = useParams<{ id: string }>();
   // One instance per URL; a hidden instance must not follow the active chat's params.
   const [chatId] = useState(params.id);
-  const { userId, scenarioPanel } = useShellUser();
+  const { userId, scenarioPanel, exploreOptions } = useShellUser();
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
   const chat = useChat(chatId);
@@ -136,11 +136,11 @@ export function ChatView({ children }: { children: ReactNode }) {
   useEffect(() => {
     const was = previousStatus.current;
     previousStatus.current = lastStatus;
-    if (was !== "streaming" || lastStatus !== "done" || !lastId || chat.forkedFrom) return;
+    if (was !== "streaming" || lastStatus !== "done" || !lastId || chat.forkedFrom || !exploreOptions) return;
     // A chat with all its forks can't take another, so there are no options to wait for.
     if (getSidebarStore().get().filter((c) => c.forkedFrom === chatId).length >= MAX_FORKS) return;
     void watchOptions(store, lastId);
-  }, [lastStatus, lastId, chat.forkedFrom, store, chatId]);
+  }, [lastStatus, lastId, chat.forkedFrom, store, chatId, exploreOptions]);
 
   const editQueued = useCallback(
     (id: string) => {

@@ -1,5 +1,5 @@
 "use client";
-import { Plus, Search, X } from "lucide-react";
+import { Plus, Search, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { buttonVariants } from "@/components/ui/button";
@@ -105,6 +105,17 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
         <div className="flex items-center justify-between gap-2 border-t border-sidebar-border px-3 py-2">
           <span className="min-h-4 truncate text-caption text-muted-foreground">{userLabel}</span>
           <div className="flex items-center">
+            <Link
+              href="/settings"
+              prefetch={false}
+              aria-label="Settings"
+              data-tip="Settings"
+              data-tip-side="top"
+              className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "tip touch-target")}
+              onClick={onNavigate}
+            >
+              <Settings />
+            </Link>
             <ThemeToggle />
             <SignOutButton />
           </div>
