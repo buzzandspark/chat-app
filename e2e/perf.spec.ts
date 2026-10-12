@@ -114,7 +114,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     expect(longFrames / Math.max(1, frames.length)).toBeLessThan(0.1);
   });
 
-  test("streaming inside a 200-message chat (D14 decision)", async ({ page }) => {
+  test("streaming inside a 200-message chat", async ({ page }) => {
     await throttle(page);
     await openNewChat(page);
     await visible(page, "scenario-panel-trigger").click();

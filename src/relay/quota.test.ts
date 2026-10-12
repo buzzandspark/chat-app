@@ -9,7 +9,7 @@ let db: Db;
 let quota: QuotaManager;
 const cap = (usd: number | null, spent = 0) => db.update(users).set({ costCapUsd: usd, costSpentUsd: spent }).where(eq(users.id, "u1")).run();
 
-describe("QuotaManager (D22: metered, cut off at the cap)", () => {
+describe("QuotaManager (metered, cut off at the cap)", () => {
   beforeEach(() => {
     db = createTestDb();
     seedUser(db, "u1");

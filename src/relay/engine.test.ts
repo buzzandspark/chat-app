@@ -79,7 +79,7 @@ describe("Engine", () => {
     expect(engine.runningCount()).toBe(0);
   });
 
-  it("writes the covered seq with each partial so a resume never duplicates text (D2)", async () => {
+  it("writes the covered seq with each partial so a resume never duplicates text", async () => {
     engine = makeEngine(1);
     const inp = input({ scenario: "slow_tokens" });
     engine.start(inp);
@@ -123,7 +123,7 @@ describe("Engine", () => {
     expect(engine.runningCount()).toBe(0);
   });
 
-  it("a scripted run costs nothing, teaches the estimator nothing, and is never refused by the cap (D22)", async () => {
+  it("a scripted run costs nothing, teaches the estimator nothing, and is never refused by the cap", async () => {
     const scripted = new ScriptedProvider((req) => scenarioScript((req.scenario as ScenarioName) ?? "normal", req), 0);
     const tps = new TpsStats();
     const before = tps.get("claude-sonnet-5-5");
@@ -229,7 +229,7 @@ describe("Engine", () => {
     expect(engine.resume(uuidv7(), USER)).toEqual({ kind: "not_found" });
   });
 
-  it.each(["scripted", "replay"])("resume: a restarted %s run settles at zero cost and leaves spend alone (D22)", async (provider) => {
+  it.each(["scripted", "replay"])("resume: a restarted %s run settles at zero cost and leaves spend alone", async (provider) => {
     const inp = input();
     engine.start(inp);
     await collectUntilTerminal(store, inp.generationId);
@@ -322,7 +322,7 @@ describe("Engine", () => {
     expect(() => engine.start(input())).toThrow(QuotaExceededError);
   });
 
-  it("stops every running reply of a user once spend reaches the cap, keeping the text so far (D22)", async () => {
+  it("stops every running reply of a user once spend reaches the cap, keeping the text so far", async () => {
     // Room for the input and a few hundred characters of output, not for two long replies.
     db.update(users).set({ costCapUsd: 0.003 }).where(eq(users.id, USER)).run();
     const slow = makeEngine(1);
