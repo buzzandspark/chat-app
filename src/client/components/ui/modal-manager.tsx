@@ -1,7 +1,6 @@
 "use client";
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChunkBoundary } from "./chunk-boundary";
-import { retryChunks } from "./lazy-chunk";
 
 export interface ModalApi {
   open: boolean;
@@ -59,11 +58,8 @@ export function ModalProvider({ children }: { children: ReactNode }) {
           key={e.id}
           label="dialog"
           fallback={null}
-          onError={() => {
-            // The dialog cannot show itself; close its entry and let the next open try the chunk again.
-            close(e.id);
-            retryChunks();
-          }}
+          // The dialog cannot show itself; close its entry.
+          onError={() => close(e.id)}
         >
           {e.render({ open: e.open, close: () => close(e.id) })}
         </ChunkBoundary>

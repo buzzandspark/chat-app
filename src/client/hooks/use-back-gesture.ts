@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent } from "react";
 
 const KEY = "cadenceSheet";
 const NAVIGATION_WINDOW_MS = 1000;
@@ -43,10 +43,7 @@ function listen(): void {
  * state on the entry (its patched pushState copies it), so going back lands on the same route.
  */
 export function useBackGesture(open: boolean, onClose: () => void): void {
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
+  const close = useEffectEvent(onClose);
   useEffect(() => {
     if (!open || typeof window === "undefined") return;
     if (window.matchMedia("(min-width: 768px)").matches) return;
@@ -55,7 +52,7 @@ export function useBackGesture(open: boolean, onClose: () => void): void {
     const entry = {
       close: () => {
         popped = true;
-        onCloseRef.current();
+        close();
       },
     };
     window.history.pushState({ ...(window.history.state ?? {}), [KEY]: true }, "", window.location.href);

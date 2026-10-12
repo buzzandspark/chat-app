@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
@@ -21,10 +21,6 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.select(), 50);
-    return () => clearTimeout(t);
-  }, []);
 
   const submit = async () => {
     if (!value.trim() || busy) return;
@@ -48,7 +44,17 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Rename chat">
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Rename chat"
+      // The whole title selected on open, ready to be typed over.
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }}
+    >
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {

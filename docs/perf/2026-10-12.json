@@ -1,0 +1,116 @@
+{
+  "shell": {
+    "cls": 0,
+    "shifts": 0,
+    "ttfbMs": 2,
+    "domContentLoadedMs": 1327,
+    "paints": {
+      "first-paint": 1452,
+      "first-contentful-paint": 1452
+    },
+    "fonts": [
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:unloaded",
+      "Inter:loaded",
+      "Inter Fallback:loaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded",
+      "JetBrains Mono:unloaded"
+    ],
+    "interLoaded": true,
+    "transferredKb": 308,
+    "hydratedMs": 4067,
+    "chunksAfterHydration": 5,
+    "at": "2026-10-12T05:23:53.291Z"
+  },
+  "long_reply": {
+    "firstPaintMs": 1842,
+    "frames": 616,
+    "p50": 16.7,
+    "p95": 16.7,
+    "p99": 16.8,
+    "longFrames": 0,
+    "assistantRows": 1,
+    "at": "2026-10-12T05:24:07.733Z"
+  },
+  "long_chat": {
+    "rows": 200,
+    "loadMs": 2894,
+    "frames": 574,
+    "p50": 16.7,
+    "p95": 16.7,
+    "p99": 16.8,
+    "longFrames": 1,
+    "at": "2026-10-12T05:24:25.669Z"
+  },
+  "click_to_thread": {
+    "coldInFlight": {
+      "click": 1335.3999999761581,
+      "frames": 22,
+      "activeFrame": 1,
+      "skeletonFrame": 2,
+      "threadFrame": 22,
+      "threadMs": 359
+    },
+    "warmedByOpen": {
+      "click": 2037.1000000238419,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 35
+    },
+    "loaded": {
+      "click": 2418.6999999284744,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 27
+    },
+    "loaded2": {
+      "click": 4735.299999952316,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 27
+    },
+    "prefetched": {
+      "click": 4352.299999952316,
+      "frames": 2,
+      "activeFrame": 1,
+      "skeletonFrame": null,
+      "threadFrame": 2,
+      "threadMs": 31
+    },
+    "at": "2026-10-12T05:24:44.854Z"
+  },
+  "giant_code_block": {
+    "frames": 2062,
+    "p50": 16.7,
+    "p95": 16.8,
+    "p99": 16.8,
+    "longFrames": 4,
+    "maxFrame": 300,
+    "reopenMaxFrame": 200,
+    "reopenLongFrames": 4,
+    "source": "worker",
+    "reopenSource": "kept",
+    "at": "2026-10-12T05:25:27.831Z"
+  },
+  "desktop_shell": {
+    "cls": 0,
+    "shifts": 0,
+    "sources": [],
+    "dockedInHtml": true,
+    "at": "2026-10-12T05:09:18.231Z"
+  }
+}

@@ -1,9 +1,8 @@
 "use client";
 import { GitFork, MoreHorizontal } from "lucide-react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, memo, useCallback, useContext, useEffect } from "react";
+import { createContext, memo, useCallback, useContext } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
@@ -12,49 +11,40 @@ import { prefetchChat } from "@client/store/prefetch";
 import { getSidebarStore, patchChatOptimistic, setPendingChat, usePendingChat, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
-import { lazyChunk } from "../ui/lazy-chunk";
+import { chunk } from "../ui/lazy-chunk";
+import { loadDialogs } from "./load-dialogs";
 import { useModals, type ModalApi } from "../ui/modal-manager";
+import type { ChatItemMenu as ChatItemMenuComponent } from "./chat-item-menu";
 
 /** What the rows need from the sidebar around them (the list is a slot the layout streams in, #20). */
 export interface SidebarListContextValue {
-  open: boolean;
   onNavigate: () => void;
 }
-export const SidebarListContext = createContext<SidebarListContextValue>({ open: false, onNavigate: () => {} });
+export const SidebarListContext = createContext<SidebarListContextValue>({ onNavigate: () => {} });
 
-// D21: Radix menus and dialogs load on first intent, not at mount (next/dynamic keeps them out of the gate).
+// D21: the row's Radix menu loads on first intent, not at mount; the dialogs' chunk is preloaded in idle time (load-dialogs.ts).
 // The row's hover tint and the ghost button's hover tint are the same colour, so the button's own hover
 // was invisible: it now takes a wash of the foreground and the full foreground colour. The dark variants
 // are needed because the ghost variant's own `dark:hover:bg-muted/50` outranks a plain `hover:` class.
 const MENU_BUTTON =
   "size-10 shrink-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100";
-const ChatItemMenu = lazyChunk(() =>
-  dynamic(() => import("./chat-item-menu").then((m) => m.ChatItemMenu), {
-    ssr: false,
-    loading: () => (
-      <IconButton label="Chat actions" className={MENU_BUTTON} aria-disabled>
-        <MoreHorizontal />
-      </IconButton>
-    ),
-  }),
-);
-const RenameDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.RenameDialog), { ssr: false }));
-const DeleteDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.DeleteDialog), { ssr: false }));
-const warmChatItemMenu = () => import("./chat-item-menu");
+const loadChatItemMenu = chunk(() => import("./chat-item-menu").then((m) => m.ChatItemMenu));
 
 /** The row owns the intent so a right-click anywhere on it opens the same menu as the ⋯ button. */
 function ChatItemMenuOnIntent({
   intent,
   ...props
 }: {
-  intent: ReturnType<typeof useIntent>;
+  intent: ReturnType<typeof useIntent<typeof ChatItemMenuComponent>>;
   title: string;
   pinned: boolean;
   onRename: () => void;
   onDelete: () => void;
   onTogglePin: () => void;
 }) {
-  if (intent.armed) {
+  if (intent.failed) throw intent.failed.error;
+  const ChatItemMenu = intent.loaded;
+  if (intent.armed && ChatItemMenu) {
     return <ChatItemMenu {...props} defaultOpen={intent.wanted === "menu"} triggerRef={intent.trigger} onCloseAutoFocus={intent.closed} />;
   }
   // Destructured: the compiler's lint takes an object one of whose fields is a `ref` for a ref itself.
@@ -90,20 +80,24 @@ const SidebarRow = memo(function SidebarRow({
   children?: React.ReactNode;
 }) {
   const href = `/c/${chat.id}`;
-  const intent = useIntent(warmChatItemMenu);
+  const intent = useIntent(loadChatItemMenu);
   const onRename = useCallback(
-    () => show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />),
+    () => loadDialogs().then(({ RenameDialog }) => show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />), () => {}),
     [chat, show],
   );
   const onDelete = useCallback(
-    () => show(({ open, close }) => <DeleteDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
+    () =>
+      loadDialogs().then(
+        ({ DeleteDialog }) => show(({ open, close }) => <DeleteDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
+        () => {},
+      ),
     [chat, currentChatId, show],
   );
   // Pin: the row moves at once; a refused request, or one that never reached the server (offline),
   // moves it back (patchChatOptimistic).
   const onTogglePin = useCallback(() => void patchChatOptimistic(getSidebarStore(), chat.id, { pinned: !chat.pinned }), [chat.id, chat.pinned]);
   return (
-    <li>
+    <li data-chat-row={chat.id}>
       <div
         // The browser's own context menu gives way to the row's: a right-click opens the ⋯ menu.
         onContextMenu={(e) => {
@@ -131,7 +125,7 @@ const SidebarRow = memo(function SidebarRow({
           {forked ? <GitFork aria-hidden className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" /> : null}
           <span className="truncate">{chat.title}</span>
         </Link>
-        <ChunkBoundary label="chat menu">
+        <ChunkBoundary label="chat menu" onRetry={intent.reset}>
           <ChatItemMenuOnIntent
             intent={intent}
             title={chat.title}
@@ -150,7 +144,7 @@ const SidebarRow = memo(function SidebarRow({
 /** The chat list, server-rendered from the user's rows (the layout streams it into the sidebar's slot). */
 export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
   const chats = useSidebarChats(initialChats);
-  const { open, onNavigate } = useContext(SidebarListContext);
+  const { onNavigate } = useContext(SidebarListContext);
   const pathname = usePathname();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
   // D21: the clicked row is active at once; the router catches up when the thread arrives.
@@ -160,8 +154,9 @@ export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
   const store = useChatStore();
   const { show } = useModals();
 
-  // D21: on intent (hover, focus, touchstart) and for the top five when the sidebar opens, warm the
-  // route shell and seed the chat's rows into the store, so the click renders from memory (ADR-0005).
+  // D21: on intent (hover, focus, touchstart), and for the top five as they come into view (the sidebar
+  // opening, or at once when docked), warm the route shell and seed the chat's rows into the store, so the
+  // click renders from memory (ADR-0005).
   const warm = useCallback(
     (chatId: string) => {
       router.prefetch(`/c/${chatId}`);
@@ -169,10 +164,28 @@ export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
     },
     [router, store],
   );
-  useEffect(() => {
-    if (!open) return;
-    for (const chat of chats.slice(0, 5)) warm(chat.id);
-  }, [open, chats, warm]);
+  // Keyed on what remounts their rows too (pinning moves a row between lists), so new rows are observed.
+  const topFive = chats
+    .slice(0, 5)
+    .map((c) => `${c.id}${c.pinned ? "+" : ""}`)
+    .join(" ");
+  const warmTopFive = useCallback(
+    (el: HTMLElement | null) => {
+      if (!el || !topFive) return;
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          const id = e.isIntersecting ? e.target.getAttribute("data-chat-row") : null;
+          if (id) warm(id);
+        }
+      });
+      for (const key of topFive.split(" ")) {
+        const row = el.querySelector(`[data-chat-row="${key.replace("+", "")}"]`);
+        if (row) io.observe(row);
+      }
+      return () => io.disconnect();
+    },
+    [topFive, warm],
+  );
 
   if (chats.length === 0) return <p className="px-2 py-3 text-small text-muted-foreground">No chats yet.</p>;
   // Forks sit under their parent and show only while it, or one of them, is open; a fork whose parent is not listed stands alone.
@@ -208,7 +221,7 @@ export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
   );
   const sectioned = pinned.length > 0;
   return (
-    <div className="space-y-3">
+    <div ref={warmTopFive} className="space-y-3">
       {sectioned ? (
         <section aria-labelledby="sidebar-pinned">
           {heading("sidebar-pinned", "Pinned")}

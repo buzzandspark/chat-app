@@ -228,6 +228,7 @@ export class ChatStore {
   private chatListeners = new Map<string, Set<Listener>>();
   private queue: RelayEvent[] = [];
   private flushHandle: number | null = null;
+  private replyEndListeners = new Set<(message: MessageState) => void>();
   private schedule: (cb: () => void) => number;
   private cancel: (handle: number) => void;
   private now: () => number;
@@ -451,7 +452,7 @@ export class ChatStore {
     this.notifyChat(chatId);
   }
 
-  /** A message typed while a reply streams waits here; the view sends the first one when that reply ends. */
+  /** A message typed while a reply streams waits here; the generation client sends the first one when that reply ends. */
   enqueueMessage(chatId: string, item: QueuedMessage): void {
     const chat = this.chats.get(chatId) ?? this.emptyChat(chatId);
     this.chats.set(chatId, { ...chat, queue: [...chat.queue, item] });
@@ -517,6 +518,28 @@ export class ChatStore {
     this.updateMessage(id, { timings: { ...(m.timings ?? {}), client } });
   }
 
+  /** Called after an applied event has taken a reply out of `streaming` (a terminal event or a final snapshot). */
+  onReplyEnd(listener: (message: MessageState) => void): () => void {
+    this.replyEndListeners.add(listener);
+    return () => {
+      this.replyEndListeners.delete(listener);
+    };
+  }
+
+  /** Commits applied drafts, notifies their subscribers, then reports the replies that stopped streaming. */
+  private commit(ids: Iterable<string>, drafts: Map<string, MessageState>): void {
+    const ended: MessageState[] = [];
+    for (const id of ids) {
+      const draft = drafts.get(id);
+      if (draft) {
+        if (this.messages.get(id)?.status === "streaming" && draft.status !== "streaming") ended.push(draft);
+        this.messages.set(id, draft);
+      }
+      this.notifyMessage(id);
+    }
+    for (const message of ended) for (const listener of this.replyEndListeners) listener(message);
+  }
+
   /** Queue a producer event for the next frame; control events apply immediately. */
   enqueue(event: RelayEvent): void {
     if (isControl(event)) {
@@ -542,20 +565,13 @@ export class ChatStore {
       const id = this.applyToDraft(event, drafts);
       if (id) touched.add(id);
     }
-    for (const id of touched) {
-      const draft = drafts.get(id);
-      if (draft) this.messages.set(id, draft);
-      this.notifyMessage(id);
-    }
+    this.commit(touched, drafts);
   }
 
   apply(event: RelayEvent): void {
     const drafts = new Map<string, MessageState>();
     const id = this.applyToDraft(event, drafts);
-    if (!id) return;
-    const draft = drafts.get(id);
-    if (draft) this.messages.set(id, draft);
-    this.notifyMessage(id);
+    if (id) this.commit([id], drafts);
   }
 
   private draftFor(id: string, drafts: Map<string, MessageState>): MessageState | undefined {

@@ -1,33 +1,23 @@
 "use client";
 import { MoreHorizontal } from "lucide-react";
-import dynamic from "next/dynamic";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { IconButton } from "../ui/icon-button";
 import type { MessageState } from "@client/store/chat-store";
 import { textOf } from "@client/store/chat-store";
 import { ChunkBoundary } from "../ui/chunk-boundary";
-import { lazyChunk } from "../ui/lazy-chunk";
+import { chunk } from "../ui/lazy-chunk";
 import { useChatActions } from "./chat-context";
 
 const USER_ACTION_BUTTON =
   "shrink-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/user:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
-const UserActions = lazyChunk(() =>
-  dynamic(() => import("./user-actions").then((m) => m.UserActions), {
-    ssr: false,
-    loading: () => (
-      <IconButton label="Message actions" className={USER_ACTION_BUTTON} aria-disabled>
-        <MoreHorizontal />
-      </IconButton>
-    ),
-  }),
-);
-
 /** D21: the menu's chunk loads on intent; the stand-in is the same button. */
-const warmUserActions = () => import("./user-actions");
+const loadUserActions = chunk(() => import("./user-actions").then((m) => m.UserActions));
 
 function UserActionsOnIntent(props: { text: string; onEdit: () => void }) {
-  const intent = useIntent(warmUserActions);
-  if (intent.armed) return <UserActions {...props} defaultOpen={intent.wanted === "menu"} />;
+  const intent = useIntent(loadUserActions);
+  if (intent.failed) throw intent.failed.error;
+  const UserActions = intent.loaded;
+  if (intent.armed && UserActions) return <UserActions {...props} defaultOpen={intent.wanted === "menu"} />;
   return (
     <IconButton label="Message actions" className={USER_ACTION_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
       <MoreHorizontal />

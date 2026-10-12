@@ -1,7 +1,7 @@
 "use client";
 import { PanelLeft, Plus, Search, Settings, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
+import { useMemo, type ReactNode, type RefObject } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
@@ -30,20 +30,14 @@ interface SidebarProps {
   userLabel: ReactNode;
   /** The header's toggle, which the shell focuses when the main header's toggle opens the dock. */
   toggleRef: RefObject<HTMLButtonElement | null>;
+  /** The aside, which the shell focuses when it opens the phone modal. */
+  asideRef: RefObject<HTMLElement | null>;
 }
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
-export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, toggleRef }: SidebarProps) {
+export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, toggleRef, asideRef }: SidebarProps) {
   const newChat = useNewChat();
-  const listContext = useMemo(() => ({ open, onNavigate }), [open, onNavigate]);
-  const asideRef = useRef<HTMLElement>(null);
-  const modal = desktop === false && phoneOpen;
-  // Opening the phone modal makes the column behind it inert, which would drop focus on <body>: it moves
-  // onto the dialog instead (announced by its name, no tooltip popping on the first button), and the
-  // next Tab reaches Search. The shell puts it back on the menu button when the modal is dismissed.
-  useEffect(() => {
-    if (modal) asideRef.current?.focus({ preventScroll: true });
-  }, [modal]);
+  const listContext = useMemo(() => ({ onNavigate }), [onNavigate]);
 
   return (
     <>

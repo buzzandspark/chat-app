@@ -1,33 +1,26 @@
 "use client";
 import { Menu, PanelLeft } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { createContext, Suspense, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { IconButton } from "../ui/icon-button";
 import { setPendingChat, usePendingChat, useSidebarChats } from "@client/store/sidebar-store";
-import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useChat } from "@client/store/hooks";
 import { ChatStoreProvider, useChatStore } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
-import { lazyChunk } from "../ui/lazy-chunk";
+import { chunk } from "../ui/lazy-chunk";
+import { loadDialogs } from "./load-dialogs";
+import type { TitleInput as TitleInputComponent } from "./title-input";
 import { markNavigationClose, useBackGesture } from "@client/hooks/use-back-gesture";
 import { useIsDesktopOrNull } from "@client/hooks/use-media-query";
 import { useNewChat } from "@client/hooks/use-new-chat";
-import { useScrollAnchoringFlag } from "@client/hooks/use-scroll-anchoring";
 import { useTypeToFocus } from "@client/hooks/use-type-to-focus";
-import { useVisualViewport } from "@client/hooks/use-visual-viewport";
-import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
 
-const SearchDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.SearchDialog), { ssr: false }));
-// The inline rename loads on intent (hover, focus, touch on the title); until it mounts the title stays as it was.
-const TitleValue = createContext("");
-function TitleLoading() {
-  return <h1 className="min-h-11 min-w-0 flex-1 truncate px-2 text-small leading-11 font-medium">{useContext(TitleValue)}</h1>;
-}
-const TitleInput = lazyChunk(() => dynamic(() => import("./title-input").then((m) => m.TitleInput), { ssr: false, loading: TitleLoading }));
-const warmTitleInput = () => import("./title-input");
+// The inline rename loads on intent (hover, focus, touch on the title); the title stays until it has.
+const loadTitleInput = chunk(() => import("./title-input").then((m) => m.TitleInput));
 
 interface ChatShellProps {
   /** The chat list and the user label are server slots: the chrome around them is static (#20). */
@@ -60,42 +53,38 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
   const { show, openCount } = useModals();
   const newChat = useNewChat();
   const searchCloser = useRef<(() => void) | null>(null);
-  useVisualViewport();
-  useScrollAnchoringFlag();
   // Typing with nothing focused goes to the composer; not while a dialog is up or the phone sidebar covers the chat.
   useTypeToFocus(openCount === 0 && !(!desktop && phoneOpen));
 
   const open = desktop ? desktopOpen : phoneOpen;
-  // The phone modal dismissed (X, backdrop, Escape, the back gesture) hands focus back to the menu button
-  // that opened it, once the column is no longer inert. Closed by a navigation or by Search it is left
-  // where the route or the dialog puts it, so those paths call setPhoneOpen directly.
+  // Focus moves in the handlers that open and close the sidebar, once the DOM has the new state (flushSync).
+  // Opening the phone modal makes the column behind it inert, which would drop focus on <body>: it moves
+  // onto the dialog instead (announced by its name, no tooltip popping on the first button), and the next
+  // Tab reaches Search. Dismissed (X, backdrop, Escape, the back gesture) it hands focus back to the menu
+  // button; closed by a navigation or by Search it is left where the route or the dialog puts it, so those
+  // paths call setPhoneOpen directly.
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const returnFocus = useRef(false);
-  const dismissPhone = useCallback(() => {
-    returnFocus.current = true;
-    setPhoneOpen(false);
+  const asideRef = useRef<HTMLElement>(null);
+  const openPhone = useCallback(() => {
+    flushSync(() => setPhoneOpen(true));
+    asideRef.current?.focus({ preventScroll: true });
   }, []);
-  useEffect(() => {
-    // Reset on open too: a dismiss while already closed would otherwise leave the flag for a later navigation.
-    if (!phoneOpen && returnFocus.current) menuButtonRef.current?.focus();
-    returnFocus.current = false;
-  }, [phoneOpen]);
+  const dismissPhone = useCallback(() => {
+    flushSync(() => setPhoneOpen(false));
+    menuButtonRef.current?.focus();
+  }, []);
   useBackGesture(!desktop && phoneOpen, dismissPhone);
   // Docked, the toggle lives in the sidebar's header while it is open and in this header while it is
   // closed, at the same spot; a keyboard press on one hands focus to the other.
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
-  const handFocus = useRef(false);
   const toggleDesktop = useCallback(() => {
-    handFocus.current = document.activeElement === menuButtonRef.current || document.activeElement === sidebarToggleRef.current;
-    setDesktopOpen((v) => !v);
-  }, []);
-  useEffect(() => {
-    if (!handFocus.current) return;
-    handFocus.current = false;
-    (desktopOpen ? sidebarToggleRef : menuButtonRef).current?.focus();
+    const fromToggle = document.activeElement === menuButtonRef.current || document.activeElement === sidebarToggleRef.current;
+    const next = !desktopOpen;
+    flushSync(() => setDesktopOpen(next));
+    if (fromToggle) (next ? sidebarToggleRef : menuButtonRef).current?.focus();
   }, [desktopOpen]);
   const close = useCallback(() => (desktop ? toggleDesktop() : dismissPhone()), [desktop, toggleDesktop, dismissPhone]);
-  const toggle = useCallback(() => (desktop ? toggleDesktop() : setPhoneOpen((v) => !v)), [desktop, toggleDesktop]);
+  const toggle = useCallback(() => (desktop ? toggleDesktop() : phoneOpen ? dismissPhone() : openPhone()), [desktop, phoneOpen, toggleDesktop, dismissPhone, openPhone]);
   const closePhone = useCallback(() => setPhoneOpen(false), []);
   const onSidebarNavigate = useCallback(() => {
     markNavigationClose();
@@ -107,11 +96,16 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
     // The Search button that opened it is then inert, so a dismissed search hands focus to the menu
     // button, as a dismissed sidebar does; elsewhere the dialog keeps its own close focus.
     const fromPhoneSidebar = !desktop && phoneOpen;
+    // The sheet takes over the sidebar's history entry instead of racing its removal (the sheet opens a moment
+    // later, once its chunk's promise settles), so Back closes the sheet without leaving the chat.
+    if (fromPhoneSidebar) markNavigationClose();
     if (!desktop) setPhoneOpen(false);
-    searchCloser.current?.();
-    searchCloser.current = show(({ open, close }) => (
-      <SearchDialog open={open} onOpenChange={(o) => !o && close()} returnFocus={fromPhoneSidebar ? menuButtonRef : undefined} />
-    ));
+    loadDialogs().then(({ SearchDialog }) => {
+      searchCloser.current?.();
+      searchCloser.current = show(({ open, close }) => (
+        <SearchDialog open={open} onOpenChange={(o) => !o && close()} returnFocus={fromPhoneSidebar ? menuButtonRef : undefined} />
+      ));
+    }, () => {});
   }, [show, desktop, phoneOpen]);
 
   // D19 shortcuts: ⌘/Ctrl+Shift+O new chat, ⌘/Ctrl+K search, Esc closes the phone sidebar first.
@@ -132,41 +126,27 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
   }, [desktop, phoneOpen, newChat, openSearch, dismissPhone]);
 
   // Inset swipe-to-open: starts at least 24 px in from the left edge (D0).
-  useEffect(() => {
-    if (desktop) return;
-    let startX = 0;
-    let startY = 0;
-    let tracking = false;
-    const onStart = (e: TouchEvent) => {
-      const t = e.touches[0];
-      if (!t) return;
-      // A horizontally scrollable code block or table owns its own swipes (#75).
-      const scrollable = (e.target as Element | null)?.closest?.(".markdown-code-pre, .overflow-x-auto");
-      tracking = !scrollable && t.clientX >= 24 && t.clientX <= 56 && !phoneOpen;
-      startX = t.clientX;
-      startY = t.clientY;
-    };
-    const onMove = (e: TouchEvent) => {
-      if (!tracking) return;
-      const t = e.touches[0];
-      if (!t) return;
-      const dx = t.clientX - startX;
-      const dy = Math.abs(t.clientY - startY);
-      if (dx > 48 && dy < 40) {
-        tracking = false;
-        setPhoneOpen(true);
-      } else if (dy > 40) tracking = false;
-    };
-    window.addEventListener("touchstart", onStart, { passive: true });
-    window.addEventListener("touchmove", onMove, { passive: true });
-    return () => {
-      window.removeEventListener("touchstart", onStart);
-      window.removeEventListener("touchmove", onMove);
-    };
-  }, [desktop, phoneOpen]);
+  const swipe = useRef({ x: 0, y: 0, tracking: false });
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (desktop || !t) return;
+    // A horizontally scrollable code block or table owns its own swipes (#75).
+    const scrollable = (e.target as Element | null)?.closest?.(".markdown-code-pre, .overflow-x-auto");
+    swipe.current = { x: t.clientX, y: t.clientY, tracking: !scrollable && t.clientX >= 24 && t.clientX <= 56 && !phoneOpen };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (!swipe.current.tracking || !t) return;
+    const dx = t.clientX - swipe.current.x;
+    const dy = Math.abs(t.clientY - swipe.current.y);
+    if (dx > 48 && dy < 40) {
+      swipe.current.tracking = false;
+      openPhone();
+    } else if (dy > 40) swipe.current.tracking = false;
+  };
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background">
+    <div className="flex h-dvh w-full overflow-hidden bg-background" onTouchStart={onTouchStart} onTouchMove={onTouchMove}>
       <Sidebar
         list={sidebarList}
         desktop={desktopOrNull}
@@ -178,6 +158,7 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
         onSearch={openSearch}
         userLabel={userLabel}
         toggleRef={sidebarToggleRef}
+        asideRef={asideRef}
       />
       {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold.
           While the phone sidebar is open the column is inert, so the sidebar is a real modal (#56). */}
@@ -246,16 +227,23 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
       : pathname === "/settings"
         ? "Settings"
         : "");
-  // Clicking the title turns it into an input in place; another chat ends the edit.
+  // Clicking the title turns it into an input in place; another chat ends the edit, including one whose
+  // input was still loading when the chat changed.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [failedId, setFailedId] = useState<string | null>(null);
-  const titleIntent = useIntent(warmTitleInput);
+  const [editsFor, setEditsFor] = useState(currentChatId);
+  if (currentChatId !== editsFor) {
+    setEditsFor(currentChatId);
+    setEditingId(null);
+  }
+  const [TitleInput, setTitleInput] = useState<typeof TitleInputComponent | null>(null);
+  const warmTitle = () => {
+    loadTitleInput().catch(() => {});
+  };
   return (
     <>
-      {currentChatId && currentSummary && editingId === currentChatId ? (
-        <TitleValue value={title}>
-          <TitleInput chatId={currentChatId} title={title} onClose={() => setEditingId(null)} onFailed={() => setFailedId(currentChatId)} />
-        </TitleValue>
+      {currentChatId && currentSummary && editingId === currentChatId && TitleInput ? (
+        <TitleInput chatId={currentChatId} title={title} onClose={() => setEditingId(null)} onFailed={() => setFailedId(currentChatId)} />
       ) : currentChatId && currentSummary ? (
         <Button
           variant="ghost"
@@ -264,10 +252,18 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
           aria-label={`Rename chat: ${title}`}
           data-tip="Rename"
           data-tip-side="bottom"
-          {...intentProps(titleIntent)}
+          onPointerEnter={warmTitle}
+          onTouchStart={warmTitle}
+          onFocus={warmTitle}
           onClick={() => {
-            setFailedId(null);
-            setEditingId(currentChatId);
+            loadTitleInput().then(
+              (input) => {
+                setTitleInput(() => input);
+                setFailedId(null);
+                setEditingId(currentChatId);
+              },
+              () => {},
+            );
           }}
         >
           <h1 className="truncate" data-testid="chat-title">

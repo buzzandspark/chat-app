@@ -1,6 +1,6 @@
 "use client";
 import { MoreHorizontal } from "lucide-react";
-import { createContext, useContext, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useMarkdownComponent } from "@client/markdown/ready";
@@ -10,16 +10,17 @@ import { canRetryReply, textOf, type MessageState } from "@client/store/chat-sto
 import { useChat, useChatStore } from "@client/store/hooks";
 import { modelDisplayName } from "@shared/models";
 import { ChunkBoundary } from "../ui/chunk-boundary";
-import { lazyChunk } from "../ui/lazy-chunk";
+import { chunk } from "../ui/lazy-chunk";
 import { useChatActions, useChatLiveState } from "./chat-context";
 import { MAX_AUTO_RETRIES, rateLimitDelayMs } from "./rate-limit";
 import { ServedBy, StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
 
-// D21: the menu (Radix) loads on first intent, not at mount; the stand-in keeps the row's height. Stand-ins
-// and loading stand-ins are never `disabled`: that dims a button, so it blinked as the real one loaded.
+// D21: the menu (Radix) loads on first intent, not at mount; the stand-in keeps the row's height. A stand-in
+// is never `disabled`: that dims a button, so it blinked as the real one replaced it.
+// first:-ml-3.5: the icon sits on the text's left edge (the 44 px target centres a 16 px icon) unless "Served by" leads the row.
 const ACTION_BUTTON =
-  "text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
+  "first:-ml-3.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
 
 function ActionsStandIn({
   message,
@@ -27,33 +28,19 @@ function ActionsStandIn({
   onPress,
 }: {
   message: MessageState;
-  intent?: { warmUp: () => void };
-  onPress?: (what: string) => void;
+  intent: { warmUp: () => void };
+  onPress: (what: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-1" {...(intent ? intentProps(intent) : {})}>
+    <div className="flex items-center gap-1" {...intentProps(intent)}>
       <ServedBy message={message} />
-      <IconButton label="Message actions" className={ACTION_BUTTON} aria-disabled={!onPress || undefined} onClick={() => onPress?.("menu")}>
+      <IconButton label="Message actions" className={ACTION_BUTTON} onClick={() => onPress("menu")}>
         <MoreHorizontal />
       </IconButton>
     </div>
   );
 }
-// The loading stand-in reads the row's message from here (dynamic() hands `loading` no props): the chunk
-// suspends for a frame on first mount even when warm, and a blank stand-in made the buttons blink.
-const ActionsMessage = createContext<MessageState | null>(null);
-function ActionsLoading() {
-  const message = useContext(ActionsMessage);
-  return message ? <ActionsStandIn message={message} /> : <div className="h-11" aria-hidden />;
-}
-const AssistantActions = lazyChunk(() =>
-  dynamic(() => import("./assistant-actions").then((m) => m.AssistantActions), {
-    ssr: false,
-    loading: ActionsLoading,
-  }),
-);
-
-const warmAssistantActions = () => import("./assistant-actions");
+const loadAssistantActions = chunk(() => import("./assistant-actions").then((m) => m.AssistantActions));
 
 // #83: the Markdown renderer (marked, 14 kB gzipped) is its own chunk, fetched when the route's JS
 // evaluates and warmed again by a send. Once it is in, rows render it directly (markdown/ready.ts);
@@ -61,14 +48,10 @@ const warmAssistantActions = () => import("./assistant-actions");
 const MarkdownLazy = dynamic(() => import("@client/markdown/Markdown").then((m) => m.Markdown), { ssr: true, loading: () => null });
 
 function AssistantActionsOnIntent(props: { message: MessageState; text: string; canRegenerate: boolean; onRegenerate: () => void }) {
-  const intent = useIntent(warmAssistantActions);
-  if (intent.armed) {
-    return (
-      <ActionsMessage value={props.message}>
-        <AssistantActions {...props} defaultOpen={intent.wanted === "menu" ? "menu" : null} />
-      </ActionsMessage>
-    );
-  }
+  const intent = useIntent(loadAssistantActions);
+  if (intent.failed) throw intent.failed.error;
+  const AssistantActions = intent.loaded;
+  if (intent.armed && AssistantActions) return <AssistantActions {...props} defaultOpen={intent.wanted === "menu" ? "menu" : null} />;
   return <ActionsStandIn message={props.message} intent={intent} onPress={intent.press} />;
 }
 

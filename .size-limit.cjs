@@ -28,15 +28,14 @@ module.exports = [
     limit: "205 kB",
     gzip: true,
   },
-  {
-    // The idle-loaded Sentry client (BrowserClient, fetch transport, two integrations): 20.6 kB when measured on 2026-10-07.
-    name: "sentry client chunk",
-    path: (() => {
-      const dir = path.join(__dirname, ".next", "static", "chunks");
-      const match = fs.readdirSync(dir).filter((f) => f.endsWith(".js") && fs.readFileSync(path.join(dir, f), "utf8").includes("sentry-rate-limits"));
-      return match.map((f) => path.join(dir, f));
-    })(),
-    limit: "25 kB",
-    gzip: true,
-  },
 ];
+
+// The idle-loaded Sentry client (BrowserClient, fetch transport, two integrations): 20.6 kB when measured on 2026-10-07.
+// Built without NEXT_PUBLIC_SENTRY_DSN (instrumentation-client.ts inlines it), the client isn't bundled at all.
+const sentryDir = path.join(__dirname, ".next", "static", "chunks");
+const sentryChunks = fs
+  .readdirSync(sentryDir)
+  .filter((f) => f.endsWith(".js") && fs.readFileSync(path.join(sentryDir, f), "utf8").includes("sentry-rate-limits"))
+  .map((f) => path.join(sentryDir, f));
+if (sentryChunks.length > 0) module.exports.push({ name: "sentry client chunk", path: sentryChunks, limit: "25 kB", gzip: true });
+else console.warn("size: no Sentry client chunk (built without NEXT_PUBLIC_SENTRY_DSN), so its 25 kB budget is not checked");

@@ -3,6 +3,8 @@ import { createSseParser, parseRelayEvent } from "@relay/sse";
 import { uuidv7 } from "@shared/id";
 import { MAX_MESSAGE_CHARS, type ModelId, type ThinkingOptions } from "@shared/types";
 import { createMessageState, type ChatStore, type MessageState } from "../store/chat-store";
+import { followReply } from "../store/announcer";
+import { getSidebarStore } from "../store/sidebar-store";
 
 export interface SendInput {
   chatId: string;
@@ -106,12 +108,34 @@ export class GenerationClient {
     this.idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
     this.headersMs = options.headersMs ?? DEFAULT_HEADERS_MS;
     this.sleepImpl = options.sleep ?? sleep;
+    store.onReplyEnd((message) => this.sendQueued(message));
     if (typeof window !== "undefined") {
       window.addEventListener("online", () => this.resumeAll());
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") this.resumeAll();
       });
     }
+  }
+
+  /**
+   * One generation at a time per chat: a message sent while a reply streams waits in the chat's queue, and
+   * one goes out per finished reply, on the reply's chat settings, whether or not the chat is on screen. A
+   * failed reply keeps the queue and leaves the decision (Try again, or send anyway) to the user.
+   */
+  private sendQueued(reply: MessageState): void {
+    if (reply.role !== "assistant" || reply.status === "error") return;
+    // After the store's commit, not inside it; and only while that reply is still the chat's last.
+    queueMicrotask(() => {
+      const chat = this.store.getChat(reply.chatId);
+      if (chat.messageIds.at(-1) !== reply.id) return;
+      const next = this.store.takeQueued(reply.chatId);
+      if (!next) return;
+      const title = chat.title ?? next.text.slice(0, 60);
+      this.send(
+        { chatId: reply.chatId, text: next.text, model: chat.settings.model, thinking: chat.settings.thinking, scenario: next.scenario ?? undefined },
+        { onAccepted: () => getSidebarStore().upsert({ id: reply.chatId, title, updatedAt: Date.now() }) },
+      );
+    });
   }
 
   /** Optimistic send: both messages appear immediately; the stream fills the second. */
@@ -156,6 +180,7 @@ export class GenerationClient {
     this.bodies.set(generationId, body);
     if (hooks.onAccepted) this.accepted.set(generationId, hooks.onAccepted);
     void this.post(body);
+    followReply(this.store, input.chatId, assistantMessageId);
     return { generationId, userMessageId, assistantMessageId };
   }
 
@@ -192,6 +217,7 @@ export class GenerationClient {
     this.bodies.set(generationId, body);
     if (hooks.onAccepted) this.accepted.set(generationId, hooks.onAccepted);
     void this.post(body);
+    followReply(this.store, input.chatId, assistantMessageId);
     return { generationId, assistantMessageId };
   }
 

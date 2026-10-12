@@ -1,9 +1,10 @@
 "use client";
 import { useSyncExternalStore } from "react";
 
-// Applies the stored theme before first paint. Kept as a string so it needs no bundle and no React.
+// Applies the stored theme, and D14's scroll-anchoring flag (WebKit reports overflow-anchor yet doesn't anchor
+// content-visibility rows, so the engine is identified by vendor), before first paint. A string: no bundle, no React.
 const THEME_SCRIPT =
-  "(function(){try{var t=localStorage.getItem('cadence-theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);if(t){var ms=document.querySelectorAll('meta[name=\"theme-color\"]');for(var i=0;i<ms.length;i++){ms[i].removeAttribute('media');ms[i].setAttribute('content',d?'#1a1816':'#faf9f6');}}}catch(e){}})();";
+  "(function(){try{document.documentElement.dataset.scrollAnchoring=CSS.supports('overflow-anchor: auto')&&navigator.vendor!=='Apple Computer, Inc.'?'yes':'no';var t=localStorage.getItem('cadence-theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);if(t){var ms=document.querySelectorAll('meta[name=\"theme-color\"]');for(var i=0;i<ms.length;i++){ms[i].removeAttribute('media');ms[i].setAttribute('content',d?'#1a1816':'#faf9f6');}}}catch(e){}})();";
 
 const subscribeNoop = () => () => {};
 

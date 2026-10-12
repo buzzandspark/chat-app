@@ -13,16 +13,19 @@ interface ResponsiveDialogProps {
   className?: string;
   /** Where focus goes on close when it doesn't go to the composer; Radix has no trigger to return to here. */
   returnFocus?: RefObject<HTMLElement | null>;
+  /** Radix's open focus, for a dialog that wants something other than its first field focused as is. */
+  onOpenAutoFocus?: (e: Event) => void;
 }
 
 /** D19: a bottom sheet on phones (slides from the bottom, follows the keyboard), a centred modal at `md`. */
-export function ResponsiveDialog({ open, onOpenChange, title, description, children, className, returnFocus }: ResponsiveDialogProps) {
+export function ResponsiveDialog({ open, onOpenChange, title, description, children, className, returnFocus, onOpenAutoFocus }: ResponsiveDialogProps) {
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
   useBackGesture(open, close);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
+        onOpenAutoFocus={onOpenAutoFocus}
         onCloseAutoFocus={(e) => {
           // Back to the composer only where a keyboard is physical; on a phone that would cover the reply (#32).
           const composer = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');

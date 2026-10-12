@@ -26,6 +26,13 @@ const chats = [
 
 const press = (key: string) => fireEvent.keyDown(document.activeElement ?? document.body, { key });
 
+// jsdom has no IntersectionObserver; the list warms its top five rows through one.
+class NoIntersections {
+  observe() {}
+  disconnect() {}
+}
+beforeEach(() => vi.stubGlobal("IntersectionObserver", NoIntersections));
+
 function renderList() {
   render(
     <ModalProvider>

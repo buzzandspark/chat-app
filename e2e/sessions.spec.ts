@@ -21,24 +21,38 @@ test.describe("sessions and errors", () => {
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("unsent after reload");
   });
 
-  test("a lazy chunk that fails to load costs one control, not the page", async ({ page }) => {
+  test("a lazy chunk that fails to load costs one control, not the page, and Retry brings it back", async ({ page }) => {
     await openNewChat(page);
     await sendText(page, "still here");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    await ensureSidebarOpen(page);
+    // The reply's ⋯ menu loads its chunk on first use; with chunks failing it gives way to a Retry.
     await page.route("**/_next/static/chunks/*.js", (route) => route.abort());
-    await page.getByRole("button", { name: "Search chats" }).first().click();
-    await page.waitForTimeout(800);
+    await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
+    const retry = lastAssistant(page).getByRole("button", { name: /Couldn.t load\. Retry/ });
+    await expect(retry).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("still here");
     await expect(page.getByText("This chat could not be shown")).toHaveCount(0);
     await expect(page.getByText("Something went wrong")).toHaveCount(0);
-    await page.unroute("**/_next/static/chunks/*.js");
-    // Once the network is back, the next open loads the chunk instead of replaying the cached failure.
-    // (Opening search put the phone sidebar away, so bring it back before pressing its button again.)
+    // A sidebar row's ⋯ too: its intent lives in the row, outside the boundary, and Retry must clear it.
     await ensureSidebarOpen(page);
-    await page.getByRole("button", { name: "Search chats" }).first().click();
-    await expect(page.getByRole("textbox", { name: /search/i })).toBeVisible({ timeout: 15_000 });
+    const row = sidebar(page).getByRole("listitem").filter({ has: page.getByRole("link", { name: "still here" }) }).first();
+    await row.getByRole("button", { name: "Actions for still here" }).click();
+    const rowRetry = row.getByRole("button", { name: /Couldn.t load\. Retry/ });
+    await expect(rowRetry).toBeVisible({ timeout: 10_000 });
+    // Once the network is back, Retry restores each control and the next press loads its chunk.
+    await page.unroute("**/_next/static/chunks/*.js");
+    await rowRetry.click();
+    await row.getByRole("button", { name: "Actions for still here" }).click();
+    await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible({ timeout: 15_000 });
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    if ((await sidebar(page).getAttribute("data-open")) === "true" && (await page.getByRole("button", { name: "Close sidebar" }).isVisible())) {
+      await page.getByRole("button", { name: "Close sidebar" }).click();
+    }
+    await retry.click();
+    await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
+    await expect(page.getByRole("menuitem", { name: "Copy" })).toBeVisible({ timeout: 15_000 });
   });
 
   test("an expired or revoked session is sent to sign in and comes back to the same chat", async ({ page, context }) => {

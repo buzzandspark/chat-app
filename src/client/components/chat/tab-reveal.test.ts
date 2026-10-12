@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { EXPAND_MS, playTabReveal, revealDuration, startTabReveal } from "./tab-reveal";
+import { EXPAND_MS, MOVE_MS, playTabReveal, revealDuration, startTabReveal } from "./tab-reveal";
 
 let clock = 0;
 let played: { el: HTMLElement; anim: { currentTime: number | null } }[] = [];
@@ -44,8 +44,20 @@ describe("tab reveal", () => {
     playTabReveal("p", strip(3), document.createElement("div"));
     expect(played.every((p) => p.anim.currentTime === EXPAND_MS)).toBe(true);
     played = [];
-    clock += revealDuration(3);
+    // jsdom's strip sits at the top, far above the button: the outline travels, which takes MOVE_MS longer.
+    clock += revealDuration(3, MOVE_MS) - EXPAND_MS;
     playTabReveal("p", strip(3), document.createElement("div"));
+    expect(played).toHaveLength(0);
+  });
+
+  it("doesn't travel when the strip is next to the button (the phone's tabs on the input)", () => {
+    startTabReveal("p", new DOMRect(100, 20, 160, 44));
+    playTabReveal("p", strip(2), document.createElement("div"));
+    const morph = played[0]!.anim as unknown as { currentTime: number };
+    expect(morph.currentTime).toBe(-150);
+    played = [];
+    clock += 150 + revealDuration(2);
+    playTabReveal("p", strip(2), document.createElement("div"));
     expect(played).toHaveLength(0);
   });
 

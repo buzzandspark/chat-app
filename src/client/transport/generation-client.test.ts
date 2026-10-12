@@ -557,3 +557,41 @@ describe("GenerationClient", () => {
     });
   });
 });
+
+describe("the chat's queue", () => {
+  beforeEach(() => {
+    store = new ChatStore({ schedule: () => 0, cancel: () => {} });
+    calls = [];
+  });
+
+  const posts = () => calls.filter((c) => c.url === "/api/chat" && c.method === "POST").map((c) => c.body);
+
+  it("sends one queued message when the reply before it ends, on the chat's model, with the item's scenario", async () => {
+    const client = makeClient(async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };
+      return sseResponse(makeEvents(body.generationId, body.assistantMessageId, "ok"));
+    });
+    store.setSettings("c1", { model: "claude-opus-5-5" });
+    const first = client.send({ chatId: "c1", text: "first", model: "claude-opus-5-5", thinking: { harder: false } });
+    store.enqueueMessage("c1", { id: "q1", text: "second", scenario: "long_reply" });
+    store.enqueueMessage("c1", { id: "q2", text: "third", scenario: null });
+    await settle(first.assistantMessageId);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(posts().map((b) => b?.text)).toEqual(["first", "second"]);
+    expect(posts()[1]).toMatchObject({ model: "claude-opus-5-5", scenario: "long_reply" });
+    expect(store.getChat("c1").queue.map((q) => q.id)).toEqual(["q2"]);
+  });
+
+  it("keeps the queue when the reply fails", async () => {
+    const client = makeClient(async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { generationId: string };
+      return sseResponse([{ type: "error", seq: 0, generationId: body.generationId, t: 0, error: { kind: "overloaded", message: "Overloaded", retryable: true } }]);
+    });
+    const first = client.send({ chatId: "c1", text: "first", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    store.enqueueMessage("c1", { id: "q1", text: "second", scenario: null });
+    await settle(first.assistantMessageId);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(posts().map((b) => b?.text)).toEqual(["first"]);
+    expect(store.getChat("c1").queue.map((q) => q.id)).toEqual(["q1"]);
+  });
+});

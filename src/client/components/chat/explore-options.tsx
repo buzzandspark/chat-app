@@ -1,6 +1,5 @@
 "use client";
 import { GitFork } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react";
 import { cn } from "@/lib/utils";
@@ -10,10 +9,14 @@ import { useChatStore } from "@client/store/hooks";
 import { useSidebarChats } from "@client/store/sidebar-store";
 import { CACHE_WARM_MS, MAX_FORKS, OPTIONS_CLICK_WAIT_MS, type ForkOption } from "@shared/forks";
 import { useShellUser } from "../shell/shell-user";
-import { lazyChunk } from "../ui/lazy-chunk";
+import { chunk } from "../ui/lazy-chunk";
 import { useModals } from "../ui/modal-manager";
 
-const ForkSheet = lazyChunk(() => dynamic(() => import("./fork-sheet").then((m) => m.ForkSheet), { ssr: false }));
+const loadForkSheet = chunk(() => import("./fork-sheet").then((m) => m.ForkSheet));
+
+/** On a phone with fork tabs on the input, the composer's notes (chips, this error) go below the input, so the open tab joins it. */
+export const UNDER_INPUT_WITH_TABS =
+  "group-has-[[data-testid=fork-tabs]]/chat:order-1 group-has-[[data-testid=fork-tabs]]/chat:mt-2 group-has-[[data-testid=fork-tabs]]/chat:mb-0 dock:group-has-[[data-testid=fork-tabs]]/chat:order-none dock:group-has-[[data-testid=fork-tabs]]/chat:mt-0 dock:group-has-[[data-testid=fork-tabs]]/chat:mb-2";
 
 /** ready: clickable; awaiting: clicked before the options finished; busy: forking. */
 export type ExploreState = "ready" | "awaiting" | "busy";
@@ -158,7 +161,10 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
     (options: readonly ForkOption[]) => {
       void import("./tab-reveal");
       void import("@client/store/fork-chat");
-      show(({ open, close }) => <ForkSheet open={open} onOpenChange={(o) => !o && close()} messageId={messageId} options={options} onFork={fork} />);
+      loadForkSheet().then(
+        (ForkSheet) => show(({ open, close }) => <ForkSheet open={open} onOpenChange={(o) => !o && close()} messageId={messageId} options={options} onFork={fork} />),
+        () => setError("Couldn't open the options. Try again."),
+      );
     },
     [show, messageId, fork],
   );
@@ -211,7 +217,7 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
         />
       )}
       {error ? (
-        <p role="alert" className="mb-2 text-caption text-destructive">
+        <p role="alert" className={cn("mb-2 text-caption text-destructive", UNDER_INPUT_WITH_TABS)}>
           {error}
         </p>
       ) : null}

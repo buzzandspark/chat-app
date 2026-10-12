@@ -1,14 +1,10 @@
 "use client";
 import { Trash2, Trophy } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
-import { lazyChunk } from "../ui/lazy-chunk";
+import { loadDialogs } from "../shell/load-dialogs";
 import { useModals } from "../ui/modal-manager";
 
-const DeleteDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.DeleteDialog), { ssr: false }));
-const DeclareWinnerDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.DeclareWinnerDialog), { ssr: false }));
-const DeleteForksDialog = lazyChunk(() => dynamic(() => import("../shell/dialogs").then((m) => m.DeleteForksDialog), { ssr: false }));
 
 export interface ForkTabMenuProps {
   tabId: string;
@@ -36,17 +32,23 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
   const onDelete = () => {
     onClose();
     const c = chat();
-    show(({ open, close }) => <DeleteDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />);
+    loadDialogs().then(({ DeleteDialog }) => show(({ open, close }) => <DeleteDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />), () => {});
   };
   const onDeclareWinner = () => {
     onClose();
     const c = chat();
-    show(({ open, close }) => <DeclareWinnerDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />);
+    loadDialogs().then(
+      ({ DeclareWinnerDialog }) => show(({ open, close }) => <DeclareWinnerDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
+      () => {},
+    );
   };
   const onDeleteForks = () => {
     onClose();
     const c = chat();
-    show(({ open, close }) => <DeleteForksDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />);
+    loadDialogs().then(
+      ({ DeleteForksDialog }) => show(({ open, close }) => <DeleteForksDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
+      () => {},
+    );
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? []);
@@ -66,8 +68,8 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
       role="menu"
       aria-label={`Tab actions for ${title}`}
       className="fixed z-50 min-w-44 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
-      // Opens upward: the tabs sit just above the composer, at the bottom of the screen.
-      style={{ left, bottom: window.innerHeight - y }}
+      // Opens toward the room: down from the docked strip at the top, up from the phone's tabs on the composer.
+      style={y < window.innerHeight / 2 ? { left, top: y } : { left, bottom: window.innerHeight - y }}
       onKeyDown={onKeyDown}
     >
       <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={isMain ? onDeleteForks : onDeclareWinner}>
