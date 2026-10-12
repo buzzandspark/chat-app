@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- One sidebar toggle, pinned at the top left: docked, the sidebar slides beneath it and the header title moves to clear it, instead of the toggle swapping between the sidebar's header and the main header.
 - Sidebar rows: hovering a title shows it in full to the right of the sidebar; the ⋯ button has no tooltip; the main chat's menu item reads Delete group; deleting a main chat with forks says its forks stay as normal chats.
 - The docked sidebar slides in and out (its width closes while its contents move left) instead of appearing and disappearing; the phone overlay already slid.
 - Guests: the long-chat scenario seeds its replies on Haiku, the server runs a guest's request on Haiku whatever model it names (it answered 403, which the page showed as "This chat belongs to another account"), and a guest's picker always reads Haiku.

@@ -75,15 +75,7 @@ function ChatShellInner({ sidebarList, userLabel, account, usage, children }: Ch
     menuButtonRef.current?.focus();
   }, []);
   useBackGesture(!desktop && phoneOpen, dismissPhone);
-  // Docked, the toggle lives in the sidebar's header while it is open and in this header while it is
-  // closed, at the same spot; a keyboard press on one hands focus to the other.
-  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
-  const toggleDesktop = useCallback(() => {
-    const fromToggle = document.activeElement === menuButtonRef.current || document.activeElement === sidebarToggleRef.current;
-    const next = !desktopOpen;
-    flushSync(() => setDesktopOpen(next));
-    if (fromToggle) (next ? sidebarToggleRef : menuButtonRef).current?.focus();
-  }, [desktopOpen]);
+  const toggleDesktop = useCallback(() => setDesktopOpen((o) => !o), []);
   const close = useCallback(() => (desktop ? toggleDesktop() : dismissPhone()), [desktop, toggleDesktop, dismissPhone]);
   const toggle = useCallback(() => (desktop ? toggleDesktop() : phoneOpen ? dismissPhone() : openPhone()), [desktop, phoneOpen, toggleDesktop, dismissPhone, openPhone]);
   const closePhone = useCallback(() => setPhoneOpen(false), []);
@@ -150,7 +142,7 @@ function ChatShellInner({ sidebarList, userLabel, account, usage, children }: Ch
   };
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background" onTouchStart={onTouchStart} onTouchMove={onTouchMove}>
+    <div className="relative flex h-dvh w-full overflow-hidden bg-background" onTouchStart={onTouchStart} onTouchMove={onTouchMove}>
       <Sidebar
         list={sidebarList}
         desktop={desktopOrNull}
@@ -162,18 +154,31 @@ function ChatShellInner({ sidebarList, userLabel, account, usage, children }: Ch
         onSearch={openSearch}
         userLabel={userLabel}
         account={account}
-        toggleRef={sidebarToggleRef}
         asideRef={asideRef}
       />
+      {/* One toggle, pinned at the top left: docked, the sidebar slides in and out beneath it and the title makes room for it. */}
+      <div
+        inert={!desktop && phoneOpen ? true : undefined}
+        className="safe-top absolute top-0 left-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] items-center pl-[max(0.5rem,env(safe-area-inset-left,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] dock:z-50"
+      >
+        <IconButton ref={menuButtonRef} label={desktop && desktopOpen ? "Hide sidebar" : "Show sidebar"} aria-expanded={open} onClick={toggle}>
+          <Menu className="dock:hidden" />
+          <PanelLeft className="hidden dock:block" />
+        </IconButton>
+      </div>
       {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold.
           While the phone sidebar is open the column is inert, so the sidebar is a real modal (#56). */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" inert={!desktop && phoneOpen ? true : undefined}>
-        <header data-tip-boundary className="safe-top relative flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
-          {/* Docked and open, the sidebar's own header shows the toggle at this same spot. */}
-          <IconButton ref={menuButtonRef} label="Show sidebar" aria-expanded={open} className={cn(desktopOpen && "dock:hidden")} onClick={toggle}>
-            <Menu className="dock:hidden" />
-            <PanelLeft className="hidden dock:block" />
-          </IconButton>
+        <header
+          data-tip-boundary
+          className={cn(
+            "safe-top relative flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border transition-[padding] duration-200 ease-out motion-reduce:transition-none",
+            "pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]",
+            // Clear of the pinned toggle, unless the open dock already holds it.
+            "pl-[calc(max(0.5rem,env(safe-area-inset-left,0px))+var(--spacing-touch)+0.25rem)] md:pl-[calc(max(0.75rem,env(safe-area-inset-left,0px))+var(--spacing-touch)+0.25rem)]",
+            desktopOpen && "dock:pl-3!",
+          )}
+        >
           {/* #20: the chrome is in the static shell; only what depends on the URL streams in here. */}
           <Suspense fallback={<HeaderRouteFallback />}>
             <HeaderRoute onPathnameChange={closePhone} />

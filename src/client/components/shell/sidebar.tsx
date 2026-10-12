@@ -1,5 +1,5 @@
 "use client";
-import { PanelLeft, Plus, Search, Settings, X } from "lucide-react";
+import { Plus, Search, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, type ReactNode, type RefObject } from "react";
 import { buttonVariants } from "@/components/ui/button";
@@ -29,14 +29,12 @@ interface SidebarProps {
   userLabel: ReactNode;
   /** Sign out for an account, Sign in for a guest: it needs the session, so the layout streams it in. */
   account: ReactNode;
-  /** The header's toggle, which the shell focuses when the main header's toggle opens the dock. */
-  toggleRef: RefObject<HTMLButtonElement | null>;
   /** The aside, which the shell focuses when it opens the phone modal. */
   asideRef: RefObject<HTMLElement | null>;
 }
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
-export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, account, toggleRef, asideRef }: SidebarProps) {
+export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, account, asideRef }: SidebarProps) {
   const newChat = useNewChat();
   const listContext = useMemo(() => ({ onNavigate }), [onNavigate]);
 
@@ -76,12 +74,11 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
             !desktopOpen && "dock:-translate-x-full",
           )}
         >
-        {/* The toggle sits where the main header's sits (same inset, and a clear border so the same height), so opening and closing never moves it. */}
+        {/* Docked, the shell's pinned toggle sits over this header's left end; the X here closes the phone overlay. */}
         <div className="flex h-14 items-center justify-between gap-1 border-b border-transparent pr-2 pl-2 md:pl-3">
           <div className="flex min-w-0 items-center gap-1">
-            <IconButton ref={toggleRef} label={desktop ? "Hide sidebar" : "Close sidebar"} aria-expanded={open} onClick={onClose}>
-              <X className="dock:hidden" />
-              <PanelLeft className="hidden dock:block" />
+            <IconButton label="Close sidebar" aria-expanded={open} className="dock:invisible" onClick={onClose}>
+              <X />
             </IconButton>
           </div>
           <div className="flex items-center">
