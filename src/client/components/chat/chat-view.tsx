@@ -6,11 +6,9 @@ import { saveLastChoice } from "@client/hooks/use-last-choice";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { canRetryReply, textOf, type ChatSettings } from "@client/store/chat-store";
 import { ensureMarkdown, useMarkdownFailed, useMarkdownReady } from "@client/markdown/ready";
-import { useChat, useChatSeeded, useChatStore, useMessage } from "@client/store/hooks";
+import { useChat, useChatSeeded, useChatStore } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
-import { watchOptions } from "@client/store/forks";
-import { MAX_FORKS } from "@shared/forks";
 import { GUEST_MODEL } from "@shared/models";
 import { isUuid, uuidv7 } from "@shared/id";
 import { isModelId } from "@shared/models";
@@ -36,7 +34,7 @@ export function ChatView({ children }: { children: ReactNode }) {
     return params.id ?? (fromNew && isUuid(fromNew) ? fromNew : uuidv7());
   });
   const newChatRoute = params.id === undefined;
-  const { userId, guest, scenarioPanel, exploreOptions } = useShellUser();
+  const { userId, guest, scenarioPanel } = useShellUser();
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
   const chat = useChat(chatId);
@@ -125,21 +123,6 @@ export function ChatView({ children }: { children: ReactNode }) {
     },
     [chatId, store, dispatch],
   );
-
-  const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
-  const lastStatus = lastMessage?.role === "assistant" ? lastMessage.status : null;
-
-  // The fork options are a side effect of the reply: followed once when a reply ends here, never for a chat opened already done.
-  const lastId = lastMessage?.id ?? null;
-  const previousStatus = useRef<string | null>(null);
-  useEffect(() => {
-    const was = previousStatus.current;
-    previousStatus.current = lastStatus;
-    if (was !== "streaming" || lastStatus !== "done" || !lastId || chat.forkedFrom || !exploreOptions) return;
-    // A chat with all its forks can't take another, so there are no options to wait for.
-    if (getSidebarStore().get().filter((c) => c.forkedFrom === chatId).length >= MAX_FORKS) return;
-    void watchOptions(store, lastId);
-  }, [lastStatus, lastId, chat.forkedFrom, store, chatId, exploreOptions]);
 
   const editQueued = useCallback(
     (id: string) => {

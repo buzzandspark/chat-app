@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { useChatStore } from "@client/store/context";
 
 export interface ShellUser {
   userId: string;
@@ -17,6 +18,9 @@ const ShellUserContext = createContext<ShellUser | null>(null);
 /** Rendered by the layout once the session is known; everything that needs the user sits inside (#20). */
 export function ShellUserProvider({ userId, guest, scenarioPanel, exploreOptions: initialExplore, children }: Omit<ShellUser, "setExploreOptions"> & { children: ReactNode }) {
   const [exploreOptions, setExploreOptions] = useState(initialExplore);
+  // The store's reply-end watcher reads the switch outside React (ADR-0005: the store follows render).
+  const store = useChatStore();
+  store.setExploreOptions(exploreOptions);
   return <ShellUserContext.Provider value={{ userId, guest, scenarioPanel, exploreOptions, setExploreOptions }}>{children}</ShellUserContext.Provider>;
 }
 

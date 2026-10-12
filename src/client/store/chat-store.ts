@@ -229,6 +229,11 @@ export class ChatStore {
   private queue: RelayEvent[] = [];
   private flushHandle: number | null = null;
   private replyEndListeners = new Set<(message: MessageState) => void>();
+  /** The Settings switch, kept here for the reply-end watcher (ShellUserProvider keeps it current). */
+  exploreOptions = true;
+  setExploreOptions(on: boolean): void {
+    this.exploreOptions = on;
+  }
   private schedule: (cb: () => void) => number;
   private cancel: (handle: number) => void;
   private now: () => number;
@@ -526,6 +531,19 @@ export class ChatStore {
     this.updateMessage(id, { timings: { ...(m.timings ?? {}), client } });
   }
 
+  /**
+   * D20: a reply this client sent paints its first text in the render this commit notifies; the paint is
+   * stamped in a task after the next frame (#46).
+   */
+  private markFirstPaint(id: string): void {
+    if (typeof requestAnimationFrame !== "function") return;
+    requestAnimationFrame(() => {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = () => this.markClientTiming(id, "firstPaint");
+      channel.port2.postMessage(0);
+    });
+  }
+
   /** Called after an applied event has taken a reply out of `streaming` (a terminal event or a final snapshot). */
   onReplyEnd(listener: (message: MessageState) => void): () => void {
     this.replyEndListeners.add(listener);
@@ -540,7 +558,9 @@ export class ChatStore {
     for (const id of ids) {
       const draft = drafts.get(id);
       if (draft) {
-        if (this.messages.get(id)?.status === "streaming" && draft.status !== "streaming") ended.push(draft);
+        const previous = this.messages.get(id);
+        if (previous?.status === "streaming" && draft.status !== "streaming") ended.push(draft);
+        if (draft.timings?.client?.sent !== undefined && previous && !textOf(previous.blocks) && textOf(draft.blocks)) this.markFirstPaint(id);
         this.messages.set(id, draft);
       }
       this.notifyMessage(id);

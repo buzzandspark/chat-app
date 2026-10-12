@@ -86,19 +86,6 @@ export function AssistantMessage({ message }: { message: MessageState }) {
   const text = textOf(message.blocks);
   const hasText = text.length > 0;
 
-  // D20: first paint is measured in a task after the committing frame, only for a reply this client sent (#46).
-  const sentHere = message.timings?.client?.sent !== undefined && message.timings.client.firstPaint === undefined;
-  useEffect(() => {
-    if (!hasText || !sentHere) return;
-    const id = message.id;
-    const raf = requestAnimationFrame(() => {
-      const channel = new MessageChannel();
-      channel.port1.onmessage = () => store.markClientTiming(id, "firstPaint");
-      channel.port2.postMessage(0);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [hasText, sentHere, message.id, store]);
-
   const userMessageId = (() => {
     const index = chat.messageIds.indexOf(message.id);
     for (let i = index - 1; i >= 0; i--) {

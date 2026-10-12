@@ -1,35 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useChatStore } from "@client/store/context";
-
-interface CapUsage {
-  spentUsd: number;
-  capUsd: number | null;
-}
+import { useState } from "react";
+import { useLiveUsage, type CapUsage } from "@client/store/usage";
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
 /** Spend against the cap along the header's bottom border; a taller transparent strip is the hover target. */
 export function UsageBar({ initial }: { initial: CapUsage }) {
-  const store = useChatStore();
-  const [usage, setUsage] = useState(initial);
-  // The server's figures again after a sign-in (the layout re-renders on its refresh): a new account, a new bar.
-  const [fromServer, setFromServer] = useState(initial);
-  if (initial !== fromServer) {
-    setFromServer(initial);
-    setUsage(initial);
-  }
-  // A reply's cost is settled by the time its end reaches the page: read the counter again then.
-  useEffect(
-    () =>
-      store.onReplyEnd(() => {
-        fetch("/api/usage")
-          .then((res) => (res.ok ? (res.json() as Promise<CapUsage>) : null))
-          .then((next) => next && setUsage(next))
-          .catch(() => {});
-      }),
-    [store],
-  );
+  const live = useLiveUsage();
+  // The server's figures win until a later read (a sign-in re-renders the layout with the new account's).
+  const [fromServer, setFromServer] = useState({ initial, seq: live.seq });
+  if (initial !== fromServer.initial) setFromServer({ initial, seq: live.seq });
+  const usage = live.usage && live.seq > fromServer.seq ? live.usage : initial;
   if (usage.capUsd === null) return null;
   const share = usage.capUsd > 0 ? Math.min(1, usage.spentUsd / usage.capUsd) : 1;
   const label = `${usd(usage.spentUsd)} of ${usd(usage.capUsd)} used (${Math.round(share * 100)}%)`;

@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- Four effects removed (17 to 13): watching for Explore options and refreshing the usage bar now run from the chat store's reply-end hook, outside React (options only for replies this client sent); the first-paint timing is stamped by the store; the fork strip's reveal starts from a ref callback.
 - Docked, the sidebar header's Search and New chat slide into the pinned toggle and fade as the sidebar closes, and come back out of it as it opens.
 - Opening a search hit goes straight to the matched message: the chat loads its earlier messages if it must, centres the match and highlights the searched words until the next click or key press. Search hits carry the matched message's id.
 - One sidebar toggle, pinned at the top left: docked, the sidebar slides beneath it and the header title moves to clear it, instead of the toggle swapping between the sidebar's header and the main header.

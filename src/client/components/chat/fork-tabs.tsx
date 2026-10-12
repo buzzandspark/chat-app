@@ -1,7 +1,7 @@
 "use client";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@client/store/hooks";
 import { prefetchChat } from "@client/store/prefetch";
@@ -62,7 +62,6 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   const drag = useRef<{ id: string; startX: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const stripRef = useRef<HTMLDivElement>(null);
-  const morphRef = useRef<HTMLDivElement>(null);
 
   const warm = useCallback(
     (id: string) => {
@@ -119,14 +118,14 @@ export function ForkTabs({ chatId }: { chatId: string }) {
     menuClosedAt.current = performance.now();
     setMenu(null);
   }, []);
-  // Before paint, so a strip that grows out of the Explore button never shows a frame at full size first.
+  // The morph's ref runs at commit, after the strip's (its earlier sibling), before paint: a strip that grows out
+  // of the Explore button never shows a frame at full size first. Loaded while the sheet was open, the chunk
+  // resolves in a microtask, still before the frame is painted.
   const parentId = model?.parentId ?? null;
-  useLayoutEffect(() => {
+  const attachMorph = (morph: HTMLDivElement | null) => {
     const strip = stripRef.current;
-    const morph = morphRef.current;
-    // Loaded while the sheet was open, the chunk resolves in a microtask, still before the frame is painted.
-    if (shown && parentId && strip && morph) void import("./tab-reveal").then((m) => m.playTabReveal(parentId, strip, morph));
-  }, [shown, parentId]);
+    if (parentId && strip && morph) void import("./tab-reveal").then((m) => m.playTabReveal(parentId, strip, morph));
+  };
 
   if (!model || !shown) return null;
   const forkIds = dragging?.ids ?? model.tabs.slice(1).map((t) => t.id);
@@ -255,7 +254,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
             );
           })}
         </div>
-        <div ref={morphRef} aria-hidden className="pointer-events-none absolute isolate z-20 bg-background opacity-0 shadow-md">
+        <div ref={attachMorph} aria-hidden className="pointer-events-none absolute isolate z-20 bg-background opacity-0 shadow-md">
           <ExploreOutline />
         </div>
       </div>
