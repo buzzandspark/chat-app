@@ -21,10 +21,6 @@ function Cell({ totals }: { totals: UsageTotals }) {
   );
 }
 
-const GROUPS = [
-  { key: "chats", label: "Chats", hint: "Main model" },
-  { key: "explore", label: "Explore", hint: "Haiku" },
-] as const;
 
 export function UsageSkeleton() {
   return (
@@ -35,7 +31,7 @@ export function UsageSkeleton() {
   );
 }
 
-/** Spend split between chat replies and Explore options, this month and all time, and the cap when there is one. */
+/** Spend on chat replies (in total and by model) and on Explore options, this month and all time, and the cap when there is one. */
 export function UsageSection({ usage }: { usage: UsageSummary }) {
   const { capUsd, spentUsd } = usage;
   const share = capUsd === null ? 0 : capUsd > 0 ? Math.min(1, spentUsd / capUsd) : 1;
@@ -57,16 +53,30 @@ export function UsageSection({ usage }: { usage: UsageSummary }) {
           </tr>
         </thead>
         <tbody>
-          {GROUPS.map((g) => (
-            <tr key={g.key} className="border-t border-border" data-testid={`usage-${g.key}`}>
-              <th scope="row" className="py-2.5 text-left align-top font-normal">
-                <div className="text-small font-medium">{g.label}</div>
-                <div className="text-caption text-muted-foreground">{g.hint}</div>
+          <tr className="border-t border-border" data-testid="usage-chats">
+            <th scope="row" className="py-2.5 text-left align-top text-small font-medium">
+              Chats
+            </th>
+            <Cell totals={usage.month.chats} />
+            <Cell totals={usage.all.chats} />
+          </tr>
+          {usage.chatModels.map((m) => (
+            <tr key={m.model} data-testid="usage-model">
+              <th scope="row" className="py-1.5 pl-3 text-left align-top text-small font-normal text-muted-foreground">
+                {m.label}
               </th>
-              <Cell totals={usage.month[g.key]} />
-              <Cell totals={usage.all[g.key]} />
+              <Cell totals={m.month} />
+              <Cell totals={m.all} />
             </tr>
           ))}
+          <tr className="border-t border-border" data-testid="usage-explore">
+            <th scope="row" className="py-2.5 text-left align-top font-normal">
+              <div className="text-small font-medium">Explore</div>
+              <div className="text-caption text-muted-foreground">Haiku</div>
+            </th>
+            <Cell totals={usage.month.explore} />
+            <Cell totals={usage.all.explore} />
+          </tr>
         </tbody>
       </table>
       {capUsd !== null ? (

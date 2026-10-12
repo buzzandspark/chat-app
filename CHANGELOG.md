@@ -2,6 +2,11 @@
 
 All notable changes, newest first. Dates are the day the work landed.
 
+## 2026-10-12
+
+- No more blink on the first click of a lazily loaded control (a reply's or your message's ⋯, a sidebar row's ⋯, the model picker, Scenarios, the header title): while its chunk loads, the stand-in shown is the same button, not a blank (the reply's ⋯ vanished for about 300 ms) or a disabled one (dimmed); stand-ins with nothing to do are `aria-disabled` rather than `disabled`. `forkChat` loads with the fork sheet, which keeps the chat route at 204.62 kB.
+- Settings: Chats usage is broken down by model (a fallback's serving model counts as its own), under the chats total.
+
 ## 2026-10-11
 
 - Settings page (`/settings`, the gear in the sidebar footer): usage split between chats and Explore (Haiku), this month and all time, with the cap when there is one, and a switch to turn Explore options off. Off, the server skips the Haiku detection (no spend) and no button shows. Migration 0001 adds `users.explore_options` (default on); the chat route is 204.9 kB of 205.

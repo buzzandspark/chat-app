@@ -15,7 +15,7 @@ const UserActions = lazyChunk(() =>
   dynamic(() => import("./user-actions").then((m) => m.UserActions), {
     ssr: false,
     loading: () => (
-      <IconButton label="Message actions" className={USER_ACTION_BUTTON} disabled>
+      <IconButton label="Message actions" className={USER_ACTION_BUTTON} aria-disabled>
         <MoreHorizontal />
       </IconButton>
     ),

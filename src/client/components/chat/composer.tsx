@@ -30,7 +30,7 @@ function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" |
 const ScenarioPanel = lazyChunk(() =>
   dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
     ssr: false,
-    loading: () => <ScenarioButton disabled />,
+    loading: () => <ScenarioButton aria-disabled />,
   }),
 );
 
@@ -67,7 +67,7 @@ function PickerStandIn({
       className="touch-target max-w-[55vw] gap-1 text-muted-foreground"
       aria-label="Choose model"
       aria-haspopup={desktop ? "menu" : "dialog"}
-      disabled={!onPress}
+      aria-disabled={!onPress || undefined}
       {...(intent ? intentProps(intent) : {})}
       onClick={onPress}
     >

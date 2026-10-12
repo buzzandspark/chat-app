@@ -6,7 +6,6 @@ import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react
 import { cn } from "@/lib/utils";
 import { useNow } from "@client/hooks/use-now";
 import type { MessageState } from "@client/store/chat-store";
-import { forkChat } from "@client/store/forks";
 import { useChatStore } from "@client/store/hooks";
 import { useSidebarChats } from "@client/store/sidebar-store";
 import { CACHE_WARM_MS, MAX_FORKS, OPTIONS_CLICK_WAIT_MS, type ForkOption } from "@shared/forks";
@@ -141,6 +140,8 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
       setBusy(true);
       setError(null);
       // The strip that replaces the button grows out of it, once the sheet is out of the way.
+      // Fetched when the sheet opened (openWith), so this resolves at once.
+      const { forkChat } = await import("@client/store/fork-chat");
       const out = await forkChat(store, router, chatId, messageId, chosen, () => {
         const from = buttonRef.current?.getBoundingClientRect();
         closeSheet();
@@ -156,6 +157,7 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
   const openWith = useCallback(
     (options: readonly ForkOption[]) => {
       void import("./tab-reveal");
+      void import("@client/store/fork-chat");
       show(({ open, close }) => <ForkSheet open={open} onOpenChange={(o) => !o && close()} messageId={messageId} options={options} onFork={fork} />);
     },
     [show, messageId, fork],

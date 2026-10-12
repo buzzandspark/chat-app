@@ -32,7 +32,7 @@ const ChatItemMenu = lazyChunk(() =>
   dynamic(() => import("./chat-item-menu").then((m) => m.ChatItemMenu), {
     ssr: false,
     loading: () => (
-      <IconButton label="Chat actions" className={MENU_BUTTON} disabled>
+      <IconButton label="Chat actions" className={MENU_BUTTON} aria-disabled>
         <MoreHorizontal />
       </IconButton>
     ),

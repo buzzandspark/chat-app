@@ -1,7 +1,7 @@
 "use client";
 import { Menu, PanelLeft } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { IconButton } from "../ui/icon-button";
@@ -21,10 +21,12 @@ import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
 
 const SearchDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.SearchDialog), { ssr: false }));
-// The inline rename loads on intent (hover, focus, touch on the title), so it is nearly always in by the click.
-const TitleInput = lazyChunk(() =>
-  dynamic(() => import("./title-input").then((m) => m.TitleInput), { ssr: false, loading: () => <div className="min-h-11 min-w-0 flex-1" /> }),
-);
+// The inline rename loads on intent (hover, focus, touch on the title); until it mounts the title stays as it was.
+const TitleValue = createContext("");
+function TitleLoading() {
+  return <h1 className="min-h-11 min-w-0 flex-1 truncate px-2 text-small leading-11 font-medium">{useContext(TitleValue)}</h1>;
+}
+const TitleInput = lazyChunk(() => dynamic(() => import("./title-input").then((m) => m.TitleInput), { ssr: false, loading: TitleLoading }));
 const warmTitleInput = () => import("./title-input");
 
 interface ChatShellProps {
@@ -251,7 +253,9 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
   return (
     <>
       {currentChatId && currentSummary && editingId === currentChatId ? (
-        <TitleInput chatId={currentChatId} title={title} onClose={() => setEditingId(null)} onFailed={() => setFailedId(currentChatId)} />
+        <TitleValue value={title}>
+          <TitleInput chatId={currentChatId} title={title} onClose={() => setEditingId(null)} onFailed={() => setFailedId(currentChatId)} />
+        </TitleValue>
       ) : currentChatId && currentSummary ? (
         <Button
           variant="ghost"

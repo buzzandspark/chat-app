@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sidebar, visible, waitForComposer } from "./helpers";
+import { ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText, sidebar, visible, waitForComposer } from "./helpers";
 
 // The projects share the dev user: Explore is switched back on whatever a test did.
 test.afterEach(async ({ request }) => {
@@ -34,8 +34,10 @@ async function replyWithOptions(page: Page) {
 }
 
 test.describe("settings", () => {
-  test("the sidebar opens it, and it shows usage for chats and Explore", async ({ page, isMobile }) => {
+  test("the sidebar opens it, and it shows usage for chats by model and for Explore", async ({ page, isMobile }) => {
     await openNewChat(page);
+    await sendText(page, "count me");
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await openSettings(page);
     // The phone overlay closes on the way, as it does for a chat.
     if (isMobile) await expect(sidebar(page)).toHaveAttribute("data-open", "false");
@@ -44,6 +46,7 @@ test.describe("settings", () => {
     await expect(page.getByRole("columnheader", { name: "All time" })).toBeVisible();
     await expect(visible(page, "usage-chats")).toContainText("Chats");
     await expect(visible(page, "usage-chats")).toContainText(/\$\d+\.\d\d/);
+    await expect(page.getByTestId("usage-model").filter({ hasText: "Sonnet 5.5" })).toBeVisible();
     await expect(visible(page, "usage-explore")).toContainText("Explore");
     await expect(visible(page, "usage-explore")).toContainText(/in · .* out/);
   });
