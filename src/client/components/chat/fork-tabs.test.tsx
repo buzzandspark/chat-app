@@ -123,6 +123,19 @@ describe("ForkTabs", () => {
     expect(push).toHaveBeenLastCalledWith("/c/f1");
   });
 
+  it("a press on the open tab opens its menu, and a second press closes it", async () => {
+    getSidebarStore().hydrate(chats);
+    renderTabs("f1");
+    const open = screen.getByRole("tab", { name: "SQLite" });
+    fireEvent.click(open);
+    expect(await screen.findByRole("menu", { name: "Tab actions for SQLite" })).toBeInTheDocument();
+    expect(open).toHaveAttribute("aria-expanded", "true");
+    expect(push).not.toHaveBeenCalled();
+    fireEvent.pointerDown(open);
+    fireEvent.click(open);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
   it("a right-click opens the tab's menu: Declare winner on a fork, Delete forks on the main chat", async () => {
     getSidebarStore().hydrate(chats);
     renderTabs("f1");

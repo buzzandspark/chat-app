@@ -65,7 +65,7 @@ export async function forkChat(
   return { ok: true };
 }
 
-/** A reply's "Duplicate chat": a new fork tab holding the chat up to that reply, listed and opened. */
+/** A reply's "Duplicate": a new fork tab holding the chat up to that reply, listed and opened. */
 export async function duplicateChat(store: ChatStore, router: { push: (href: string) => void }, chatId: string, messageId: string): Promise<ForkOutcome> {
   let res: Response;
   try {

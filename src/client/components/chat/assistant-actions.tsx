@@ -76,7 +76,7 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
           {roomForFork ? (
             <DropdownMenuItem onSelect={onDuplicate} className="min-h-11">
               <CopyPlus />
-              Duplicate chat
+              Duplicate
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>

@@ -35,7 +35,7 @@ test.describe("explore options", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     const parentUrl = page.url();
     await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
-    const item = page.getByRole("menuitem", { name: "Duplicate chat" });
+    const item = page.getByRole("menuitem", { name: "Duplicate" });
     expect(await item.evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
     await item.click();
     await expect(page).not.toHaveURL(parentUrl, { timeout: 15_000 });

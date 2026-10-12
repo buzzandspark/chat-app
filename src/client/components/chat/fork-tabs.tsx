@@ -113,7 +113,12 @@ export function ForkTabs({ chatId }: { chatId: string }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [visibleKey, chatId, open, openCount]);
-  const closeMenu = useCallback(() => setMenu(null), []);
+  // A press on the open tab closes its menu first (the menu's outside press); that same click must not reopen it.
+  const menuClosedAt = useRef(0);
+  const closeMenu = useCallback(() => {
+    menuClosedAt.current = performance.now();
+    setMenu(null);
+  }, []);
   // Before paint, so a strip that grows out of the Explore button never shows a frame at full size first.
   const parentId = model?.parentId ?? null;
   useLayoutEffect(() => {
@@ -214,13 +219,20 @@ export function ForkTabs({ chatId }: { chatId: string }) {
                     suppressClick.current = false;
                     return;
                   }
-                  open(tab.id);
+                  if (!active) return open(tab.id);
+                  if (performance.now() - menuClosedAt.current < 300) return;
+                  // The open tab's menu drops from the docked strip and rises from the phone's tabs on the input.
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const at = { tab, x: r.left, y: r.top < window.innerHeight / 2 ? r.bottom : r.top };
+                  loadTabMenu().then((Menu) => setMenu({ ...at, Menu }), () => {});
                 }}
               >
                 <button
                   type="button"
                   role="tab"
                   aria-selected={active}
+                  aria-haspopup={active ? "menu" : undefined}
+                  aria-expanded={active ? menu?.tab.id === tab.id : undefined}
                   className={cn("flex h-full min-w-0 items-center pl-3 pr-1 text-small whitespace-nowrap outline-none focus-visible:ring-3 focus-visible:ring-ring/50", active && "font-medium")}
                   onFocus={() => warm(tab.id)}
                 >

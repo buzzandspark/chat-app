@@ -162,7 +162,7 @@ export interface Duplicate {
 }
 
 /**
- * A reply's "Duplicate chat": a new fork of the main chat (a fork duplicates as its sibling) holding the
+ * A reply's "Duplicate": a new fork of the main chat (a fork duplicates as its sibling) holding the
  * chat's rows up to and including that reply, and nothing more; the next turn is the user's to write.
  * Counts toward the main chat's fork cap.
  */
