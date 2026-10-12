@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- In the Explore options sheet, a click or tap anywhere on an option outside its title and message fields picks or drops it.
 - Delete chat and Delete all forks open with Delete focused, so Enter confirms.
 - A click or tap on the open fork tab opens its menu (as a right-click does); a second press closes it.
 - A reply's ⋯ offers Duplicate: a new fork tab of the main chat holding the chat up to and including that reply (a fork duplicates as its sibling; counts toward the ten-fork cap, and the item hides once the main chat has ten). `POST /api/chats/:id/duplicate`.

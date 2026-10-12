@@ -96,6 +96,12 @@ test.describe("explore options", () => {
     const checks = dialog.getByRole("checkbox");
     await expect(checks).toHaveCount(3);
     await checks.nth(2).uncheck();
+    // A press on an option outside its fields toggles it too.
+    const second = dialog.getByTestId("fork-sheet-options").getByRole("listitem").nth(1);
+    await second.click({ position: { x: 4, y: 4 } });
+    await expect(checks.nth(1)).not.toBeChecked();
+    await second.click({ position: { x: 4, y: 4 } });
+    await expect(checks.nth(1)).toBeChecked();
     await dialog.getByLabel("Tab title").first().fill("SQLite forever");
     // Enter in the instruction applies it to every prompt; Shift+Enter forks.
     await instruction.fill("Assess performance");

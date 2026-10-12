@@ -109,7 +109,14 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
       >
         <ul className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto pr-1" data-testid="fork-sheet-options">
           {items.map((it, i) => (
-            <li key={i} className="flex gap-2 rounded-lg border border-border p-2">
+            <li
+              key={i}
+              className="flex cursor-pointer gap-2 rounded-lg border border-border p-2"
+              // A press anywhere on the option but its fields picks or drops it; the checkbox toggles itself.
+              onClick={(e) => {
+                if (!(e.target as HTMLElement).closest("input, textarea, button")) toggle(i);
+              }}
+            >
               <input type="checkbox" className="mt-2.5 size-4 shrink-0 accent-primary" checked={it.selected} onChange={() => toggle(i)} aria-label={`Fork ${it.title}`} />
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <Input value={it.title} onChange={(e) => update(i, { title: e.target.value })} maxLength={MAX_OPTION_TITLE} aria-label="Tab title" className="h-9" />
