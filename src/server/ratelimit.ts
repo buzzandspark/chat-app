@@ -4,6 +4,8 @@ import { env } from "@shared/env";
 
 interface Limiters {
   seedLongChat: RateLimiter;
+  guestStart: RateLimiter;
+  guestStartAll: RateLimiter;
 }
 
 const g = globalThis as unknown as { __chatLimiters?: Limiters };
@@ -14,6 +16,10 @@ export function getLimiters(): Limiters {
   const limiters: Limiters = {
     // The e2e projects share one dev user and each seeds a long chat; the harness is not the abuse case.
     seedLongChat: env.e2e ? new RateLimiter(60, 600) : new RateLimiter(2, 10),
+    // New guests per address: clearing cookies must not hand out a fresh allowance every time.
+    guestStart: env.e2e ? new RateLimiter(60, 600) : new RateLimiter(3, 20),
+    // And across every address, a ceiling on new guests a day (each can spend up to the guest cap).
+    guestStartAll: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(30, 500),
   };
   // Idle keys are dropped every ten minutes, so a day of distinct callers does not pile up in memory.
   // Started here, once with the limiters, not per call: a timer per request would never be cleared.
@@ -29,15 +35,13 @@ export function getLimiters(): Limiters {
  */
 export function clientIp(request: Request): string {
   const hops = Number(process.env.TRUST_PROXY_HOPS ?? (env.isProd ? 1 : 0));
-  if (hops > 0) {
-    const forwarded = request.headers.get("x-forwarded-for");
-    if (forwarded) {
-      const parts = forwarded.split(",").map((s) => s.trim()).filter(Boolean);
-      const pick = parts[Math.max(0, parts.length - hops)];
-      if (pick) return pick;
-    }
-  }
-  return request.headers.get("x-real-ip") ?? "local";
+  // Without a trusted proxy every forwarding header is the client's own word: one shared key then.
+  if (hops <= 0) return "local";
+  const forwarded = request.headers.get("x-forwarded-for");
+  const parts = (forwarded ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const ip = parts[Math.max(0, parts.length - hops)] ?? "local";
+  // An IPv6 client usually holds a whole /64: key by that prefix, not by each address in it.
+  return ip.includes(":") ? `${ip.split(":").slice(0, 4).join(":")}::/64` : ip;
 }
 
 export function tooMany(retryAfterMs: number): Response {

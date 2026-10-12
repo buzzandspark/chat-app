@@ -3,7 +3,7 @@ import type { Db } from "@db/client";
 import { chats, generations, messages } from "@db/schema";
 import { MAX_FORKS } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
-import { DEFAULT_MODEL, isModelId } from "@shared/models";
+import { DEFAULT_MODEL, GUEST_MODEL, isModelId } from "@shared/models";
 import type { ThinkingOptions, UserRole } from "@shared/types";
 import type { Engine, RetryPolicy } from "./engine";
 import { isTerminal } from "./events";
@@ -79,7 +79,7 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
 
   const rows = db.select().from(messages).where(eq(messages.chatId, parent.id)).orderBy(asc(messages.position)).all();
   const lastReply = [...rows].reverse().find((r) => r.role === "assistant");
-  const model = isModelId(lastReply?.requestedModel) ? lastReply.requestedModel : DEFAULT_MODEL;
+  const model = input.userRole === "guest" ? GUEST_MODEL : isModelId(lastReply?.requestedModel) ? lastReply.requestedModel : DEFAULT_MODEL;
   const thinking: ThinkingOptions = lastReply?.thinking ?? { harder: false };
   const lastGeneration = lastReply?.generationId
     ? db.select({ scenario: generations.scenario }).from(generations).where(eq(generations.id, lastReply.generationId)).get()

@@ -3,6 +3,8 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 
 export interface ShellUser {
   userId: string;
+  /** An anonymous visitor: Haiku only (the other models show greyed out) until it signs in. */
+  guest: boolean;
   /** Whether the scenario panel is shown; every signed-in user may run scenarios (they are scripted and replayed, so they spend nothing). */
   scenarioPanel: boolean;
   /** The Settings switch; the server holds it too and skips detection when it is off. */
@@ -13,9 +15,9 @@ export interface ShellUser {
 const ShellUserContext = createContext<ShellUser | null>(null);
 
 /** Rendered by the layout once the session is known; everything that needs the user sits inside (#20). */
-export function ShellUserProvider({ userId, scenarioPanel, exploreOptions: initialExplore, children }: Omit<ShellUser, "setExploreOptions"> & { children: ReactNode }) {
+export function ShellUserProvider({ userId, guest, scenarioPanel, exploreOptions: initialExplore, children }: Omit<ShellUser, "setExploreOptions"> & { children: ReactNode }) {
   const [exploreOptions, setExploreOptions] = useState(initialExplore);
-  return <ShellUserContext.Provider value={{ userId, scenarioPanel, exploreOptions, setExploreOptions }}>{children}</ShellUserContext.Provider>;
+  return <ShellUserContext.Provider value={{ userId, guest, scenarioPanel, exploreOptions, setExploreOptions }}>{children}</ShellUserContext.Provider>;
 }
 
 export function useShellUser(): ShellUser {

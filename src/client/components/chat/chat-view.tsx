@@ -1,5 +1,5 @@
 "use client";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { saveLastChoice } from "@client/hooks/use-last-choice";
@@ -26,9 +26,15 @@ import { ThreadSkeleton } from "./thread-skeleton";
  * server's rows arrive through `children` (a Suspense child that seeds the store) whenever they do.
  */
 export function ChatView({ children }: { children: ReactNode }) {
-  const params = useParams<{ id: string }>();
-  // One instance per URL; a hidden instance must not follow the active chat's params.
-  const [chatId] = useState(params.id);
+  const params = useParams<{ id?: string }>();
+  const search = useSearchParams();
+  // One instance per URL; a hidden instance must not follow the active chat's params. At /c (a new chat
+  // with no id in its address yet) the id is in-app New chat's `n`, or a fresh one.
+  const [chatId] = useState(() => {
+    const fromNew = search.get("n");
+    return params.id ?? (fromNew && isUuid(fromNew) ? fromNew : uuidv7());
+  });
+  const newChatRoute = params.id === undefined;
   const { userId, scenarioPanel, exploreOptions } = useShellUser();
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
@@ -88,12 +94,15 @@ export function ChatView({ children }: { children: ReactNode }) {
       } else {
         client.send({ ...opts, text: trimmed }, hooks);
       }
+      // The first send names the chat in the address: /c becomes /c/<id> in place, with nothing remounted.
+      // State null: Next's patched replaceState then copies its own and syncs usePathname (passing its state skips that).
+      if (newChatRoute && window.location.pathname === "/c") window.history.replaceState(null, "", `/c/${chatId}`);
       setEditing(null);
       listRef.current?.engage();
       // Only where a keyboard is physical: on a phone, focusing pops the keyboard over the reply (#32).
       if (window.matchMedia("(hover: hover) and (min-width: 768px)").matches) composerRef.current?.focus();
     },
-    [chatId, client, store, announceChat],
+    [chatId, client, store, announceChat, newChatRoute],
   );
 
   // One generation at a time, but typing never has to wait: a message sent while a reply streams
@@ -211,7 +220,7 @@ export function ChatView({ children }: { children: ReactNode }) {
           <ForkTabs chatId={chatId} />
           <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />
           <LiveRegion chatId={chatId} />
-          <Composer ref={composerRef} chatId={chatId} />
+          <Composer ref={composerRef} chatId={chatId} draftId={newChatRoute && chat.messageIds.length === 0 ? "new" : chatId} />
         </div>
       </ChatLiveStateContext.Provider>
     </ChatActionsContext.Provider>

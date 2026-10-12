@@ -49,3 +49,6 @@ export function modelDisplayName(model: string): string {
   const family = m[1]!.charAt(0).toUpperCase() + m[1]!.slice(1);
   return `Claude ${family} ${m[2]}${m[3] ? `.${m[3]}` : ""}`;
 }
+
+/** The only model a guest may use; the others show in the picker greyed out until sign-in. */
+export const GUEST_MODEL: ModelId = "claude-haiku-5-5";

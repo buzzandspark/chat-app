@@ -23,7 +23,7 @@ The container expects a volume at `/data` and keeps its database at `/data/app.d
 
 `BETTER_AUTH_SECRET` is required: in production the server refuses to start without it. Generate one with `openssl rand -base64 32`. Set `BETTER_AUTH_URL` to the URL users reach the app at.
 
-Leave `E2E` unset. It is the test harness's switch (no login redirect, cookieless requests run as the uncapped dev user, no sign-in rate limit), and the server refuses to start with it in production unless `E2E_ALLOW_PRODUCTION=1`, which only the harness sets.
+Leave `E2E` unset. It is the test harness's switch (no guest redirect, cookieless requests run as the uncapped dev user, no sign-in rate limit), and the server refuses to start with it in production unless `E2E_ALLOW_PRODUCTION=1`, which only the harness sets.
 
 The container listens on `PORT` (default 3000). It drains in-flight generations on `SIGTERM`; give it a stop grace period of at least 30 s.
 

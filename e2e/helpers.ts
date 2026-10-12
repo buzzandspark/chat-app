@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { expect, type Locator, type Page } from "@playwright/test";
 
 export const CHAT_URL = /\/c\/[0-9a-f-]{36}$/;
+/** A new chat before its first send: plain /c. */
+export const NEW_CHAT_URL = /\/c$/;
+/** A chat page of either kind: a new chat (/c) or a saved one (/c/<id>). */
+export const ANY_CHAT_URL = /\/c(\/[0-9a-f-]{36})?$/;
 
 /** A new chat is a fresh id with no rows (ADR-0005); the `/c/new` alias redirects to one. */
 export function newChatPath(): string {

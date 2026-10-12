@@ -2,7 +2,8 @@ import type { ModelId } from "./models";
 
 export type { ModelId };
 
-export type UserRole = "admin" | "user";
+/** A guest is an anonymous visitor: Haiku only, a small cost cap, its chats move to the account it signs in to. */
+export type UserRole = "admin" | "user" | "guest";
 
 /** generations.status (D2, D4, D5). */
 export type GenerationStatus = "running" | "done" | "stopped" | "interrupted" | "error";

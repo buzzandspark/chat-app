@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { sidebarAria } from "./sidebar-aria";
 import { SidebarListContext } from "./sidebar-list";
-import { SignOutButton } from "./sign-out-button";
 import { ThemeToggle } from "./theme-toggle";
 
 interface SidebarProps {
@@ -28,6 +27,8 @@ interface SidebarProps {
   onSearch: () => void;
   /** The signed-in user's label, streamed in with the list. */
   userLabel: ReactNode;
+  /** Sign out for an account, Sign in for a guest: it needs the session, so the layout streams it in. */
+  account: ReactNode;
   /** The header's toggle, which the shell focuses when the main header's toggle opens the dock. */
   toggleRef: RefObject<HTMLButtonElement | null>;
   /** The aside, which the shell focuses when it opens the phone modal. */
@@ -35,7 +36,7 @@ interface SidebarProps {
 }
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
-export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, toggleRef, asideRef }: SidebarProps) {
+export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, account, toggleRef, asideRef }: SidebarProps) {
   const newChat = useNewChat();
   const listContext = useMemo(() => ({ onNavigate }), [onNavigate]);
 
@@ -81,9 +82,9 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
             <IconButton label="Search chats" shortcut="⌘K" aria-keyshortcuts="Meta+K Control+K" onClick={onSearch}>
               <Search />
             </IconButton>
-            {/* href keeps open-in-new-tab working through the /c/new alias; a plain click goes straight to a fresh id. */}
+            {/* href keeps open-in-new-tab working; a plain click opens a fresh view (useNewChat). */}
             <Link
-              href="/c/new"
+              href="/c"
               prefetch={false}
               aria-label="New chat"
               data-tip="New chat  ⌘⇧O"
@@ -118,7 +119,7 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               <Settings />
             </Link>
             <ThemeToggle />
-            <SignOutButton />
+            {account}
           </div>
         </div>
       </aside>

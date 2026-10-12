@@ -13,6 +13,8 @@ const schema = z.object({
   ADMIN_PATH_SLUG: z.string().regex(/^[a-z0-9-]+$/).default("admin"),
   /** USD cap for an invited user when the admin leaves the field blank (ADR-0004). */
   DEFAULT_COST_CAP_USD: DefaultCapEnvSchema,
+  /** USD cap for a guest (an anonymous visitor on Haiku). */
+  GUEST_COST_CAP_USD: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.coerce.number().positive().max(100).default(0.25)),
   DEV_USER_ID: z.string().default("dev-user"),
   REPLAY_MODE: z.string().optional(),
   RECORD: z.string().optional(),

@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@db/client";
 
 export interface AdminUserRow {
@@ -18,7 +18,8 @@ export interface AdminUserRow {
 /** D7: the one admin table. */
 export function listUsersForAdmin(): AdminUserRow[] {
   const db = getDb();
-  const users = db.select().from(schema.users).orderBy(desc(schema.users.createdAt)).all();
+  // Guests are anonymous visitors, not accounts to manage.
+  const users = db.select().from(schema.users).where(ne(schema.users.role, "guest")).orderBy(desc(schema.users.createdAt)).all();
   const invites = db.select().from(schema.invites).orderBy(desc(schema.invites.createdAt)).all();
   const latestInvite = new Map<string, schema.Invite>();
   for (const inv of invites) if (!latestInvite.has(inv.userId)) latestInvite.set(inv.userId, inv);

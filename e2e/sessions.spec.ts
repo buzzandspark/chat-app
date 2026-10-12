@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHAT_URL, ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, sidebar, waitForChatUrl, waitForComposer } from "./helpers";
+import { ANY_CHAT_URL, ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, sidebar, waitForChatUrl, waitForComposer } from "./helpers";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "admin-password-123";
@@ -73,7 +73,7 @@ test.describe("sessions and errors", () => {
     await page.getByLabel("Email").fill(ADMIN_EMAIL);
     await page.getByLabel("Password").fill(ADMIN_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(CHAT_URL);
+    await expect(page).toHaveURL(ANY_CHAT_URL);
     await waitForComposer(page);
     const before = (await context.cookies()).filter((c) => /session_token/.test(c.name));
     expect(before.length).toBeGreaterThan(0);

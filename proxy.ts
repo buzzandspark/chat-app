@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { uuidv7 } from "@shared/id";
 import { crossSite } from "@server/cross-site";
 
 const SESSION_COOKIES = ["better-auth.session_token", "__Secure-better-auth.session_token"];
 // ADR-0004: cookie-presence redirect only; real validation is `getCurrentUser`.
-// Development and the e2e harness run against the seeded dev user without a cookie.
+// A visitor without a session becomes a guest (/api/guest); the e2e harness runs as the seeded dev user instead.
 export function proxy(request: NextRequest) {
   // better-auth checks the origin of its own endpoints against its trusted origins.
   if (request.nextUrl.pathname.startsWith("/api/")) {
@@ -14,19 +13,17 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
   const hasCookie = SESSION_COOKIES.some((name) => request.cookies.has(name));
-  const bypass = process.env.NODE_ENV !== "production" || process.env.E2E === "1";
-  if (!hasCookie && !bypass) {
+  if (!hasCookie && process.env.E2E !== "1") {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", request.nextUrl.pathname);
+    url.pathname = "/api/guest";
+    url.search = "";
+    url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
-  // `/c/new` is an alias, not a page: a new chat is an id with no rows yet, chosen by the client, so
-  // no "new" view is ever mounted and kept alive by the router (ADR-0005). In-app affordances
-  // navigate straight to `/c/<uuid>`; this covers bookmarks and external links.
+  // `/c/new` (old bookmarks and links) is now plain /c, where a new chat lives until its first send.
   if (request.nextUrl.pathname === "/c/new") {
     const url = request.nextUrl.clone();
-    url.pathname = `/c/${uuidv7()}`;
+    url.pathname = "/c";
     return NextResponse.redirect(url, 307);
   }
   // ADR-0004: validation happens in the layout; it needs the path to send an expired session back here.

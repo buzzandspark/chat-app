@@ -177,10 +177,21 @@ describe("0002_drop_feedback", () => {
     applyMigrations(sqlite, migrationsThrough("0001_explore_options"));
     seed();
     sqlite.prepare("INSERT INTO feedback (id, user_id, chat_id, body, created_at) VALUES (?, ?, ?, ?, ?)").run("f1", "u1", "c1", "slow", Date.now());
-    applyMigrations(sqlite);
+    applyMigrations(sqlite, migrationsThrough("0002_drop_feedback"));
     expect(journalRows()).toBe(3);
     expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'feedback'").get()).toBeUndefined();
     expect(sqlite.prepare("SELECT count(*) FROM chats").pluck().get()).toBe(1);
     expect(sqlite.prepare("SELECT count(*) FROM messages").pluck().get()).toBe(1);
+  });
+});
+
+describe("0003_guests", () => {
+  it("adds is_anonymous, false for every existing user", () => {
+    applyMigrations(sqlite, migrationsThrough("0002_drop_feedback"));
+    seed();
+    applyMigrations(sqlite);
+    expect(journalRows()).toBe(4);
+    expect(sqlite.prepare("SELECT is_anonymous FROM users").pluck().all()).toEqual(expect.arrayContaining([0]));
+    expect(sqlite.prepare("SELECT count(*) FROM users WHERE is_anonymous = 1").pluck().get()).toBe(0);
   });
 });

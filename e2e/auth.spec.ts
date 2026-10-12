@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { CHAT_URL } from "./helpers";
+import { ANY_CHAT_URL } from "./helpers";
 
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "admin-password-123";
@@ -14,7 +14,7 @@ async function submitLogin(page: Page, email: string, password: string): Promise
 /** Signs in and waits for the session to take effect before navigating elsewhere. */
 async function login(page: Page, email: string, password: string): Promise<void> {
   await submitLogin(page, email, password);
-  await expect(page).toHaveURL(CHAT_URL);
+  await expect(page).toHaveURL(ANY_CHAT_URL);
 }
 
 async function createInvitee(page: Page): Promise<{ email: string; inviteUrl: string }> {
@@ -36,14 +36,14 @@ async function freshPage(browser: Browser): Promise<Page> {
 test.describe("accounts", () => {
   test("admin signs in, creates a user; the invite signs in once and is rejected the second time", async ({ page, browser }) => {
     await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-    await expect(page).toHaveURL(CHAT_URL);
+    await expect(page).toHaveURL(ANY_CHAT_URL);
     const { email, inviteUrl } = await createInvitee(page);
 
     const invitee = await freshPage(browser);
     await invitee.goto(inviteUrl);
     await invitee.getByLabel("New password").fill("a-strong-password-1");
     await invitee.getByRole("button", { name: "Set password and sign in" }).click();
-    await expect(invitee).toHaveURL(CHAT_URL);
+    await expect(invitee).toHaveURL(ANY_CHAT_URL);
     await expect(invitee.getByText(email)).toBeVisible();
 
     const second = await freshPage(browser);
@@ -58,7 +58,7 @@ test.describe("accounts", () => {
     await invitee.goto(inviteUrl);
     await invitee.getByLabel("New password").fill("a-strong-password-2");
     await invitee.getByRole("button", { name: "Set password and sign in" }).click();
-    await expect(invitee).toHaveURL(CHAT_URL);
+    await expect(invitee).toHaveURL(ANY_CHAT_URL);
 
     const card = page.getByTestId(`user-${email}`);
     await card.getByRole("button", { name: "Disable" }).click();

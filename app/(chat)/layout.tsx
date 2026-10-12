@@ -6,6 +6,8 @@ import { ChatShell } from "@client/components/shell/chat-shell";
 import { SettingsDefaults } from "@client/components/shell/settings-defaults";
 import { ShellUserProvider } from "@client/components/shell/shell-user";
 import { SidebarList, SidebarListSkeleton } from "@client/components/shell/sidebar-list";
+import { SignInButton } from "@client/components/shell/sign-in-button";
+import { SignOutButton } from "@client/components/shell/sign-out-button";
 import { listChats } from "@server/chats";
 import { getCurrentUser } from "@server/current-user";
 import { getUserSettings } from "@server/settings";
@@ -19,7 +21,7 @@ const currentUser = cache(async () => {
   const user = await getCurrentUser();
   if (!user) {
     // The cookie got past the proxy but the session is expired, purged or banned: sign in again, then come back.
-    const path = (await headers()).get("x-pathname") ?? "/c/new";
+    const path = (await headers()).get("x-pathname") ?? "/c";
     redirect(`/login?next=${encodeURIComponent(path)}`);
   }
   return user;
@@ -38,6 +40,11 @@ export default function ChatLayout({ children }: LayoutProps<"/">) {
           <UserLabel />
         </Suspense>
       }
+      account={
+        <Suspense fallback={null}>
+          <Account />
+        </Suspense>
+      }
     >
       <Suspense fallback={<ChatViewSkeleton />}>
         <WithUser>{children}</WithUser>
@@ -53,13 +60,18 @@ async function SidebarListData() {
 
 async function UserLabel() {
   const user = await currentUser();
-  return <>{user.email}</>;
+  return <>{user.role === "guest" ? "Guest" : user.email}</>;
+}
+
+async function Account() {
+  const user = await currentUser();
+  return user.role === "guest" ? <SignInButton /> : <SignOutButton />;
 }
 
 async function WithUser({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   return (
-    <ShellUserProvider userId={user.id} scenarioPanel exploreOptions={getUserSettings(user.id).exploreOptions}>
+    <ShellUserProvider userId={user.id} guest={user.role === "guest"} scenarioPanel exploreOptions={getUserSettings(user.id).exploreOptions}>
       <SettingsDefaults />
       {children}
     </ShellUserProvider>

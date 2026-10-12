@@ -23,3 +23,7 @@ Switching chats took a full server round trip (about 650 ms in development and o
 ## Consequences
 
 The server seed still streams on every navigation (the router fetches the route's dynamic hole), but the view never waits for it: for a loaded or prefetched chat it is a no-op reconcile. The page-level Suspense fallback is only ever seen on a hard load before the view's own chunk streams, and it mirrors the real layout class for class.
+
+## Amendment (2026-10-12): a new chat at /c
+
+A new chat now lives at `/c` until its first send. `/c` is a page that renders the same view with a client-chosen id: in-app New chat pushes `/c?n=<id>` (so each New chat gets a view of its own, since the router keys views by address) and the view drops `n` from the address on mount; a cold load of `/c` picks a fresh id. The first send rewrites the address to `/c/<id>` with `history.replaceState`, so nothing remounts (the phone keyboard stays up). A new chat's draft is kept under the key `new` until that send. `/c/new` and `/` redirect to `/c`.

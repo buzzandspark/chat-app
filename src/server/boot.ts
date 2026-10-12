@@ -7,6 +7,7 @@ import { seedDevUser } from "@db/seed";
 import { seedAdmin } from "@auth/admin-seed";
 import { settleOrphan } from "@relay/orphans";
 import { redactInviteTokens } from "@shared/redact";
+import { startGuestPurge } from "./guests";
 import { installSignalHandlers, onShutdown } from "./shutdown";
 
 const g = globalThis as unknown as { __chatBooted?: boolean };
@@ -31,6 +32,7 @@ export async function boot(): Promise<void> {
   if (!env.isProd || env.e2e) seedDevUser(env.DEV_USER_ID);
   await seedAdmin(env.ADMIN_EMAIL, env.ADMIN_PASSWORD);
   backstopInterruptedGenerations();
+  startGuestPurge();
   installSignalHandlers();
   onShutdown(() => closeDatabase(), "close");
   if (env.SENTRY_DSN) {

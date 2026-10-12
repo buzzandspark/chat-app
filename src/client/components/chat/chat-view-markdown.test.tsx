@@ -6,7 +6,7 @@ const CHAT = "0199a000-0000-7000-8000-000000000001";
 
 // The Markdown chunk (#83) is ready.ts's lazy import: each test decides how it loads.
 const chunk = { load: (): Promise<unknown> => new Promise(() => {}) };
-vi.mock("next/navigation", () => ({ useParams: () => ({ id: CHAT }), useRouter: () => ({ push: () => {}, prefetch: () => {}, refresh: () => {} }) }));
+vi.mock("next/navigation", () => ({ useParams: () => ({ id: CHAT }), useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push: () => {}, prefetch: () => {}, refresh: () => {} }) }));
 vi.mock("@client/hooks/use-new-chat", () => ({ useNewChat: () => () => {} }));
 vi.mock("@client/transport/generation-client", () => ({ getGenerationClient: () => ({ send: () => {}, attach: () => {} }) }));
 vi.mock("./composer", () => ({ Composer: () => null }));
@@ -60,7 +60,7 @@ async function mount(prepare: (store: import("@client/store/chat-store").ChatSto
   render(
     <ChatStoreProvider>
       <ModalProvider>
-        <ShellUserProvider userId="u1" scenarioPanel={false} exploreOptions={false}>
+        <ShellUserProvider userId="u1" guest={false} scenarioPanel={false} exploreOptions={false}>
           <ChatView>
             <Seed />
           </ChatView>

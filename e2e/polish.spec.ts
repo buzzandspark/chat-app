@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHAT_URL, assistantText, ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText, sidebar, waitForChatUrl } from "./helpers";
+import { assistantText, ensureSidebarOpen, lastAssistant, openNewChat, runScenario, sendText, sidebar, waitForChatUrl, NEW_CHAT_URL } from "./helpers";
 
 test.describe("edit, regenerate, drafts", () => {
   test("editing the last message replaces it and regenerates", async ({ page }) => {
@@ -117,7 +117,7 @@ test.describe("chat management", () => {
     await expect(page.getByRole("dialog").getByRole("button", { name: "Delete" })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page).not.toHaveURL(firstUrl);
-    await expect(page).toHaveURL(CHAT_URL);
+    await expect(page).toHaveURL(NEW_CHAT_URL);
   });
 });
 

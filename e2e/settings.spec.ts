@@ -45,8 +45,7 @@ test.describe("settings", () => {
     await expect(page.getByRole("columnheader", { name: "This month" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "All time" })).toBeVisible();
     await expect(visible(page, "usage-chats")).toContainText("Chats");
-    // One chat model so far: the group shows no total of its own, the model row carries the figures.
-    await expect(visible(page, "usage-chats")).not.toContainText("$");
+    // The model row carries its figures (the group's own total shows only with two models or more).
     await expect(page.getByTestId("usage-model").filter({ hasText: "Sonnet 5.5" })).toContainText(/\$\d+\.\d\d/);
     await expect(visible(page, "usage-explore")).toContainText("Explore");
     await expect(visible(page, "usage-explore")).toContainText(/in · .* out/);

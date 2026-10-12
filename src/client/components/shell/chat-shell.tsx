@@ -26,6 +26,7 @@ interface ChatShellProps {
   /** The chat list and the user label are server slots: the chrome around them is static (#20). */
   sidebarList: ReactNode;
   userLabel: ReactNode;
+  account: ReactNode;
   children: ReactNode;
 }
 
@@ -43,7 +44,7 @@ export function ChatShell(props: ChatShellProps) {
   );
 }
 
-function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
+function ChatShellInner({ sidebarList, userLabel, account, children }: ChatShellProps) {
   // Null until the viewport is known (server, hydration render); everything but the sidebar's
   // modality treats that as the phone base, as useIsDesktop does.
   const desktopOrNull = useIsDesktopOrNull();
@@ -158,6 +159,7 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
         onNavigate={onSidebarNavigate}
         onSearch={openSearch}
         userLabel={userLabel}
+        account={account}
         toggleRef={sidebarToggleRef}
         asideRef={asideRef}
       />
@@ -219,9 +221,11 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
     pendingSummary?.title ??
     (currentChatId
       ? (currentSummary?.title ?? openChat.title ?? (openChat.seeded && openChat.messageIds.length === 0 ? "New chat" : ""))
-      : pathname === "/settings"
-        ? "Settings"
-        : "");
+      : pathname === "/c"
+        ? "New chat"
+        : pathname === "/settings"
+          ? "Settings"
+          : "");
   // Clicking the title turns it into an input in place; another chat ends the edit, including one whose
   // input was still loading when the chat changed.
   const [editingId, setEditingId] = useState<string | null>(null);

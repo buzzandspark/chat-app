@@ -4,9 +4,9 @@ import { useCallback } from "react";
 import { useChatStore } from "@client/store/context";
 import { uuidv7 } from "@shared/id";
 
-/** A new chat is a fresh id with no rows; the engine creates the row on the first send (ADR-0005). */
+/** A new chat lives at /c until its first send; the engine creates the row then (ADR-0005). */
 export function newChatHref(): string {
-  return `/c/${uuidv7()}`;
+  return "/c";
 }
 
 export function useNewChat(): () => void {
@@ -15,6 +15,7 @@ export function useNewChat(): () => void {
   return useCallback(() => {
     const id = uuidv7();
     store.createChat(id);
-    router.push(`/c/${id}`);
+    // `n` gives each New chat a view of its own (the router keeps views per address); /c drops it on mount.
+    router.push(`/c?n=${id}`);
   }, [router, store]);
 }

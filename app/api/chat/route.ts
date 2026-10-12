@@ -5,7 +5,7 @@ import { getDb, schema } from "@db/client";
 import { DrainingError, ForbiddenError } from "@relay/engine";
 import { QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
-import { MODEL_IDS } from "@shared/models";
+import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
@@ -32,6 +32,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request", issues: parsed.error.issues });
     const body = parsed.data;
+    // A guest runs Haiku only; the other models need an account.
+    if (user.role === "guest" && body.model !== GUEST_MODEL) return jsonError(403, { error: "guest_model" });
     const { engine, store } = getRelay();
     // A duplicate POST for an id that already exists goes straight to start's `exists` and the attach
     // below (D2): the drain gates new work only, so an owner reconnecting while the reply is still

@@ -4,6 +4,8 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- Guests: a visitor without a session is a guest instead of being sent to sign in. Guests chat on Haiku only (the other models show greyed out, and the server refuses them), under a $0.25 cap (`GUEST_COST_CAP_USD`) with Explore on; new guests are limited per address. The sidebar footer's Sign out slot is Sign in for a guest, and signing in moves the guest's chats into the account. Idle guests are purged after 30 days. Migration 0003 adds `users.is_anonymous`. The sign-in page offers "Continue as a guest". ADR-0004 amended.
+- A new chat sits at `/c` until its first send, which rewrites the address to `/c/<id>` in place (nothing remounts). `/`, `/c/new` and the installed app open `/c`. ADR-0005 amended.
 - The app has no name of its own: the old name is gone everywhere (titles, the manifest, the sidebar, the sign-in and invite pages, the system prompt, storage keys, identifiers and docs); where a name is needed it is "Chat". The landing page is gone too: `/` opens a new chat (sign-in first), and the installed app starts there. The composer's placeholder reads "Send a message". Saved themes, drafts and model choices start fresh because their storage keys changed.
 - Switching the theme recolours everything in the same frame: buttons and rows with a colour transition (the sidebar buttons, the open chat's row, Send) used to ease into the new theme about 150 ms behind the rest of the page.
 - Settings usage: a group with a single model shows no total of its own, since the model row would only repeat it.

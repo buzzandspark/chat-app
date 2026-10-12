@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useBackGesture } from "@client/hooks/use-back-gesture";
 import { useIsDesktop } from "@client/hooks/use-media-query";
-import { MODEL_IDS, MODELS, type ModelId } from "@shared/models";
+import { MODEL_IDS, MODELS, type ModelId, GUEST_MODEL } from "@shared/models";
 import type { ThinkingOptions } from "@shared/types";
 
 // Shown only in the picker, so the main chunk carries names, not copy (D21).
@@ -23,6 +23,8 @@ const THINKING_LABEL = "Think harder";
 
 // Menu items are divs, so cursor-pointer/select-none give them the feel of the buttons the sheet uses.
 const ROW = "flex min-h-12 w-full cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50";
+// A model a guest can't use: greyed out and inert (Radix marks a disabled item data-disabled).
+const LOCKED = "data-disabled:cursor-not-allowed data-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50";
 const rowTone = (selected: boolean) => (selected ? "bg-accent text-accent-foreground" : "hover:bg-muted active:bg-muted");
 
 function RowText({ title, blurb }: { title: string; blurb: string }) {
@@ -41,7 +43,7 @@ const STEPS: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1
 function onRadioKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
   const group = e.currentTarget.closest('[role="radiogroup"]');
   if (!group) return;
-  const radios = Array.from(group.querySelectorAll<HTMLElement>('[role="radio"]'));
+  const radios = Array.from(group.querySelectorAll<HTMLElement>('[role="radio"]:not(:disabled)'));
   const at = radios.indexOf(e.currentTarget);
   const step = STEPS[e.key];
   const next = step !== undefined ? radios[(at + step + radios.length) % radios.length] : e.key === "Home" ? radios[0] : e.key === "End" ? radios.at(-1) : undefined;
@@ -58,10 +60,14 @@ interface ModelPickerProps {
   defaultOpen?: boolean;
   /** Called instead of returning focus to the trigger when the menu closes because a model was picked. */
   onPicked?: () => void;
+  /** A guest: only Haiku can be picked; the other models show greyed out, with a note to sign in. */
+  guest?: boolean;
 }
 
 /** One picker (D0): a bottom sheet on phones, a menu at `md`. */
-export function ModelPicker({ model, thinking, onChange, defaultOpen = false, onPicked }: ModelPickerProps) {
+export function ModelPicker({ model, thinking, onChange, defaultOpen = false, onPicked, guest = false }: ModelPickerProps) {
+  const locked = (id: ModelId) => guest && id !== GUEST_MODEL;
+  const blurb = (id: ModelId) => (locked(id) ? "Sign in to use this model" : MODEL_BLURBS[id]);
   const desktop = useIsDesktop();
   const [open, setOpen] = useState(defaultOpen);
   const picked = useRef(false);
@@ -97,11 +103,17 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
         >
           <MenuPrimitive.RadioGroup value={model} className="flex flex-col gap-1">
             {MODEL_IDS.map((id) => (
-              <MenuPrimitive.RadioItem key={id} value={id} onSelect={() => {
+              <MenuPrimitive.RadioItem
+                key={id}
+                value={id}
+                disabled={locked(id)}
+                onSelect={() => {
                   picked.current = true;
                   onChange({ model: id });
-                }} className={cn(ROW, rowTone(id === model))}>
-                <RowText title={MODELS[id].name} blurb={MODEL_BLURBS[id]} />
+                }}
+                className={cn(ROW, rowTone(id === model), LOCKED)}
+              >
+                <RowText title={MODELS[id].name} blurb={blurb(id)} />
                 {id === model ? <Check className="size-4 shrink-0" /> : null}
               </MenuPrimitive.RadioItem>
             ))}
@@ -140,14 +152,15 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
                   role="radio"
                   aria-checked={selected}
                   tabIndex={selected ? 0 : -1}
+                  disabled={locked(id)}
                   onKeyDown={onRadioKeyDown}
                   onClick={() => {
                     onChange({ model: id });
                     setOpen(false);
                   }}
-                  className={cn(ROW, rowTone(selected))}
+                  className={cn(ROW, rowTone(selected), LOCKED)}
                 >
-                  <RowText title={MODELS[id].name} blurb={MODEL_BLURBS[id]} />
+                  <RowText title={MODELS[id].name} blurb={blurb(id)} />
                   {selected ? <Check className="size-4 shrink-0" /> : null}
                 </button>
               );

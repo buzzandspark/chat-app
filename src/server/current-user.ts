@@ -15,8 +15,8 @@ export interface CurrentUser {
   name: string;
 }
 
-// ADR-0004: validated through better-auth once per request. Without a session, development
-// and the e2e harness fall back to the seeded dev user; production never does.
+// ADR-0004: validated through better-auth once per request. Without a session only the e2e harness
+// falls back to the seeded dev user; everyone else is sent to become a guest first (proxy.ts).
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   // better-sqlite3 is synchronous, so only `connection()` tells the prerenderer this is request
   // time; it keeps the database out of the build and the shell static (D21).
@@ -26,11 +26,11 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (session?.user) {
     const u = session.user as { id: string; email: string; name: string; role?: string | null; banned?: boolean | null };
     if (u.banned) return null;
-    const role: UserRole = u.role === "admin" ? "admin" : "user";
+    const role: UserRole = u.role === "admin" ? "admin" : u.role === "guest" ? "guest" : "user";
     touchLastActive(u.id);
     return { id: u.id, role, email: u.email, name: u.name };
   }
-  if (env.isProd && !env.e2e) return null;
+  if (!env.e2e) return null;
   // A cookie that no longer matches a session is an expired or revoked sign-in, not an anonymous
   // visit: the development and harness fallback applies only when there is no session cookie at all.
   if (reqHeaders.get("cookie")?.includes(SESSION_COOKIE)) return null;

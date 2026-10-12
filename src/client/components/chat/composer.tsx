@@ -18,6 +18,7 @@ import { chunk } from "../ui/lazy-chunk";
 import { useModals } from "../ui/modal-manager";
 import { IconButton } from "../ui/icon-button";
 import { ExploreOptionsIsland, UNDER_INPUT_WITH_TABS } from "./explore-options";
+import { useShellUser } from "../shell/shell-user";
 
 // D21: the panel's chunk (a Radix dialog) loads on intent.
 function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" | "children">) {
@@ -97,7 +98,7 @@ function PickerStandIn({
 }
 const loadModelPicker = chunk(() => import("./model-picker").then((m) => m.ModelPicker));
 
-function ModelPickerOnIntent({ known, ...props }: { model: ModelId; thinking: ThinkingOptions; known: boolean; onChange: (patch: Partial<ChatSettings>) => void; onPicked: () => void }) {
+function ModelPickerOnIntent({ known, ...props }: { model: ModelId; thinking: ThinkingOptions; known: boolean; onChange: (patch: Partial<ChatSettings>) => void; onPicked: () => void; guest: boolean }) {
   const intent = useIntent(loadModelPicker);
   if (intent.failed) throw intent.failed.error;
   if (!known) return <PickerStandIn model={props.model} thinking={props.thinking} known={false} />;
@@ -113,12 +114,14 @@ export interface ComposerHandle {
 }
 
 /** D19/D18: sticky above the keyboard, 16 px text so iOS never zooms; Enter sends only with hover + md. */
-export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function Composer({ chatId }, ref) {
+// `draftId`: the draft's key, the chat id except in a new chat at /c, whose draft is "new" until the first send.
+export const Composer = forwardRef<ComposerHandle, { chatId: string; draftId: string }>(function Composer({ chatId, draftId }, ref) {
   const { send, settings, setSettings, client, userId, editing, cancelEdit, editMessage, scenarioPanel } = useChatContext();
   const store = useChatStore();
   const chat = useChat(chatId);
   const settingsKnown = useChatSettingsKnown(chatId);
-  const key = draftKey(userId, chatId);
+  const { guest } = useShellUser();
+  const key = draftKey(userId, draftId);
   // The draft is empty in the server render and hydration (useDraft): read during hydration it would enable
   // Send in React while the server-rendered button stays disabled in the DOM (hydration never patches
   // attributes). D10/D18: an edit has text of its own, so the unsent draft is left as it is meanwhile.
@@ -266,7 +269,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
                 </span>
               ) : null}
               <ChunkBoundary label="model picker">
-                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} known={settingsKnown} onChange={(patch) => setSettings(patch)} onPicked={() => textareaRef.current?.focus()} />
+                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} known={settingsKnown} onChange={(patch) => setSettings(patch)} onPicked={() => textareaRef.current?.focus()} guest={guest} />
               </ChunkBoundary>
               {scenarioPanel ? (
                 <ChunkBoundary label="scenario panel">

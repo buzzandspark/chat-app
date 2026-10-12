@@ -39,6 +39,8 @@ export const users = sqliteTable(
     lastActiveAt: timestamp("last_active_at"),
     /** Settings: off skips the Haiku detection after each reply, so no Explore button and no spend. */
     exploreOptions: integer("explore_options", { mode: "boolean" }).notNull().default(true),
+    // better-auth anonymous plugin: a guest until it signs in (its rows then move to that account).
+    isAnonymous: integer("is_anonymous", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [index("users_role_idx").on(t.role), index("users_last_active_idx").on(t.lastActiveAt), index("users_created_idx").on(t.createdAt)],
 );

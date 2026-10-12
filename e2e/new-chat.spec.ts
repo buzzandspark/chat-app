@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CHAT_URL, ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, sidebar, waitForComposer } from "./helpers";
+import { ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, sidebar, waitForComposer, NEW_CHAT_URL } from "./helpers";
 
 // Reproduces the review's critical bug: send in a new chat, click New chat, send again. The second
 // thread went blank, the URL stayed /c/new and the reply streamed where nothing displayed it.
@@ -15,8 +15,8 @@ test.describe("new chat", () => {
 
     await ensureSidebarOpen(page);
     await page.getByRole("link", { name: "New chat" }).click();
-    await expect(page).not.toHaveURL(firstUrl);
-    await expect(page).toHaveURL(CHAT_URL);
+    // A new chat sits at /c until its first send gives it an id.
+    await expect(page).toHaveURL(NEW_CHAT_URL);
     await waitForComposer(page);
     await expect(page.locator("[data-role]:visible")).toHaveCount(0);
     await expect(page.getByTestId("chat-title").locator("visible=true").first()).toHaveText("New chat");
@@ -63,13 +63,13 @@ test.describe("new chat", () => {
 
   test("the root has no landing page: it opens a new chat", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveURL(CHAT_URL);
+    await expect(page).toHaveURL(NEW_CHAT_URL);
     await waitForComposer(page);
   });
 
-  test("/c/new redirects to a fresh chat id that renders an empty, usable view", async ({ page }) => {
+  test("/c/new redirects to /c, an empty, usable new chat", async ({ page }) => {
     await page.goto("/c/new");
-    await expect(page).toHaveURL(CHAT_URL);
+    await expect(page).toHaveURL(NEW_CHAT_URL);
     await waitForComposer(page);
     await expect(page.locator("[data-role]:visible")).toHaveCount(0);
     await expect(page.getByText(/could not be found/i)).toHaveCount(0);
