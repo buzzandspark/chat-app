@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- Explore options also appear for a menu of ideas or suggestions the user could pick from, even when they could do several (a reply offering three random decisions got no button). Tips that together serve one goal still don't count. Checked on 10 replies, 3 runs each: 30/30, against 27/30 before.
 - While Haiku reads the last reply for options, the border above the input pulses lightly (not with reduced motion).
 - Picking a model from the desktop menu puts focus in the message input, ready to type (Escape or a click away still returns it to the picker).
 - The keyboard hint line under the composer is gone; the Search and New chat buttons show their shortcuts (⌘K, ⌘⇧O) in their hover tooltips.

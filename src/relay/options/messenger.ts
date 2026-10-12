@@ -27,9 +27,9 @@ export interface OptionsMessenger {
   rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult>;
 }
 
-const DETECT_SYSTEM = `Decide whether this assistant reply lays out distinct alternatives the user might weigh against each other.
+const DETECT_SYSTEM = `Decide whether this assistant reply lays out distinct alternatives the user might weigh against each other. A menu of ideas or suggestions the user could pick from counts too, even when they could do several of them.
 
-Return none for parts of one whole (steps, tips, features, facts, examples, pros and cons), alternatives mentioned in passing, or questions about the user's situation. When unsure, return none.`;
+Return none for parts of one whole (steps, tips that together serve one goal, features, facts, examples, pros and cons), alternatives mentioned in passing, or questions about the user's situation. When unsure, return none.`;
 
 interface Effort {
   thinking: { type: "adaptive" } | { type: "disabled" };
