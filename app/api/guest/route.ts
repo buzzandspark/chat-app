@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { getAuth } from "@auth/server";
 import { getDb, schema } from "@db/client";
-import { clientIp, getLimiters } from "@server/ratelimit";
+import { clientKeys, getLimiters } from "@server/ratelimit";
 import { isDraining } from "@server/shutdown";
 import { safeNext } from "@shared/safe-next";
 
@@ -43,14 +43,15 @@ async function start(request: Request, mayCreate: boolean): Promise<Response> {
   if (request.headers.has("sec-purpose")) return new Response(null, { status: 503, headers: { "cache-control": "no-store" } });
   const login = `/login?next=${encodeURIComponent(next)}`;
   const limiters = getLimiters();
-  if (!mayCreate || isDraining() || !limiters.guestStart.check(clientIp(request)).ok || !limiters.guestStartAll.check("all").ok) return redirectTo(login);
+  const keys = clientKeys(request);
+  if (!mayCreate || isDraining() || !limiters.guestStart.check(keys.ip).ok || !limiters.guestStartAll.check("all").ok) return redirectTo(login);
   // A stale cookie (an expired or purged session) must not block a fresh guest.
   const fresh = new Headers(reqHeaders);
   fresh.delete("cookie");
   const result = await auth.api.signInAnonymous({ headers: fresh, returnHeaders: true }).catch(() => null);
   const user = result?.response?.user;
   if (!result || !user) return redirectTo(login);
-  getDb().update(schema.users).set({ lastActiveAt: new Date() }).where(eq(schema.users.id, user.id)).run();
+  getDb().update(schema.users).set({ lastActiveAt: new Date(), budgetKeys: keys.budgetKeys }).where(eq(schema.users.id, user.id)).run();
   result.headers.forEach((value, key) => {
     if (key.toLowerCase() === "set-cookie") back.headers.append("set-cookie", value);
   });

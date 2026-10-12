@@ -1,8 +1,10 @@
 // @vitest-environment node
+import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@db/client";
-import { createTestDb } from "@relay/test-utils";
+import { users } from "@db/schema";
+import { createTestDb, seedUser } from "@relay/test-utils";
 import { getLimiters } from "@server/ratelimit";
 import { proxy } from "@/proxy";
 import { GET, POST } from "./route";
@@ -55,6 +57,12 @@ describe("GET /api/guest", () => {
     expect(res.headers.get("location")).toBe("/c/abc");
     expect(res.headers.get("set-cookie")).toContain("better-auth.session_token=t");
     expect(api.signInAnonymous).toHaveBeenCalledOnce();
+  });
+
+  it("charges the new guest's spend to the address it came from", async () => {
+    seedUser(ctx.db!, "guest-1", { role: "guest", isAnonymous: true });
+    await get(PAGE);
+    expect(ctx.db!.select({ keys: users.budgetKeys }).from(users).where(eq(users.id, "guest-1")).get()?.keys).toEqual([`ip:10.0.0.${nextIp}`]);
   });
 
   it("sends anything but a page visit to sign in, creating nothing", async () => {

@@ -41,6 +41,8 @@ export const users = sqliteTable(
     exploreOptions: integer("explore_options", { mode: "boolean" }).notNull().default(true),
     // better-auth anonymous plugin: a guest until it signs in (its rows then move to that account).
     isAnonymous: integer("is_anonymous", { mode: "boolean" }).notNull().default(false),
+    /** A guest's spend budgets (`spend_buckets` keys), from the address that created it; null for everyone else. */
+    budgetKeys: text("budget_keys", { mode: "json" }).$type<string[]>(),
   },
   (t) => [index("users_role_idx").on(t.role), index("users_last_active_idx").on(t.lastActiveAt), index("users_created_idx").on(t.createdAt)],
 );
@@ -233,6 +235,13 @@ export const usageEvents = sqliteTable(
   },
   (t) => [index("usage_user_idx").on(t.userId), index("usage_generation_idx").on(t.generationId)],
 );
+
+/** Guest spend per budget key: the level drains continuously at the key's USD-a-day rate from `updated_at`. */
+export const spendBuckets = sqliteTable("spend_buckets", {
+  key: text("key").primaryKey(),
+  levelUsd: real("level_usd").notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull(),
+});
 
 export type User = typeof users.$inferSelect;
 export type Chat = typeof chats.$inferSelect;

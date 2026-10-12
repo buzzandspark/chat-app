@@ -188,9 +188,22 @@ describe("0003_guests", () => {
   it("adds is_anonymous, false for every existing user", () => {
     applyMigrations(sqlite, migrationsThrough("0002_drop_feedback"));
     seed();
-    applyMigrations(sqlite);
+    applyMigrations(sqlite, migrationsThrough("0003_guests"));
     expect(journalRows()).toBe(4);
     expect(sqlite.prepare("SELECT is_anonymous FROM users").pluck().all()).toEqual(expect.arrayContaining([0]));
     expect(sqlite.prepare("SELECT count(*) FROM users WHERE is_anonymous = 1").pluck().get()).toBe(0);
+  });
+});
+
+describe("0004_spend_buckets", () => {
+  it("adds an empty spend_buckets table and a null budget_keys for every existing user", () => {
+    applyMigrations(sqlite, migrationsThrough("0003_guests"));
+    seed();
+    applyMigrations(sqlite);
+    expect(journalRows()).toBe(5);
+    expect(count("spend_buckets")).toBe(0);
+    expect(sqlite.prepare("SELECT budget_keys FROM users").pluck().all()).toEqual([null]);
+    sqlite.prepare("INSERT INTO spend_buckets (key, level_usd, updated_at) VALUES (?, ?, ?)").run("guests", 0.5, Date.now());
+    expect(() => sqlite.prepare("INSERT INTO spend_buckets (key, updated_at) VALUES (?, ?)").run("guests", Date.now())).toThrow(/UNIQUE/);
   });
 });
