@@ -158,8 +158,8 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
       }
       sidebar.patch(chat.id, { forkedFrom: null, forkOrder: null, tabHidden: false });
       store.setFork(chat.id, { from: null, position: null });
-      // Haiku reads the winner's last reply now; waiting for it here means the chat opens with its button.
-      if (winner.lastMessageId) await watchOptions(store, winner.lastMessageId);
+      // Haiku reads the winner's last reply now; its Explore button pops up when the count arrives, as after any reply.
+      if (winner.lastMessageId) void watchOptions(store, winner.lastMessageId);
       const leaving = currentChatId !== null && winner.deleted.includes(currentChatId);
       if (leaving) markNavigationClose();
       onOpenChange(false);
