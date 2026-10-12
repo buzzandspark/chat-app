@@ -6,12 +6,14 @@ import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
+import { revealSearchHit } from "../chat/search-reveal";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface Hit {
   chatId: string;
   title: string;
   snippet: string | null;
+  messageId: string | null;
   updatedAt: number;
 }
 
@@ -72,9 +74,13 @@ export function SearchDialog({
   };
   const visibleHits = active && !searching ? hits : [];
   const activeIndex = visibleHits.length === 0 ? -1 : Math.min(cursor, visibleHits.length - 1);
-  const pick = (hit: Hit) => {
+  const opened = (hit: Hit) => {
+    if (hit.messageId) revealSearchHit({ chatId: hit.chatId, messageId: hit.messageId, query: query.trim() });
     markNavigationClose();
     changeOpen(false);
+  };
+  const pick = (hit: Hit) => {
+    opened(hit);
     router.push(`/c/${hit.chatId}`);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -125,10 +131,7 @@ export function SearchDialog({
           <li key={h.chatId} id={`search-hit-${i}`} role="option" aria-selected={i === activeIndex}>
             <Link
               href={`/c/${h.chatId}`}
-              onClick={() => {
-                markNavigationClose();
-                changeOpen(false);
-              }}
+              onClick={() => opened(h)}
               className={`flex min-h-11 flex-col justify-center rounded-lg px-3 py-2 hover:bg-muted active:bg-muted${i === activeIndex ? " bg-muted" : ""}`}
             >
               <span className="truncate text-body font-medium">{h.title}</span>

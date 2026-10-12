@@ -302,6 +302,12 @@
   }
 }
 
+/* Search's matched words in the opened chat (search-reveal.ts). */
+::highlight(search-hit) {
+  background-color: color-mix(in oklch, oklch(0.85 0.17 90) 70%, transparent);
+  color: inherit;
+}
+
 /* A sidebar row's full title, to the right of the sidebar (row-tip.ts). */
 .row-tip {
   position: fixed;

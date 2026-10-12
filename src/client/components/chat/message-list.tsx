@@ -9,6 +9,7 @@ import { loadEarlierMessages } from "@client/store/prefetch";
 import { setPendingChat } from "@client/store/sidebar-store";
 import { useChatActions } from "./chat-context";
 import { MessageRow } from "./message-row";
+import { clearSearchHit, onSearchHit, searchHitFor } from "./search-reveal";
 
 /** A message waiting for the streaming reply to end: shown where it will land, editable, removable. */
 function QueuedRow({ item }: { item: QueuedMessage }) {
@@ -129,6 +130,24 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
     // keeps a following thread pinned to the end as content grows, and as the viewport shrinks (the Android
     // keyboard); with per-frame store flushes it fires at most once per frame.
     const scrolledForRef = useRef<string | null>(null);
+    // A search hit in this chat: once its row is here (after loading the rest of a long chat), it is shown
+    // instead of the end. Tried on attach, as rows land, and when a search picks this chat while it is open.
+    const revealLoadingRef = useRef(false);
+    const tryReveal = useCallback(() => {
+      const el = scrollRef.current;
+      const hit = searchHitFor(chatId);
+      if (!el || !hit || store.getChat(chatId).messageIds.length === 0) return;
+      const row = el.querySelector(`[data-message-id="${CSS.escape(hit.messageId)}"]`);
+      if (row) {
+        clearSearchHit();
+        setEngaged(false);
+        void import("./search-match").then(({ showMatch }) => showMatch(el, row, hit.query));
+      } else if (store.getChat(chatId).older > 0) {
+        if (revealLoadingRef.current) return;
+        revealLoadingRef.current = true;
+        void loadEarlierMessages(store, chatId).finally(() => (revealLoadingRef.current = false));
+      } else clearSearchHit();
+    }, [chatId, store, setEngaged]);
     const attachScroller = useCallback(
       (el: HTMLDivElement | null) => {
         scrollRef.current = el;
@@ -139,18 +158,22 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
           el.scrollTop = el.scrollHeight;
           lastTopRef.current = el.scrollTop;
         }
+        tryReveal();
         const ro = new ResizeObserver(() => {
           if (holdRef.current !== null) el.scrollTop = el.scrollHeight - holdRef.current;
           else if (engagedRef.current) el.scrollTop = el.scrollHeight;
+          if (searchHitFor(chatId)) tryReveal();
         });
         ro.observe(inner);
         ro.observe(el);
+        const off = onSearchHit(tryReveal);
         return () => {
           ro.disconnect();
+          off();
           scrollRef.current = null;
         };
       },
-      [chatId],
+      [chatId, tryReveal],
     );
 
     const onScroll = useCallback(() => {
