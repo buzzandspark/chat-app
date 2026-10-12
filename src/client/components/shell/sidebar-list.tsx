@@ -13,6 +13,7 @@ import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
 import { chunk } from "../ui/lazy-chunk";
 import { loadDialogs } from "./load-dialogs";
+import { hideRowTip, showRowTip } from "./row-tip";
 import { useModals, type ModalApi } from "../ui/modal-manager";
 import type { ChatItemMenu as ChatItemMenuComponent } from "./chat-item-menu";
 
@@ -125,15 +126,20 @@ const SidebarRow = memo(function SidebarRow({
           onClick={onNavigate}
           onNavigate={() => setPendingChat(chat.id === currentChatId ? null : chat.id)}
           onTouchStart={() => warm(chat.id)}
-          onPointerEnter={() => warm(chat.id)}
-          onFocus={() => warm(chat.id)}
+          onPointerEnter={(e) => {
+            warm(chat.id);
+            if (e.pointerType === "mouse") showRowTip(e.currentTarget, chat.title);
+          }}
+          onPointerLeave={hideRowTip}
+          onPointerDown={hideRowTip}
+          onFocus={(e) => {
+            warm(chat.id);
+            if (e.currentTarget.matches(":focus-visible")) showRowTip(e.currentTarget, chat.title);
+          }}
+          onBlur={hideRowTip}
           aria-current={active ? "page" : undefined}
           aria-label={forked ? `Forked: ${chat.title}` : undefined}
-          // The full title, which the row truncates; it wraps within the row rather than running past the sidebar.
-          data-tip={chat.title}
-          data-tip-align="start"
-          data-tip-wrap
-          className={cn("tip flex min-h-11 min-w-0 flex-1 items-center rounded-lg text-small", nested ? "pl-2" : "pl-3", active && "font-medium")}
+          className={cn("flex min-h-11 min-w-0 flex-1 items-center rounded-lg text-small", nested ? "pl-2" : "pl-3", active && "font-medium")}
         >
           {forked ? <GitFork aria-hidden className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" /> : null}
           <span className="truncate">{chat.title}</span>
