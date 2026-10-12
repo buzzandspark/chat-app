@@ -227,7 +227,7 @@ export class Engine {
         input.userId,
         input.generationId,
         input.model,
-        QuotaManager.estimateInputTokens(this.chatChars(input.chatId) + (userRowExists ? 0 : chatText.length)),
+        QuotaManager.estimateInputTokens(this.promptChars(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : chatText.length)),
       );
     }
 
@@ -564,6 +564,7 @@ export class Engine {
           }
           if (body.type === "error") return body.error;
           this.append(active, body);
+          if (body.type === "message_start" && active.billable) this.quota.started(active.id, body.model, body);
           // Metered as it streams; at the cap every running reply of the user stops.
           if ((body.type === "text_delta" || body.type === "thinking_delta") && active.billable && this.quota.meter(active.id, body.text.length)) {
             this.stopAtCap(active.userId);
@@ -877,14 +878,19 @@ export class Engine {
     return rows.filter((r) => r.position < cutoff).map((r) => ({ role: r.role, content: r.content, status: r.status }));
   }
 
-  private chatChars(chatId: string): number {
+  /** The text and thinking the request will carry: rows a replace is about to drop do not count. */
+  private promptChars(chatId: string, replaceFromMessageId: string | undefined): number {
     const rows = this.db
-      .select({ content: messages.content })
+      .select({ id: messages.id, position: messages.position, content: messages.content })
       .from(messages)
       .where(eq(messages.chatId, chatId))
       .all();
+    const cutoff = rows.find((r) => r.id === replaceFromMessageId)?.position ?? Number.MAX_SAFE_INTEGER;
     let n = 0;
-    for (const r of rows) for (const b of r.content) if (b.type === "text") n += b.text.length;
+    for (const r of rows) {
+      if (r.position >= cutoff) continue;
+      for (const b of r.content) n += b.type === "text" ? b.text.length : b.type === "thinking" ? b.thinking.length : 0;
+    }
     return n;
   }
 }

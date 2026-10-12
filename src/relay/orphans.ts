@@ -4,6 +4,7 @@ import { generations, messages, usageEvents, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import { costOf } from "./anthropic/pricing";
 import { isBillableProvider } from "./providers/types";
+import { CHARS_PER_TOKEN } from "./quota";
 
 export interface OrphanRow {
   id: string;
@@ -16,7 +17,7 @@ export interface OrphanRow {
 }
 
 /**
- * Marks a generation whose process died as interrupted and settles a cost estimated from its saved text at 4 chars/token,
+ * Marks a generation whose process died as interrupted and settles a cost estimated from its saved text at CHARS_PER_TOKEN,
  * thinking counted as output. A non-billable run gets its usage row at cost zero and never touches spend, so a restart mid-scenario cannot eat a cap.
  */
 export function settleOrphan(tx: Db, row: OrphanRow, now: Date): number {
@@ -39,7 +40,7 @@ export function settleOrphan(tx: Db, row: OrphanRow, now: Date): number {
     }
   }
   const model = servingModel ?? row.requestedModel;
-  const tokens = { inputTokens: Math.ceil(inputChars / 4), outputTokens: Math.ceil(outputChars / 4), cacheReadTokens: 0, cacheWriteTokens: 0 };
+  const tokens = { inputTokens: Math.ceil(inputChars / CHARS_PER_TOKEN), outputTokens: Math.ceil(outputChars / CHARS_PER_TOKEN), cacheReadTokens: 0, cacheWriteTokens: 0 };
   const costUsd = isBillableProvider(row.provider) ? costOf(model, tokens) : 0;
   tx.insert(usageEvents)
     .values({ id: uuidv7(), generationId: row.id, userId: row.userId, model, iterationType: "message", ...tokens, costUsd, estimated: true, createdAt: now })

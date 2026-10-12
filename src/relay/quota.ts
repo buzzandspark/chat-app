@@ -1,7 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { users } from "@db/schema";
-import { ratesFor } from "./anthropic/pricing";
+import { costOf, ratesFor, type TokenCounts } from "./anthropic/pricing";
+
+/** Characters per token as measured on real prompts and replies, code and thinking included. */
+export const CHARS_PER_TOKEN = 2.5;
 
 export class QuotaExceededError extends Error {
   constructor(
@@ -21,8 +24,8 @@ interface Meter {
   chars: number;
 }
 
-// A reply starts while its estimated input fits under the cap and is metered as it streams (output at chars / 4); once spend
-// plus the user's live meters reach the cap, all their replies stop. Settled cost replaces the meter, so the cap can overshoot by about one delta per stream.
+// A reply starts while its estimated input fits under the cap; message_start swaps in the exact input cost and output is metered as it streams.
+// Once spend plus the user's live meters reach the cap, all their replies stop. Settled cost replaces the meter, so the cap can overshoot by about one delta per stream.
 export class QuotaManager {
   private meters = new Map<string, Meter>();
   constructor(private db: Db) {}
@@ -34,7 +37,7 @@ export class QuotaManager {
   private liveUsd(userId: string): number {
     let usd = 0;
     for (const m of this.meters.values()) {
-      if (m.userId === userId) usd += m.inputUsd + (Math.ceil(m.chars / 4) * m.outputRate) / 1_000_000;
+      if (m.userId === userId) usd += m.inputUsd + (Math.ceil(m.chars / CHARS_PER_TOKEN) * m.outputRate) / 1_000_000;
     }
     return usd;
   }
@@ -47,6 +50,14 @@ export class QuotaManager {
     // Atomic in a single-threaded process: the sum and the insert happen in one tick.
     if (user.spent + this.liveUsd(userId) + inputUsd > user.cap) throw new QuotaExceededError(user.spent, user.cap);
     this.meters.set(generationId, { userId, inputUsd, outputRate: rates.output, chars: 0 });
+  }
+
+  /** The prompt as message_start billed it, cache writes and the long-context tier included. */
+  started(generationId: string, model: string, usage: Omit<TokenCounts, "outputTokens">): void {
+    const m = this.meters.get(generationId);
+    if (!m) return;
+    m.inputUsd = costOf(model, { ...usage, outputTokens: 0 });
+    m.outputRate = ratesFor(model, usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens).output;
   }
 
   /** Counts streamed text (reply or thinking); true once the user's spend and live replies reach the cap. */
@@ -77,9 +88,9 @@ export class QuotaManager {
       .run();
   }
 
-  /** Rough reservation input: chars / 4 is a safe over-estimate for English prose. */
+  /** For admission only: message_start replaces it with the billed count. */
   static estimateInputTokens(chars: number): number {
-    return Math.ceil(chars / 4) + 200;
+    return Math.ceil(chars / CHARS_PER_TOKEN) + 100;
   }
 
   static outputRate(model: string): number {

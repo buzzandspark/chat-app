@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { generations, messages, usageEvents, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
@@ -8,7 +8,7 @@ import { ProviderStatusError } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { TpsStats } from "./tps";
-import { QuotaExceededError } from "./quota";
+import { QuotaExceededError, QuotaManager } from "./quota";
 import { scenarioScript, type ScenarioName } from "./scenarios";
 import { EventStore } from "./store";
 import { collectUntilTerminal, createTestDb, seedUser, waitFor } from "./test-utils";
@@ -340,6 +340,31 @@ describe("Engine", () => {
     }
     // The settled spend sits at the cap, give or take the last delta of each stream.
     expect(db.select({ spent: users.costSpentUsd }).from(users).where(eq(users.id, USER)).get()?.spent).toBeLessThan(0.006);
+  });
+
+  it("admits on the prompt's text and thinking, leaving out the turns a replace drops, then meters from message_start", async () => {
+    const quota = new QuotaManager(db);
+    const admit = vi.spyOn(quota, "admit");
+    const started = vi.spyOn(quota, "started");
+    engine = makeEngine(0, { quota });
+    const first = input({ text: "x".repeat(250) });
+    engine.start(first);
+    await collectUntilTerminal(store, first.generationId);
+    expect(admit).toHaveBeenLastCalledWith(USER, first.generationId, "claude-sonnet-5-5", 100 + 100);
+    expect(started).toHaveBeenCalledWith(first.generationId, "claude-sonnet-5-5", expect.objectContaining({ inputTokens: 800 }));
+    const reply = db.select().from(messages).where(eq(messages.id, first.assistantMessageId)).get()!;
+    const replyChars = reply.content.reduce((n, b) => n + (b.type === "text" ? b.text.length : b.type === "thinking" ? b.thinking.length : 0), 0);
+    expect(reply.content.some((b) => b.type === "thinking")).toBe(true);
+
+    const next = input({ chatId: first.chatId, text: "y".repeat(250) });
+    engine.start(next);
+    await collectUntilTerminal(store, next.generationId);
+    expect(admit).toHaveBeenLastCalledWith(USER, next.generationId, "claude-sonnet-5-5", Math.ceil((500 + replyChars) / 2.5) + 100);
+
+    const regenerate = input({ chatId: first.chatId, userMessageId: next.userMessageId, text: undefined, replaceFromMessageId: next.assistantMessageId });
+    engine.start(regenerate);
+    await collectUntilTerminal(store, regenerate.generationId);
+    expect(admit).toHaveBeenLastCalledWith(USER, regenerate.generationId, "claude-sonnet-5-5", Math.ceil((500 + replyChars) / 2.5) + 100);
   });
 
   it("builds history from earlier turns and keeps a retry's existing user message", async () => {
