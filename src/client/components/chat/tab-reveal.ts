@@ -62,18 +62,16 @@ export function playTabReveal(parentId: string, strip: HTMLElement, morph: HTMLE
   // The morph is positioned against the strip's wrapper, whose box is the strip's.
   const box = strip.getBoundingClientRect();
   const expanded = EXPAND_MS / total;
-  const { backgroundColor, borderTopColor } = getComputedStyle(strip);
   const expand = morph.animate(
     [
       { offset: 0, top: `${r.from.top - box.top}px`, left: `${r.from.left - box.left}px`, width: `${r.from.width}px`, height: `${r.from.height}px`, borderRadius: "8px", opacity: 1, easing: "cubic-bezier(0.2, 0, 0, 1)" },
-      { offset: expanded, top: "0px", left: "0px", width: `${box.width}px`, height: `${box.height}px`, borderRadius: "0px", opacity: 1 },
-      { offset: Math.min(1, expanded + TAB_MS / total), top: "0px", left: "0px", width: `${box.width}px`, height: `${box.height}px`, borderRadius: "0px", opacity: 0 },
+      { offset: expanded, top: "0px", left: "0px", width: `${box.width}px`, height: `${box.height}px`, borderRadius: "8px", opacity: 1 },
+      { offset: Math.min(1, expanded + TAB_MS / total), top: "0px", left: "0px", width: `${box.width}px`, height: `${box.height}px`, borderRadius: "8px", opacity: 0 },
     ],
     { duration: total, fill: "backwards" },
   );
   const animations = [
     expand,
-    strip.animate([{ backgroundColor: "transparent", borderTopColor: "transparent" }, { backgroundColor, borderTopColor }], { duration: TAB_MS, delay: EXPAND_MS, fill: "backwards" }),
     ...tabs.map((tab, i) =>
       tab.animate([{ transform: "scaleX(0)", opacity: 0 }, { transform: "scaleX(1)", opacity: 1 }], {
         duration: TAB_MS,

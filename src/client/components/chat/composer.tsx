@@ -17,6 +17,7 @@ import { ChunkBoundary } from "../ui/chunk-boundary";
 import { lazyChunk } from "../ui/lazy-chunk";
 import { IconButton } from "../ui/icon-button";
 import { ExploreOptionsIsland } from "./explore-options";
+import { ForkTabs } from "./fork-tabs";
 
 // D21: the panel's chunk (a Radix dialog) loads on intent; the stand-in is the same button.
 function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" | "children">) {
@@ -224,7 +225,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     <div
       ref={rootRef}
       data-tip-boundary
-      className="relative shrink-0 border-t border-border bg-background safe-x pt-2 group-has-[[data-testid=fork-tabs]]/chat:border-t-transparent"
+      className="relative shrink-0 border-t border-border bg-background safe-x pt-2"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
       data-testid="composer"
     >
@@ -246,6 +247,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
           </div>
         ) : null}
         <ExploreOptionsIsland chatId={chatId} message={lastMessage} isFork={chat.forkedFrom !== null} editing={editing !== null} />
+        <ForkTabs chatId={chatId} />
         <div className="flex flex-col rounded-xl border border-input bg-card shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
           <textarea
             ref={textareaRef}

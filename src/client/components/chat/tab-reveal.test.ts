@@ -35,8 +35,8 @@ describe("tab reveal", () => {
     playTabReveal("other", strip(3), document.createElement("div"));
     expect(played).toHaveLength(0);
     playTabReveal("p", strip(3), document.createElement("div"));
-    // The morph, the strip's colour, and one per tab.
-    expect(played).toHaveLength(5);
+    // The morph, and one per tab.
+    expect(played).toHaveLength(4);
     // Held while the sheet closes (150 ms at desktop width), then under way.
     expect(played.every((p) => p.anim.currentTime === -150)).toBe(true);
     played = [];
@@ -53,7 +53,7 @@ describe("tab reveal", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false }));
     startTabReveal("p", from);
     playTabReveal("p", strip(2), document.createElement("div"));
-    expect(played).toHaveLength(4);
+    expect(played).toHaveLength(3);
     expect(played.every((p) => p.anim.currentTime === -250)).toBe(true);
   });
 

@@ -44,7 +44,7 @@ export function moveBefore(ids: readonly string[], id: string, target: string): 
 const DRAG_PX = 6;
 
 /**
- * Browser-style tabs between the thread and the composer: the main chat, then its forks. A closed tab stays closed until
+ * Folder tabs on the composer's input: the main chat, then its forks. A closed tab stays closed until
  * the chat is opened again (from the sidebar); Ctrl+Shift+[ and ] cycle; a right-click offers Declare
  * winner and Delete chat; forks reorder by dragging with a mouse or pen.
  */
@@ -151,13 +151,13 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   };
 
   return (
-    <div className="relative shrink-0">
-      {/* The line under the tabs is an inset shadow (the composer drops its own border), so the open tab can cover it inside the scroller. */}
+    // Overlaps the input's top border by a pixel, so the open tab covers it and joins the input.
+    <div className="relative z-10 -mb-px">
       <div
         ref={stripRef}
         role="tablist"
         aria-label="Chat and its forks"
-        className="flex gap-1 overflow-x-auto border-t border-border bg-sidebar-accent px-2 pt-1.5 shadow-[inset_0_-1px_0_var(--border)] [touch-action:pan-x] safe-x"
+        className="flex gap-1 overflow-x-auto px-3 [mask-image:linear-gradient(to_right,#000_calc(100%-1.5rem),transparent)] [touch-action:pan-x]"
         data-testid="fork-tabs"
       >
         {tabs.map((tab) => {
@@ -170,8 +170,9 @@ export function ForkTabs({ chatId }: { chatId: string }) {
               data-fork-tab={isMain ? undefined : tab.id}
               className={cn(
                 "group/tab flex h-9 max-w-56 shrink-0 items-center rounded-t-lg border border-b-0 pr-1 select-none",
-                // The open tab takes the page's colour and covers the strip's bottom line, joining the composer below.
-                active ? "relative border-border bg-background" : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10",
+                active
+                  ? "border-input bg-card group-has-[textarea:focus]/chat:border-ring"
+                  : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10",
                 dragging?.id === tab.id && "opacity-60",
               )}
               onPointerEnter={() => warm(tab.id)}
@@ -206,7 +207,11 @@ export function ForkTabs({ chatId }: { chatId: string }) {
                 type="button"
                 data-tab-close
                 aria-label={`Close tab ${tab.title}`}
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/tab:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/tab:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100",
+                  // Without hover only the open tab offers its ×, so a narrow row isn't half close buttons.
+                  !active && "[@media(hover:none)]:hidden",
+                )}
                 onClick={() => dismiss(tab)}
               >
                 <X className="size-3.5" />
