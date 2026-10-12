@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- Earlier messages load by themselves when the reader scrolls near the top of a long chat (no "Show N earlier messages" button); the reading position stays put while they land above.
 - A chat that fits on screen never shows Jump to latest: an upward wheel, drag or scroll key only stops auto-follow when the thread can scroll.
 - Deleting the open chat moves to the next tab over (or the one before, if it was the last), as closing a tab does; a chat with no tabs still opens a new chat.
 - Settings usage: Explore is laid out like Chats, a total row with one row per model under it, instead of a fixed "Haiku" caption.

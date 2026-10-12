@@ -82,9 +82,8 @@ test.describe("scroll", () => {
     await visible(page, "scenario-panel-trigger").click();
     await visible(page, "scenario-long_chat").click();
     await expect(page).not.toHaveURL(before, { timeout: 30_000 });
-    // The page ships the newest 100 of the 200 rows (#47); the rest sit behind "Show earlier messages".
+    // The page ships the newest 100 of the 200 rows (#47); the rest load when the reader nears the top.
     await expect(page.locator("[data-role]:visible")).toHaveCount(100, { timeout: 60_000 });
-    await expect(page.getByRole("button", { name: /100 earlier messages/ })).toBeVisible();
     await page.waitForTimeout(500);
     const firstTops = await page.evaluate(() => (window as Window & { __firstTops?: number[] }).__firstTops ?? []);
     // Never painted at the top first: every observed frame with rows was already scrolled down.
@@ -112,5 +111,9 @@ test.describe("scroll", () => {
     const uneven = moves.slice(0, -1).filter((m) => Math.abs(m - 300) > 4).length;
     expect(moves.length).toBeGreaterThan(5);
     expect(uneven).toBeLessThanOrEqual(1);
+    // Reaching the top loads the earlier rows above, and the reader stays where they were rather than at the oldest.
+    await list.evaluate((el) => el.scrollTo(0, 0));
+    await expect(page.locator("[data-role]:visible")).toHaveCount(200, { timeout: 15_000 });
+    await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBeGreaterThan(1000);
   });
 });

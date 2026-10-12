@@ -58,6 +58,8 @@ export interface MessageListHandle {
 }
 
 const DISENGAGE_PX = 48;
+// Earlier messages load once the reader is this close to the top.
+const LOAD_EARLIER_PX = 400;
 
 /**
  * D16 auto-follow by intent (#27): a wheel or touch scroll upwards, or a scroll key, disengages at once;
@@ -74,6 +76,8 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
     const [engaged, setEngagedState] = useState(true);
     const engagedRef = useRef(true);
     const lastTopRef = useRef(0);
+    // While earlier messages load and land above, the reading position is held by its distance from the bottom.
+    const holdRef = useRef<number | null>(null);
 
     const setEngaged = useCallback(
       (value: boolean) => {
@@ -136,7 +140,8 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
           lastTopRef.current = el.scrollTop;
         }
         const ro = new ResizeObserver(() => {
-          if (engagedRef.current) el.scrollTop = el.scrollHeight;
+          if (holdRef.current !== null) el.scrollTop = el.scrollHeight - holdRef.current;
+          else if (engagedRef.current) el.scrollTop = el.scrollHeight;
         });
         ro.observe(inner);
         ro.observe(el);
@@ -158,10 +163,25 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
       // moves scrollTop up without leaving the end and must keep following.
       if (movedUp > 0 && distance > DISENGAGE_PX) setEngaged(false);
       else if (distance <= 2) setEngaged(true);
-    }, [setEngaged]);
+      if (el.scrollTop < LOAD_EARLIER_PX && chat.older > 0 && !loadingEarlier) {
+        setLoadingEarlier(true);
+        holdRef.current = el.scrollHeight - el.scrollTop;
+        void loadEarlierMessages(store, chatId).finally(() => {
+          setLoadingEarlier(false);
+          // Released a frame after the rows have rendered and the observer has placed them.
+          requestAnimationFrame(() => requestAnimationFrame(() => (holdRef.current = null)));
+        });
+      }
+    }, [setEngaged, chat.older, loadingEarlier, store, chatId]);
 
     return (
       <div className="relative min-h-0 flex-1">
+        {/* Over the thread, not in it, so it adds no height above the rows the reader is on. */}
+        {loadingEarlier ? (
+          <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center" role="status" data-testid="loading-earlier">
+            <span className="rounded-full bg-sidebar-accent px-3 py-1 text-caption text-muted-foreground shadow-sm">Loading earlier messages…</span>
+          </div>
+        ) : null}
         <div
           ref={attachScroller}
           onScroll={onScroll}
@@ -173,22 +193,6 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
           data-testid="message-list"
         >
           <div className="mx-auto flex w-full max-w-thread flex-col gap-5 safe-x py-4 md:py-6">
-            {chat.older > 0 ? (
-              <div className="flex justify-center">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="touch-target"
-                  disabled={loadingEarlier}
-                  onClick={() => {
-                    setLoadingEarlier(true);
-                    void loadEarlierMessages(store, chatId).finally(() => setLoadingEarlier(false));
-                  }}
-                >
-                  {loadingEarlier ? "Loading…" : `Show ${chat.older} earlier message${chat.older === 1 ? "" : "s"}`}
-                </Button>
-              </div>
-            ) : null}
             {chat.messageIds.length === 0 ? (
               <div className="flex flex-1 items-center justify-center py-16 text-center text-small text-muted-foreground">
                 Ask anything. Replies keep streaming even if you switch apps.
