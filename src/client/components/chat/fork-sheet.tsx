@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
-import { rewriteOptions } from "@client/store/forks";
+import { rewriteOptions } from "@client/store/forks-rewrite";
 import { MAX_FORKS, MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption } from "@shared/forks";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 

@@ -10,6 +10,7 @@ import { forkChat } from "@client/store/forks";
 import { useChatStore } from "@client/store/hooks";
 import { useSidebarChats } from "@client/store/sidebar-store";
 import { CACHE_WARM_MS, MAX_FORKS, OPTIONS_CLICK_WAIT_MS, type ForkOption } from "@shared/forks";
+import { useShellUser } from "../shell/shell-user";
 import { lazyChunk } from "../ui/lazy-chunk";
 import { useModals } from "../ui/modal-manager";
 
@@ -123,8 +124,9 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
   const [error, setError] = useState<string | null>(null);
   const waitRef = useRef<(() => void) | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const { exploreOptions } = useShellUser();
   const messageId = message?.id ?? "";
-  const found = optionsFound(message, { isFork, forks, editing });
+  const found = exploreOptions && optionsFound(message, { isFork, forks, editing });
   const count = Math.min(message?.optionsStream ? (message.optionsStream.count ?? 0) : (message?.options?.length ?? 0), MAX_FORKS);
   // The last count shown, so the label doesn't change while the button tucks away.
   const [shownCount, setShownCount] = useState(count);

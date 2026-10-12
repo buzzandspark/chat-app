@@ -37,6 +37,8 @@ export const users = sqliteTable(
     costCapUsd: real("cost_cap_usd"),
     costSpentUsd: real("cost_spent_usd").notNull().default(0),
     lastActiveAt: timestamp("last_active_at"),
+    /** Settings: off skips the Haiku detection after each reply, so no Explore button and no spend. */
+    exploreOptions: integer("explore_options", { mode: "boolean" }).notNull().default(true),
   },
   (t) => [index("users_role_idx").on(t.role), index("users_last_active_idx").on(t.lastActiveAt), index("users_created_idx").on(t.createdAt)],
 );
@@ -228,21 +230,6 @@ export const usageEvents = sqliteTable(
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
   },
   (t) => [index("usage_user_idx").on(t.userId), index("usage_generation_idx").on(t.generationId)],
-);
-
-export const feedback = sqliteTable(
-  "feedback",
-  {
-    id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
-    chatId: text("chat_id"),
-    messageId: text("message_id"),
-    body: text("body").notNull(),
-    timings: text("timings", { mode: "json" }).$type<Timings>(),
-    userAgent: text("user_agent"),
-    createdAt: timestamp("created_at").notNull().$defaultFn(now),
-  },
-  (t) => [index("feedback_created_idx").on(t.createdAt), index("feedback_user_idx").on(t.userId)],
 );
 
 export type User = typeof users.$inferSelect;

@@ -10,7 +10,7 @@ export interface ForkOutcome {
   error?: string;
 }
 
-const CAP = "You have reached your usage cap.";
+export const CAP = "You have reached your usage cap.";
 const MESSAGES: Record<number, string> = {
   402: CAP,
   404: "This chat no longer exists.",
@@ -63,26 +63,6 @@ export async function forkChat(
   return { ok: true };
 }
 
-export type RewriteOutcome = { ok: true; options: ForkOption[] } | { ok: false; error: string };
-
-/** The sheet's instruction applied to every prompt; the call's trace goes to the console in development. */
-export async function rewriteOptions(messageId: string, instruction: string, options: readonly ForkOption[]): Promise<RewriteOutcome> {
-  const asked = performance.now();
-  try {
-    const res = await fetch(`/api/messages/${messageId}/options/rewrite`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ instruction, options }),
-    });
-    if (!res.ok) return { ok: false, error: res.status === 402 ? CAP : `Could not apply the instruction (${res.status}).` };
-    const data = (await res.json()) as { options: ForkOption[]; trace?: OptionsTrace | null };
-    if (data.trace) logOptionsTrace("rewrite", data.trace, performance.now() - asked);
-    return { ok: true, options: data.options };
-  } catch {
-    return { ok: false, error: "You seem to be offline." };
-  }
-}
-
 /** A reply's options stream, one JSON object per line. */
 export async function streamOptions(messageId: string, onEvent: (event: OptionsEvent) => void): Promise<void> {
   const res = await fetch(`/api/messages/${messageId}/options`);
@@ -117,7 +97,7 @@ export async function watchOptions(store: ChatStore, messageId: string): Promise
       // A fork from a list still arriving spent the options; the rest of the stream is ignored.
       if (!store.getMessage(messageId)?.optionsStream) return;
       if (event.done) {
-        if (event.trace) logOptionsTrace("detect", event.trace, performance.now() - asked);
+        if (process.env.NODE_ENV !== "production" && event.trace) logOptionsTrace("detect", event.trace, performance.now() - asked);
         store.updateMessage(messageId, { options: event.options ?? [], optionsStream: null });
       } else if (event.error) {
         fail();

@@ -125,6 +125,29 @@ describe("OptionsService", () => {
     expect(db.select().from(usageEvents).all()).toHaveLength(0);
   });
 
+  it("with Explore options off in Settings, asks Haiku nothing and spends nothing, until it is back on", async () => {
+    const live = fakeLive();
+    const service = new OptionsService({ db, replayMode: false, live: () => live });
+    db.update(users).set({ exploreOptions: false }).where(eq(users.id, USER)).run();
+    const off = seedReply(uuidv7());
+    service.onReplyDone(off);
+    expect(await service.awaitOptions(off.messageId, 100)).toBeNull();
+    const scripted = seedReply(uuidv7());
+    service.onReplyDone({ ...scripted, scenario: "options_reply", billable: false });
+    expect(await service.awaitOptions(scripted.messageId, 100)).toBeNull();
+    expect(service.detectLastReply(off.chatId, USER)).toBeNull();
+    expect(live.asked).toEqual([]);
+    expect(db.select().from(usageEvents).all()).toHaveLength(0);
+    // The reply stays "not run", not "no options".
+    expect(db.select().from(messages).where(eq(messages.id, off.messageId)).get()!.forkOptions).toBeNull();
+
+    db.update(users).set({ exploreOptions: true }).where(eq(users.id, USER)).run();
+    const on = seedReply(uuidv7());
+    service.onReplyDone(on);
+    expect(await service.awaitOptions(on.messageId, 1000)).toEqual(TWO);
+    expect(live.asked).toEqual(["A or B"]);
+  });
+
   it("scenario runs and replay mode answer from the script and spend nothing", async () => {
     const live = fakeLive();
     const service = new OptionsService({ db, replayMode: false, live: () => live });

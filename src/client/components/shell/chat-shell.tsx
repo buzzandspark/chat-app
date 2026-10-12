@@ -5,7 +5,8 @@ import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { IconButton } from "../ui/icon-button";
-import { getSidebarStore, patchChat, setPendingChat, usePendingChat, useSidebarChats } from "@client/store/sidebar-store";
+import { setPendingChat, usePendingChat, useSidebarChats } from "@client/store/sidebar-store";
+import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useChat } from "@client/store/hooks";
 import { ChatStoreProvider, useChatStore } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
@@ -20,6 +21,11 @@ import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
 
 const SearchDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.SearchDialog), { ssr: false }));
+// The inline rename loads on intent (hover, focus, touch on the title), so it is nearly always in by the click.
+const TitleInput = lazyChunk(() =>
+  dynamic(() => import("./title-input").then((m) => m.TitleInput), { ssr: false, loading: () => <div className="min-h-11 min-w-0 flex-1" /> }),
+);
+const warmTitleInput = () => import("./title-input");
 
 interface ChatShellProps {
   /** The chat list and the user label are server slots: the chrome around them is static (#20). */
@@ -235,19 +241,17 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
     pendingSummary?.title ??
     (currentChatId
       ? (currentSummary?.title ?? openChat.title ?? (openChat.seeded && openChat.messageIds.length === 0 ? "New chat" : ""))
-      : "");
+      : pathname === "/settings"
+        ? "Settings"
+        : "");
   // Clicking the title turns it into an input in place; another chat ends the edit.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [failedId, setFailedId] = useState<string | null>(null);
+  const titleIntent = useIntent(warmTitleInput);
   return (
     <>
       {currentChatId && currentSummary && editingId === currentChatId ? (
-        <TitleInput
-          chatId={currentChatId}
-          title={title}
-          onClose={() => setEditingId(null)}
-          onFailed={() => setFailedId(currentChatId)}
-        />
+        <TitleInput chatId={currentChatId} title={title} onClose={() => setEditingId(null)} onFailed={() => setFailedId(currentChatId)} />
       ) : currentChatId && currentSummary ? (
         <Button
           variant="ghost"
@@ -256,6 +260,7 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
           aria-label={`Rename chat: ${title}`}
           data-tip="Rename"
           data-tip-side="bottom"
+          {...intentProps(titleIntent)}
           onClick={() => {
             setFailedId(null);
             setEditingId(currentChatId);
@@ -276,57 +281,5 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
         </span>
       ) : null}
     </>
-  );
-}
-
-/**
- * The header title as an input: Enter or leaving it saves, Escape cancels. The new title shows at once;
- * a refused or failed save puts the old one back, unless the title has changed again since.
- */
-function TitleInput({ chatId, title, onClose, onFailed }: { chatId: string; title: string; onClose: () => void; onFailed: () => void }) {
-  const store = useChatStore();
-  const [value, setValue] = useState(title);
-  const settled = useRef(false);
-  const save = async () => {
-    if (settled.current) return;
-    settled.current = true;
-    onClose();
-    const next = value.trim();
-    if (!next || next === title) return;
-    const sidebar = getSidebarStore();
-    sidebar.patch(chatId, { title: next });
-    store.setChatTitle(chatId, next);
-    if (await patchChat(chatId, { title: next })) return;
-    if (sidebar.get().find((c) => c.id === chatId)?.title !== next) return;
-    sidebar.patch(chatId, { title });
-    store.setChatTitle(chatId, title);
-    onFailed();
-  };
-  return (
-    <input
-      // Focused and selected as it mounts, in place of the title it replaces.
-      ref={(el) => {
-        el?.focus();
-        el?.select();
-      }}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => void save()}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-          e.preventDefault();
-          void save();
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          settled.current = true;
-          onClose();
-        }
-      }}
-      aria-label="Chat title"
-      maxLength={120}
-      enterKeyHint="done"
-      // 16 px where a touch keyboard is likely, so iOS doesn't zoom; the title's own size with a mouse.
-      className="min-h-11 min-w-0 flex-1 rounded-md border border-input bg-transparent px-[calc(0.5rem-1px)] text-body font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:hover)]:text-small"
-    />
   );
 }

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OptionsTrace } from "@shared/forks";
 import { ChatStore, createMessageState } from "./chat-store";
-import { logOptionsTrace, rewriteOptions, streamOptions, traceTimings, watchOptions } from "./forks";
+import { logOptionsTrace, streamOptions, traceTimings, watchOptions } from "./forks";
+import { rewriteOptions } from "./forks-rewrite";
 
 const trace: OptionsTrace = { model: "claude-haiku-5-5", system: "s", user: "u", response: { kind: "list" }, stopReason: "end_turn", inputTokens: 300, outputTokens: 40, apiMs: 1520 };
 
