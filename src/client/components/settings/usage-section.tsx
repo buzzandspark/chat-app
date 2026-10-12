@@ -30,8 +30,15 @@ function UsageGroup({ name, testId, period, models }: { name: string; testId: st
         <th scope="row" className={cn("text-left align-middle text-small font-medium", pad(0))}>
           {name}
         </th>
-        <Cell totals={period.month} className={pad(0)} />
-        <Cell totals={period.all} className={pad(0)} />
+        {/* One model: its row already says it all, so the group's total would only repeat it. */}
+        {models.length === 1 ? (
+          <td colSpan={2} />
+        ) : (
+          <>
+            <Cell totals={period.month} className={pad(0)} />
+            <Cell totals={period.all} className={pad(0)} />
+          </>
+        )}
       </tr>
       {models.map((m, i) => (
         <tr key={m.model} data-testid="usage-model">
