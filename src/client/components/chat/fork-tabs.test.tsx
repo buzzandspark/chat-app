@@ -27,6 +27,8 @@ function renderTabs(chatId: string) {
 
 beforeEach(() => {
   push.mockClear();
+  // jsdom has no scrolling; the strip scrolls the open tab into view.
+  Element.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
 });
 afterEach(() => {
@@ -83,6 +85,8 @@ describe("ForkTabs", () => {
     renderTabs("f1");
     fireEvent.click(screen.getByRole("button", { name: "Close tab SQLite" }));
     expect(push).toHaveBeenCalledWith("/c/f2");
+    // Still on its chat until the navigation lands: the tab must stay closed rather than reopen itself.
+    expect(getSidebarStore().get().find((c) => c.id === "f1")?.tabHidden).toBe(true);
     cleanup();
     getSidebarStore().hydrate(chats);
     renderTabs("f2");

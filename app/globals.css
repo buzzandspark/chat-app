@@ -296,7 +296,14 @@
     font-weight: 400;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 120ms ease 450ms;
+    transition:
+      opacity 120ms ease 450ms,
+      scale 0s linear 570ms;
+  }
+  /* Hidden at zero size: it keeps its width for alignTip, but adds no scrollable overflow (the sidebar list
+     scrolled sideways). A rule of its own, so the minifier can't fold it into the transform above. */
+  .tip:not(:hover, :focus-visible)::after {
+    scale: 0;
   }
   .tip[data-tip-side="top"]::after {
     top: auto;
@@ -314,6 +321,9 @@
   .tip:hover::after,
   .tip:focus-visible::after {
     opacity: 1;
+    transition:
+      opacity 120ms ease 450ms,
+      scale 0s;
   }
   .tip[aria-expanded="true"]::after,
   .tip:disabled::after {

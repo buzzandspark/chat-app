@@ -79,11 +79,23 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   const visible = model ? model.tabs.filter((t) => !t.hidden || t.id === chatId) : [];
   const visibleIds = visible.map((t) => t.id);
   const shown = visible.length >= 2;
-  // Opening a closed tab's chat reopens the tab.
+  // Opening a closed tab's chat reopens the tab, but closing the open tab must not: it stays closed once
+  // this view hides (Activity runs the cleanup then), and a later visit from the sidebar reopens it.
   const activeHidden = model?.tabs.find((t) => t.id === chatId)?.hidden ?? false;
+  const closing = useRef<string | null>(null);
   useEffect(() => {
-    if (activeHidden) void setTabHidden(getSidebarStore(), chatId, false);
+    if (!activeHidden) return;
+    if (closing.current === chatId) {
+      return () => {
+        closing.current = null;
+      };
+    }
+    void setTabHidden(getSidebarStore(), chatId, false);
   }, [activeHidden, chatId]);
+  // The open tab scrolls into view, clear of the fade at the strip's end, so its × can be reached.
+  useEffect(() => {
+    if (shown) stripRef.current?.querySelector('[aria-selected="true"]')?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [shown, chatId]);
   // Ctrl+Shift+] and [ move to the next and previous tab, wrapping round.
   const visibleKey = shown ? visibleIds.join(",") : "";
   useEffect(() => {
@@ -120,6 +132,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   };
   const dismiss = (tab: ForkTab) => {
     if (tab.id === chatId) {
+      closing.current = chatId;
       const i = visibleIds.indexOf(tab.id);
       const next = visibleIds[i + 1] ?? visibleIds[i - 1];
       if (next) open(next);
@@ -157,7 +170,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
         ref={stripRef}
         role="tablist"
         aria-label="Chat and its forks"
-        className="flex gap-1 overflow-x-auto px-3 [mask-image:linear-gradient(to_right,#000_calc(100%-1.5rem),transparent)] [touch-action:pan-x]"
+        className="flex scroll-pr-6 gap-1 overflow-x-auto pr-6 pl-3 [mask-image:linear-gradient(to_right,#000_calc(100%-1.5rem),transparent)] [touch-action:pan-x]"
         data-testid="fork-tabs"
       >
         {tabs.map((tab) => {
@@ -208,7 +221,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
                 data-tab-close
                 aria-label={`Close tab ${tab.title}`}
                 className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/tab:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100",
+                  "flex size-6 shrink-0 items-center justify-center rounded-md [@media(hover:none)]:size-8 text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/tab:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100",
                   // Without hover only the open tab offers its ×, so a narrow row isn't half close buttons.
                   !active && "[@media(hover:none)]:hidden",
                 )}
