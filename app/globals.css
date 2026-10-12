@@ -280,30 +280,21 @@
 .composer-scanning {
   animation: composer-scan 1.6s ease-in-out infinite;
 }
-@keyframes explore-sweep {
-  0% {
-    stroke-dashoffset: 0;
-    opacity: 0;
-  }
-  10%,
-  85% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: -100;
-    opacity: 0;
+@keyframes explore-lap {
+  to {
+    stroke-dashoffset: calc(-1 * var(--lap, 0px));
   }
 }
-/* After the 300 ms pop-up, once round. */
-.explore-sweep {
-  animation: explore-sweep 1.2s ease-in-out 0.3s both;
+/* After the 300 ms pop-up, the dashes run clockwise once round; they stay where they stop. */
+.explore-lap {
+  animation: explore-lap 1.5s ease-in-out 0.3s forwards;
 }
 @media (prefers-reduced-motion: reduce) {
   .explore-border {
     animation: none;
   }
-  .explore-sweep {
-    display: none;
+  .explore-lap {
+    animation: none;
   }
   .composer-scanning {
     animation: none;

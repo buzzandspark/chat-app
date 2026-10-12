@@ -8,7 +8,7 @@ All notable changes, newest first. Dates are the day the work landed.
 - While Haiku reads the last reply for options, the border above the input pulses lightly (not with reduced motion).
 - Picking a model from the desktop menu puts focus in the message input, ready to type (Escape or a click away still returns it to the picker).
 - The keyboard hint line under the composer is gone; the Search and New chat buttons show their shortcuts (⌘K, ⌘⇧O) in their hover tooltips.
-- Once the Explore button has popped up, a light runs once round its border (none with reduced motion).
+- Once the Explore button has popped up, its dashed border runs clockwise once round (none with reduced motion).
 - In the Explore options sheet, a click or tap anywhere on an option outside its title and message fields picks or drops it.
 - Delete chat and Delete all forks open with Delete focused, so Enter confirms.
 - A click or tap on the open fork tab opens its menu (as a right-click does); a second press closes it.

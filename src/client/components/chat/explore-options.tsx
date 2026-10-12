@@ -67,7 +67,7 @@ export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen, 
       >
         {/* Dimmed and pulsing inside, so the tooltip (the button's ::after) stays opaque. */}
         <span className={cn("flex items-center gap-1.5", state === "awaiting" && "animate-pulse", state === "busy" && "opacity-60")} data-part="label">
-          <ExploreOutline marching={state !== "ready"} sweep={shown} />
+          <ExploreOutline marching={state !== "ready"} lap={shown} />
           <GitFork className="size-4" />
           {label}
         </span>
@@ -76,8 +76,13 @@ export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen, 
   );
 }
 
+/** The border's length, which one lap of the dashes travels. */
+const measureLap = (rect: SVGRectElement | null) => {
+  if (rect && typeof rect.getTotalLength === "function") rect.style.setProperty("--lap", `${rect.getTotalLength()}px`);
+};
+
 /** The button's dashed gradient outline, drawn behind its content; the tab strip's reveal starts from it too. */
-export function ExploreOutline({ marching = false, sweep = false }: { marching?: boolean; sweep?: boolean }) {
+export function ExploreOutline({ marching = false, lap = false }: { marching?: boolean; lap?: boolean }) {
   const gradient = useId();
   return (
     <svg aria-hidden className="pointer-events-none absolute inset-0 -z-10 size-full">
@@ -94,29 +99,15 @@ export function ExploreOutline({ marching = false, sweep = false }: { marching?:
         y="1"
         rx="7"
         // The animation lives in an unlayered rule that no utility can override, so the class itself is the switch.
-        className={marching ? "explore-border" : undefined}
+        // `lap`: once popped up, the dashes run clockwise once round the border; re-added, it replays.
+        ref={lap ? measureLap : undefined}
+        className={marching ? "explore-border" : lap ? "explore-lap" : undefined}
         style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
         fill="none"
         stroke={`url(#${gradient})`}
         strokeWidth="1.5"
         strokeDasharray="6 4"
       />
-      {/* Once it has popped up, a light runs once round the border; remounted, so it replays on every pop-up. */}
-      {sweep ? (
-        <rect
-          x="1"
-          y="1"
-          rx="7"
-          className="explore-sweep"
-          style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
-          fill="none"
-          stroke={`url(#${gradient})`}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          pathLength="100"
-          strokeDasharray="20 80"
-        />
-      ) : null}
     </svg>
   );
 }
