@@ -55,9 +55,10 @@ export function SearchDialog({
       setSearching(false);
       return;
     }
+    // Searching from the keystroke on, through the debounce, until this query's results are in.
+    setSearching(true);
     const controller = new AbortController();
     const timer = setTimeout(async () => {
-      setSearching(true);
       try {
         const res = await fetch(`/api/chats/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
         if (res.ok) setHits(((await res.json()) as { hits: Hit[] }).hits);
@@ -69,7 +70,7 @@ export function SearchDialog({
     }, 200);
     pending.current = { timer, controller };
   };
-  const visibleHits = active ? hits : [];
+  const visibleHits = active && !searching ? hits : [];
   const activeIndex = visibleHits.length === 0 ? -1 : Math.min(cursor, visibleHits.length - 1);
   const pick = (hit: Hit) => {
     markNavigationClose();
@@ -111,13 +112,15 @@ export function SearchDialog({
         />
       </div>
       <ul id="search-hits" role="listbox" className="mt-2 max-h-[50dvh] overflow-y-auto" aria-busy={searching}>
-        {searching && visibleHits.length === 0 ? (
-          // One row's worth of pulse while the first results are on their way; earlier hits stay put while a refinement loads.
-          <li className="flex min-h-11 flex-col justify-center gap-1.5 px-3 py-2" aria-hidden>
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-3 w-3/4" />
-          </li>
-        ) : null}
+        {active && searching
+          ? // Skeleton rows until this query's results are in: no stale hits from the previous query meanwhile.
+            [0, 1, 2].map((i) => (
+              <li key={i} className="flex min-h-11 flex-col justify-center gap-1.5 px-3 py-2" aria-hidden>
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-3 w-3/4" />
+              </li>
+            ))
+          : null}
         {visibleHits.map((h, i) => (
           <li key={h.chatId} id={`search-hit-${i}`} role="option" aria-selected={i === activeIndex}>
             <Link
