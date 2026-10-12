@@ -1,11 +1,11 @@
 "use client";
 import { ArrowUp, FlaskConical, Square, X } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
+import { createContext, forwardRef, useCallback, useContext, useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import { clearDraft, draftKey, readDraft, useDraft } from "@client/hooks/use-draft";
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
 import { textOf } from "@client/store/chat-store";
-import { useChat, useChatStore, useMessage } from "@client/store/hooks";
+import { useChat, useChatSettingsKnown, useChatStore, useMessage } from "@client/store/hooks";
 import { useChatContext, type ChatSettings } from "./chat-context";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { DEFAULT_MODEL, MODELS, type ModelId } from "@shared/models";
@@ -46,11 +46,14 @@ function ScenarioPanelOnIntent() {
 function PickerStandIn({
   model,
   thinking,
+  known = true,
   intent,
   onPress,
 }: {
   model: ModelId;
   thinking: ThinkingOptions;
+  /** False until the chat's model is known: the label keeps its room but shows nothing, rather than the default. */
+  known?: boolean;
   intent?: { warmUp: () => void };
   onPress?: () => void;
 }) {
@@ -68,24 +71,37 @@ function PickerStandIn({
       {...(intent ? intentProps(intent) : {})}
       onClick={onPress}
     >
-      <span className="truncate">{info.short}</span>
-      {thinking.harder ? <span className="rounded-md bg-accent px-1.5 text-caption text-accent-foreground">harder</span> : null}
+      <span className={cn("truncate", !known && "invisible")}>{info.short}</span>
+      {thinking.harder && known ? <span className="rounded-md bg-accent px-1.5 text-caption text-accent-foreground">harder</span> : null}
       <ChevronDown data-icon="inline-end" className="size-3.5" />
     </Button>
   );
 }
+// The loading stand-in reads the chat's model from here: dynamic() hands `loading` no props, and a
+// hard-coded default showed Sonnet for a frame every time the chunk loaded.
+const PickerValue = createContext<{ model: ModelId; thinking: ThinkingOptions }>({ model: DEFAULT_MODEL, thinking: { harder: false } });
+function PickerLoading() {
+  return <PickerStandIn {...useContext(PickerValue)} />;
+}
 const ModelPicker = lazyChunk(() =>
   dynamic(() => import("./model-picker").then((m) => m.ModelPicker), {
     ssr: false,
-    loading: () => <PickerStandIn model={DEFAULT_MODEL} thinking={{ harder: false }} />,
+    loading: PickerLoading,
   }),
 );
 
 const warmModelPicker = () => import("./model-picker");
 
-function ModelPickerOnIntent(props: { model: ModelId; thinking: ThinkingOptions; onChange: (patch: Partial<ChatSettings>) => void }) {
+function ModelPickerOnIntent({ known, ...props }: { model: ModelId; thinking: ThinkingOptions; known: boolean; onChange: (patch: Partial<ChatSettings>) => void }) {
   const intent = useIntent(warmModelPicker);
-  if (intent.armed) return <ModelPicker {...props} defaultOpen={intent.wanted === "picker"} />;
+  if (!known) return <PickerStandIn model={props.model} thinking={props.thinking} known={false} />;
+  if (intent.armed) {
+    return (
+      <PickerValue value={{ model: props.model, thinking: props.thinking }}>
+        <ModelPicker {...props} defaultOpen={intent.wanted === "picker"} />
+      </PickerValue>
+    );
+  }
   return <PickerStandIn model={props.model} thinking={props.thinking} intent={intent} onPress={() => intent.press("picker")} />;
 }
 
@@ -102,6 +118,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   const { send, settings, setSettings, client, userId, editing, cancelEdit, editMessage, scenarioPanel } = useChatContext();
   const store = useChatStore();
   const chat = useChat(chatId);
+  const settingsKnown = useChatSettingsKnown(chatId);
   const key = draftKey(userId, chatId);
   // Empty on both server and client: a draft read during render would enable Send in React while the
   // server-rendered button stays disabled in the DOM (hydration never patches attributes). It is
@@ -268,7 +285,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
                 </span>
               ) : null}
               <ChunkBoundary label="model picker">
-                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
+                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} known={settingsKnown} onChange={(patch) => setSettings(patch)} />
               </ChunkBoundary>
               {scenarioPanel ? (
                 <ChunkBoundary label="scenario panel">

@@ -1,10 +1,11 @@
 "use client";
-import { Menu, MessageSquareText, PanelLeft } from "lucide-react";
+import { Menu, PanelLeft } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { IconButton } from "../ui/icon-button";
-import { setPendingChat, usePendingChat, useSidebarChats } from "@client/store/sidebar-store";
+import { getSidebarStore, patchChat, setPendingChat, usePendingChat, useSidebarChats } from "@client/store/sidebar-store";
 import { useChat } from "@client/store/hooks";
 import { ChatStoreProvider, useChatStore } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
@@ -19,8 +20,6 @@ import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
 
 const SearchDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.SearchDialog), { ssr: false }));
-const FeedbackDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.FeedbackDialog), { ssr: false }));
-const RenameDialog = lazyChunk(() => dynamic(() => import("./dialogs").then((m) => m.RenameDialog), { ssr: false }));
 
 interface ChatShellProps {
   /** The chat list and the user label are server slots: the chrome around them is static (#20). */
@@ -74,8 +73,21 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
     returnFocus.current = false;
   }, [phoneOpen]);
   useBackGesture(!desktop && phoneOpen, dismissPhone);
-  const close = useCallback(() => (desktop ? setDesktopOpen(false) : dismissPhone()), [desktop, dismissPhone]);
-  const toggle = useCallback(() => (desktop ? setDesktopOpen((v) => !v) : setPhoneOpen((v) => !v)), [desktop]);
+  // Docked, the toggle lives in the sidebar's header while it is open and in this header while it is
+  // closed, at the same spot; a keyboard press on one hands focus to the other.
+  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
+  const handFocus = useRef(false);
+  const toggleDesktop = useCallback(() => {
+    handFocus.current = document.activeElement === menuButtonRef.current || document.activeElement === sidebarToggleRef.current;
+    setDesktopOpen((v) => !v);
+  }, []);
+  useEffect(() => {
+    if (!handFocus.current) return;
+    handFocus.current = false;
+    (desktopOpen ? sidebarToggleRef : menuButtonRef).current?.focus();
+  }, [desktopOpen]);
+  const close = useCallback(() => (desktop ? toggleDesktop() : dismissPhone()), [desktop, toggleDesktop, dismissPhone]);
+  const toggle = useCallback(() => (desktop ? toggleDesktop() : setPhoneOpen((v) => !v)), [desktop, toggleDesktop]);
   const closePhone = useCallback(() => setPhoneOpen(false), []);
   const onSidebarNavigate = useCallback(() => {
     markNavigationClose();
@@ -157,13 +169,16 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
         onNavigate={onSidebarNavigate}
         onSearch={openSearch}
         userLabel={userLabel}
+        toggleRef={sidebarToggleRef}
       />
       {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold.
           While the phone sidebar is open the column is inert, so the sidebar is a real modal (#56). */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" inert={!desktop && phoneOpen ? true : undefined}>
         <header data-tip-boundary className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
-          <IconButton ref={menuButtonRef} label={open ? "Hide sidebar" : "Show sidebar"} aria-expanded={open} onClick={toggle}>
-            {desktop ? <PanelLeft /> : <Menu />}
+          {/* Docked and open, the sidebar's own header shows the toggle at this same spot. */}
+          <IconButton ref={menuButtonRef} label="Show sidebar" aria-expanded={open} className={cn(desktopOpen && "dock:hidden")} onClick={toggle}>
+            <Menu className="dock:hidden" />
+            <PanelLeft className="hidden dock:block" />
           </IconButton>
           {/* #20: the chrome is in the static shell; only what depends on the URL streams in here. */}
           <Suspense fallback={<HeaderRouteFallback />}>
@@ -178,18 +193,11 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
 }
 
 function HeaderRouteFallback() {
-  return (
-    <>
-      <h1 className="min-w-0 flex-1 truncate px-2 text-small font-medium" data-testid="chat-title" />
-      <IconButton label="Send feedback" disabled>
-        <MessageSquareText />
-      </IconButton>
-    </>
-  );
+  return <h1 className="min-w-0 flex-1 truncate px-2 text-small font-medium" data-testid="chat-title" />;
 }
 
 /**
- * Everything in the shell that depends on the URL: the title, rename, feedback for this chat, the
+ * Everything in the shell that depends on the URL: the title and its inline rename, the
  * release of the pending chat, the store's eviction of chats visited long ago, and putting the phone
  * sidebar away on navigation. It suspends during prerender, so the chrome around it stays static (#20).
  */
@@ -197,7 +205,6 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
   const pathname = usePathname();
   const chats = useSidebarChats();
   const store = useChatStore();
-  const { show } = useModals();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
   const pendingChatId = usePendingChat();
   // The pending chat is released once the router has committed it (or left the chat routes).
@@ -229,18 +236,19 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
     (currentChatId
       ? (currentSummary?.title ?? openChat.title ?? (openChat.seeded && openChat.messageIds.length === 0 ? "New chat" : ""))
       : "");
-  const openFeedback = useCallback(
-    () => show(({ open, close }) => <FeedbackDialog open={open} onOpenChange={(o) => !o && close()} chatId={currentChatId} />),
-    [show, currentChatId],
-  );
-  const openRename = useCallback(() => {
-    if (!currentChatId) return;
-    const chat = currentSummary ?? { id: currentChatId, title, updatedAt: 0 };
-    show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />);
-  }, [show, currentChatId, currentSummary, title]);
+  // Clicking the title turns it into an input in place; another chat ends the edit.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [failedId, setFailedId] = useState<string | null>(null);
   return (
     <>
-      {currentChatId && currentSummary ? (
+      {currentChatId && currentSummary && editingId === currentChatId ? (
+        <TitleInput
+          chatId={currentChatId}
+          title={title}
+          onClose={() => setEditingId(null)}
+          onFailed={() => setFailedId(currentChatId)}
+        />
+      ) : currentChatId && currentSummary ? (
         <Button
           variant="ghost"
           size="sm"
@@ -248,7 +256,10 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
           aria-label={`Rename chat: ${title}`}
           data-tip="Rename"
           data-tip-side="bottom"
-          onClick={openRename}
+          onClick={() => {
+            setFailedId(null);
+            setEditingId(currentChatId);
+          }}
         >
           <h1 className="truncate" data-testid="chat-title">
             {title}
@@ -259,9 +270,63 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
           {title}
         </h1>
       )}
-      <IconButton label="Send feedback" onClick={openFeedback}>
-        <MessageSquareText />
-      </IconButton>
+      {failedId !== null && failedId === currentChatId ? (
+        <span role="alert" className="shrink-0 px-2 text-caption text-destructive">
+          Rename failed
+        </span>
+      ) : null}
     </>
+  );
+}
+
+/**
+ * The header title as an input: Enter or leaving it saves, Escape cancels. The new title shows at once;
+ * a refused or failed save puts the old one back, unless the title has changed again since.
+ */
+function TitleInput({ chatId, title, onClose, onFailed }: { chatId: string; title: string; onClose: () => void; onFailed: () => void }) {
+  const store = useChatStore();
+  const [value, setValue] = useState(title);
+  const settled = useRef(false);
+  const save = async () => {
+    if (settled.current) return;
+    settled.current = true;
+    onClose();
+    const next = value.trim();
+    if (!next || next === title) return;
+    const sidebar = getSidebarStore();
+    sidebar.patch(chatId, { title: next });
+    store.setChatTitle(chatId, next);
+    if (await patchChat(chatId, { title: next })) return;
+    if (sidebar.get().find((c) => c.id === chatId)?.title !== next) return;
+    sidebar.patch(chatId, { title });
+    store.setChatTitle(chatId, title);
+    onFailed();
+  };
+  return (
+    <input
+      // Focused and selected as it mounts, in place of the title it replaces.
+      ref={(el) => {
+        el?.focus();
+        el?.select();
+      }}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => void save()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+          e.preventDefault();
+          void save();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          settled.current = true;
+          onClose();
+        }
+      }}
+      aria-label="Chat title"
+      maxLength={120}
+      enterKeyHint="done"
+      // 16 px where a touch keyboard is likely, so iOS doesn't zoom; the title's own size with a mouse.
+      className="min-h-11 min-w-0 flex-1 rounded-md border border-input bg-transparent px-[calc(0.5rem-1px)] text-body font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:hover)]:text-small"
+    />
   );
 }

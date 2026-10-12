@@ -77,7 +77,7 @@ export class SidebarStore {
 }
 
 /** PATCHes a chat; a refusal and a network failure both come back as false, never as a rejection. */
-async function patchChat(id: string, body: Record<string, unknown>): Promise<boolean> {
+export async function patchChat(id: string, body: Record<string, unknown>): Promise<boolean> {
   try {
     const res = await fetch(`/api/chats/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     return res.ok;

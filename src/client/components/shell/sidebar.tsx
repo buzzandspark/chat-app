@@ -1,7 +1,7 @@
 "use client";
-import { Plus, Search, X } from "lucide-react";
+import { PanelLeft, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
@@ -28,10 +28,12 @@ interface SidebarProps {
   onSearch: () => void;
   /** The signed-in user's label, streamed in with the list. */
   userLabel: ReactNode;
+  /** The header's toggle, which the shell focuses when the main header's toggle opens the dock. */
+  toggleRef: RefObject<HTMLButtonElement | null>;
 }
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
-export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel }: SidebarProps) {
+export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, toggleRef }: SidebarProps) {
   const newChat = useNewChat();
   const listContext = useMemo(() => ({ open, onNavigate }), [open, onNavigate]);
   const asideRef = useRef<HTMLElement>(null);
@@ -72,8 +74,15 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
           desktopOpen ? "dock:flex" : "dock:hidden",
         )}
       >
-        <div className="flex h-14 items-center justify-between gap-1 px-2">
-          <span className="px-1 text-small font-semibold tracking-tight">Cadence</span>
+        {/* The toggle sits where the main header's sits (same inset, and a clear border so the same height), so opening and closing never moves it. */}
+        <div className="flex h-14 items-center justify-between gap-1 border-b border-transparent pr-2 pl-2 md:pl-3">
+          <div className="flex min-w-0 items-center gap-1">
+            <IconButton ref={toggleRef} label={desktop ? "Hide sidebar" : "Close sidebar"} aria-expanded={open} onClick={onClose}>
+              <X className="dock:hidden" />
+              <PanelLeft className="hidden dock:block" />
+            </IconButton>
+            <span className="truncate px-1 text-small font-semibold tracking-tight">Cadence</span>
+          </div>
           <div className="flex items-center">
             <IconButton label="Search chats" onClick={onSearch}>
               <Search />
@@ -94,9 +103,6 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
             >
               <Plus />
             </Link>
-            <IconButton label="Close sidebar" className="dock:hidden" onClick={onClose}>
-              <X />
-            </IconButton>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-2 pb-2">

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { IconButton } from "../ui/icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { MessageState } from "@client/store/chat-store";
-import { LatencyPopover } from "./latency-popover";
 import { ServedBy } from "./status-footer";
 
 interface AssistantActionsProps {
@@ -13,10 +12,10 @@ interface AssistantActionsProps {
   canRegenerate: boolean;
   onRegenerate: () => void;
   /** Which stand-in the user pressed before this chunk had loaded. */
-  defaultOpen?: "menu" | "latency" | null;
+  defaultOpen?: "menu" | null;
 }
 
-/** Loaded after first paint (D21): the menu and popover pull in Radix, which the first frame does not need. */
+/** Loaded after first paint (D21): the menu pulls in Radix, which the first frame does not need. */
 export function AssistantActions({ message, text, canRegenerate, onRegenerate, defaultOpen = null }: AssistantActionsProps) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(defaultOpen === "menu");
@@ -37,7 +36,6 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
   return (
     <div className="flex items-center gap-1">
       <ServedBy message={message} />
-      <LatencyPopover timings={message.timings} usage={message.usage} defaultOpen={defaultOpen === "latency"} />
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <IconButton

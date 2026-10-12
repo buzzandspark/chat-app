@@ -4,6 +4,12 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-11
 
+- Feedback is gone: the header's Send feedback button, its dialog, `POST /api/feedback`, its rate limiter, and the `feedback` table (migration 0002). So is the reply's latency (clock) button and its popover; replies still record their timings.
+- Clicking the chat's title in the header edits it in place: Enter or clicking away saves, Escape cancels; the title shows at once and a refused save puts the old one back. The sidebar's Rename keeps its dialog.
+- The sidebar toggle stays in the top-left corner whether the sidebar is open or closed: the sidebar's own header carries it while open, at the same spot as the main header's (on phones it is the overlay's close button, which moved there from the right).
+- The model picker no longer shows Sonnet for a moment: its chunk's loading stand-in showed the default model, not the chat's, every time it loaded, and a hard load showed the default until the chat's rows arrived. The label now waits, blank, until the chat's model is known.
+- Production headers: `nosniff`, framing denied (`X-Frame-Options` and CSP `frame-ancestors`), `base-uri`/`form-action`/`object-src` locked down, a strict referrer policy, a Permissions-Policy, COOP, HSTS in production; API responses are same-origin only (CORP) and not indexed. A state-changing API request from another site gets 403 (`Sec-Fetch-Site`, else `Origin` against the host).
+
 - The sidebar list no longer scrolls sideways: each row's hidden ⋯ tooltip kept its full width centred on the button, past the list's right edge. Hidden tooltips now have zero size (they keep their width for alignment) everywhere.
 - Closing the open fork tab really closes it; it used to reopen itself before the next tab loaded, and on phones, where only the open tab shows its ×, no tab could be closed. The open tab scrolls into view clear of the strip's fade, and its × is 32 px on touch screens.
 

@@ -45,26 +45,6 @@ test.describe("edit, regenerate, drafts", () => {
     await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue("unsent draft text");
     await expect(page.getByRole("button", { name: "Send message" })).toBeEnabled();
   });
-
-  test("the latency popover shows all six stages", async ({ page }) => {
-    await openNewChat(page);
-    await runScenario(page, "fallback_pre_output");
-    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    await lastAssistant(page).getByRole("button", { name: "Latency breakdown" }).click();
-    const dialog = page.getByRole("dialog");
-    for (const label of [
-      "Client: sent → first byte",
-      "Client: first byte → first paint",
-      "Client: sent → done",
-      "Server: received → upstream first token",
-      "Server: upstream first token → first relayed",
-      "Server: received → done",
-    ]) {
-      await expect(dialog).toContainText(label);
-    }
-    await expect(dialog).toContainText("includes a declined attempt");
-    await expect(dialog).not.toContainText("Client: sent → done\n–");
-  });
 });
 
 test.describe("chat management", () => {
@@ -86,6 +66,30 @@ test.describe("chat management", () => {
     await aside.getByRole("listitem").filter({ has: page.getByRole("link", { name: title }) }).getByRole("button", { name: `Actions for ${title}` }).click();
     await page.getByRole("menuitem", { name: "Unpin" }).click();
     await expect(aside.getByRole("region", { name: "Pinned" })).toHaveCount(0);
+  });
+
+  test("clicking the header title edits it in place: Enter saves, Escape cancels", async ({ page }, info) => {
+    const title = `inline ${info.project.name}`;
+    await openNewChat(page);
+    await sendText(page, title);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    const heading = page.getByTestId("chat-title").locator("visible=true").first();
+    await page.getByRole("button", { name: `Rename chat: ${title}` }).click();
+    const input = page.getByRole("textbox", { name: "Chat title" });
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(title);
+    await input.fill(`${title} renamed`);
+    await input.press("Enter");
+    await expect(heading).toHaveText(`${title} renamed`);
+    await ensureSidebarOpen(page);
+    await expect(sidebar(page).getByRole("link", { name: `${title} renamed` })).toHaveCount(1);
+    await page.reload();
+    await expect(heading).toHaveText(`${title} renamed`, { timeout: 15_000 });
+    await page.getByRole("button", { name: `Rename chat: ${title} renamed` }).click();
+    await page.getByRole("textbox", { name: "Chat title" }).fill("not this");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("textbox", { name: "Chat title" })).toHaveCount(0);
+    await expect(heading).toHaveText(`${title} renamed`);
   });
 
   test("rename, search, and delete a chat", async ({ page }) => {

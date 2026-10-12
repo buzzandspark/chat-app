@@ -196,9 +196,18 @@ export function canRetryReply(chat: Pick<ChatState, "messageIds">, message: Pick
 export class ChatStore {
   /** Model and effort for chats that have no reply to inherit from (#22): the user's last choice, set by the shell. */
   private defaults: ChatSettings = DEFAULT_SETTINGS;
+  /** Whether the shell has read that choice yet; until then an empty chat's model is not known. */
+  private defaultsLoaded = false;
+
+  /** A chat's model and effort are known: from its last reply, or for an empty chat from the user's last choice. */
+  settingsKnown(chatId: string): boolean {
+    const chat = this.getChat(chatId);
+    return chat.seeded && (chat.messageIds.length > 0 || this.defaultsLoaded);
+  }
 
   setDefaultSettings(patch: Partial<Pick<ChatSettings, "model" | "thinking">>): void {
     this.defaults = { ...this.defaults, ...patch };
+    this.defaultsLoaded = true;
     // Empty chats the user has not touched follow the new default.
     for (const [id, chat] of this.chats) {
       if (chat.settingsTouched || chat.messageIds.length > 0) continue;

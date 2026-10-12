@@ -353,6 +353,18 @@ describe("ChatStore", () => {
     expect(store.getChat("saved").settings.model).toBe("claude-sonnet-5-5");
   });
 
+  it("knows a chat's model once it has replies, or for an empty chat once the user's last choice is read", () => {
+    const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
+    // Before its rows arrive the model would be the default, which is why the picker shows nothing then.
+    expect(store.settingsKnown("saved")).toBe(false);
+    store.seedChat("saved", "Saved", [row({ id: "u1", role: "user", content: [text("q")] }), row({ id: "a1", role: "assistant", status: "done" })]);
+    expect(store.settingsKnown("saved")).toBe(true);
+    store.createChat("fresh");
+    expect(store.settingsKnown("fresh")).toBe(false);
+    store.setDefaultSettings({});
+    expect(store.settingsKnown("fresh")).toBe(true);
+  });
+
   it("never fabricates client timings for a reply this client did not send (#46)", () => {
     const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
     store.seedChat("c", "C", [

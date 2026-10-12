@@ -1,11 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { uuidv7 } from "@shared/id";
+import { crossSite } from "@server/cross-site";
 
 const SESSION_COOKIES = ["better-auth.session_token", "__Secure-better-auth.session_token"];
-
 // ADR-0004: cookie-presence redirect only; real validation is `getCurrentUser`.
 // Development and the e2e harness run against the seeded dev user without a cookie.
 export function proxy(request: NextRequest) {
+  // better-auth checks the origin of its own endpoints against its trusted origins.
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    if (!request.nextUrl.pathname.startsWith("/api/auth/") && crossSite(request.method, request.headers)) {
+      return NextResponse.json({ error: "cross_site" }, { status: 403, headers: { "cache-control": "no-store" } });
+    }
+    return NextResponse.next();
+  }
   const hasCookie = SESSION_COOKIES.some((name) => request.cookies.has(name));
   const bypass = process.env.NODE_ENV !== "production" || process.env.E2E === "1";
   if (!hasCookie && !bypass) {
@@ -29,5 +36,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/c/:path*"],
+  matcher: ["/c/:path*", "/api/:path*"],
 };
