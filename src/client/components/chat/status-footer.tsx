@@ -7,7 +7,7 @@ import { useNewChat } from "@client/hooks/use-new-chat";
 import { useNow } from "@client/hooks/use-now";
 import type { MessageState } from "@client/store/chat-store";
 import { modelDisplayName } from "@shared/models";
-import { MAX_AUTO_RETRIES, rateLimitDelayMs } from "./rate-limit";
+import { isLongWait, MAX_AUTO_RETRIES, rateLimitDelayMs, waitText } from "./rate-limit";
 
 interface StatusFooterProps {
   message: MessageState;
@@ -21,6 +21,12 @@ function Countdown({ until }: { until: number }) {
   const now = useNow(500);
   if (now === 0) return <span>a moment</span>;
   return <span>{Math.max(0, Math.ceil((until - now) / 1000))}s</span>;
+}
+
+function WaitLeft({ until }: { until: number }) {
+  const now = useNow(30_000);
+  if (now === 0) return <span>a while</span>;
+  return <span>{waitText(until - now)}</span>;
 }
 
 /** Every terminal and non-terminal state has its own wording and action. */
@@ -91,6 +97,15 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
             Try again
           </button>
         ) : null;
+        if (isLongWait(e.retryAfterMs)) {
+          text = (
+            <>
+              Busy right now. Try again in <WaitLeft until={message.createdAt + (e.retryAfterMs ?? 0)} />
+              {tryAgain ? <>, or {tryAgain} now</> : null}.
+            </>
+          );
+          break;
+        }
         const exhausted = message.retryAttempt >= MAX_AUTO_RETRIES;
         const headline = exhausted ? `Still rate limited after ${MAX_AUTO_RETRIES} tries.` : "Rate limited.";
         // No retry offered means no countdown either: the automatic retry stops along with Try again.
