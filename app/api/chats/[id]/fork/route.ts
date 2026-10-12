@@ -7,7 +7,7 @@ import { ForkOptionBody } from "@relay/options/schema";
 import { BudgetExceededError, PromptTooLongError, QuotaExceededError } from "@relay/quota";
 import { MAX_FORKS } from "@shared/forks";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
-import { tooMany } from "@server/ratelimit";
+import { refuseGuestSend, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
 
@@ -42,6 +42,10 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request", issues: parsed.error.issues });
     if (isDraining()) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
+    if (user.role === "guest") {
+      const refused = refuseGuestSend(request, user.id);
+      if (refused) return refused;
+    }
     const { engine, store } = getRelay();
     try {
       const forks = createForks({ db: getDb(), engine, store }, { userId: user.id, userRole: user.role, parentId: id, forks: parsed.data.forks });

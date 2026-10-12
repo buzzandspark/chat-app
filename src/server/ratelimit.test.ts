@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { clientIp, clientKeys, getLimiters } from "./ratelimit";
+import { clientIp, clientKeys, getLimiters, refuseGuestRewrite, refuseGuestSend } from "./ratelimit";
 
 const g = globalThis as unknown as { __chatLimiters?: ReturnType<typeof getLimiters> };
 
@@ -90,5 +90,37 @@ describe("clientKeys", () => {
     for (const value of ["::ffff:1.2.3.4", "::FFFF:1.2.3.4", "::ffff:102:304", "0:0:0:0:0:ffff:1.2.3.4", "[::ffff:1.2.3.4]:8080"]) {
       expect(keys({ "x-forwarded-for": value })).toEqual({ ip: "1.2.3.4", budgetKeys: ["ip:1.2.3.4"] });
     }
+  });
+});
+
+describe("refuseGuestSend and refuseGuestRewrite", () => {
+  beforeEach(() => {
+    delete g.__chatLimiters;
+    vi.stubEnv("TRUST_PROXY_HOPS", "1");
+  });
+  afterEach(() => {
+    for (const limiter of Object.values(g.__chatLimiters ?? {})) limiter.stopSweeper();
+    delete g.__chatLimiters;
+    vi.unstubAllEnvs();
+  });
+  const from = (ip: string) => new Request("http://x/", { headers: { "x-forwarded-for": ip } });
+
+  it("allows a guest 12 sends a minute and an address 40, counting a send only when both allow it", () => {
+    for (let i = 0; i < 12; i++) expect(refuseGuestSend(from("1.1.1.1"), "g1")).toBeNull();
+    const refused = refuseGuestSend(from("1.1.1.1"), "g1");
+    expect(refused?.status).toBe(429);
+    expect(Number(refused?.headers.get("retry-after"))).toBeGreaterThan(0);
+    for (let i = 0; i < 28; i++) expect(refuseGuestSend(from("1.1.1.1"), `g${2 + (i % 4)}`)).toBeNull();
+    expect(refuseGuestSend(from("1.1.1.1"), "g6")?.status).toBe(429);
+    for (let i = 0; i < 12; i++) expect(refuseGuestSend(from("2.2.2.2"), "g6")).toBeNull();
+  });
+
+  it("allows a guest 10 Explore rewrites a minute and an address 30, apart from its sends", () => {
+    for (let i = 0; i < 10; i++) expect(refuseGuestRewrite(from("1.1.1.1"), "g1")).toBeNull();
+    expect(refuseGuestRewrite(from("1.1.1.1"), "g1")?.status).toBe(429);
+    expect(refuseGuestSend(from("1.1.1.1"), "g1")).toBeNull();
+    for (let i = 0; i < 20; i++) expect(refuseGuestRewrite(from("1.1.1.1"), `g${2 + (i % 2)}`)).toBeNull();
+    expect(refuseGuestRewrite(from("1.1.1.1"), "g4")?.status).toBe(429);
+    expect(refuseGuestRewrite(from("2.2.2.2"), "g4")).toBeNull();
   });
 });

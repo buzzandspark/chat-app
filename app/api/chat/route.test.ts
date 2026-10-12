@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BusyError } from "@relay/engine";
 import { BudgetExceededError, PromptTooLongError } from "@relay/quota";
 import { SCENARIO_NAMES } from "@relay/scenarios";
 import { requireUser } from "@server/current-user";
+import { getLimiters } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import type { UserRole } from "@shared/types";
 import { POST } from "./route";
@@ -28,9 +29,15 @@ function send(role: UserRole, extra: Record<string, unknown>): Promise<Response>
   return POST(new NextRequest("http://localhost/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
 }
 
+const g = globalThis as unknown as { __chatLimiters?: ReturnType<typeof getLimiters> };
+
 beforeEach(() => {
   ctx.isProd = true;
   vi.mocked(getRelay).mockClear();
+});
+afterEach(() => {
+  for (const limiter of Object.values(g.__chatLimiters ?? {})) limiter.stopSweeper();
+  delete g.__chatLimiters;
 });
 
 describe("POST /api/chat with a scenario", () => {
@@ -78,5 +85,15 @@ describe("POST /api/chat refused by a guest limit", () => {
     const res = await send("guest", {});
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("10");
+  });
+});
+
+describe("POST /api/chat send rate", () => {
+  it("refuses a guest's thirteenth new send in a minute and never limits a member", async () => {
+    for (let i = 0; i < 12; i++) expect((await send("guest", {})).status).not.toBe(429);
+    const refused = await send("guest", {});
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toMatchObject({ error: "rate_limited" });
+    for (let i = 0; i < 20; i++) expect((await send("user", {})).status).not.toBe(429);
   });
 });

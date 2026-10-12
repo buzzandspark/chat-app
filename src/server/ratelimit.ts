@@ -7,6 +7,10 @@ interface Limiters {
   seedLongChat: RateLimiter;
   guestStart: RateLimiter;
   guestStartAll: RateLimiter;
+  guestSend: RateLimiter;
+  guestSendIp: RateLimiter;
+  guestRewrite: RateLimiter;
+  guestRewriteIp: RateLimiter;
 }
 
 const g = globalThis as unknown as { __chatLimiters?: Limiters };
@@ -21,6 +25,12 @@ export function getLimiters(): Limiters {
     // leave room for a shared address.
     guestStart: env.e2e ? new RateLimiter(60, 600) : new RateLimiter(10, 100),
     guestStartAll: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(60, 3000),
+    // A guest's sends (replies, forks, declared winners) and Explore rewrites, per guest and per address.
+    // The daily counts bound memory; the spend budgets are the daily limit.
+    guestSend: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(12, 1000),
+    guestSendIp: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(40, 6000),
+    guestRewrite: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(10, 300),
+    guestRewriteIp: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(30, 3000),
   };
   // Idle keys are dropped every ten minutes, so a day of distinct callers does not pile up in memory.
   // Started here, once with the limiters, not per call: a timer per request would never be cleared.
@@ -89,6 +99,28 @@ function parseIp(raw: string): string | number[] | null {
     return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
   }
   return groups;
+}
+
+/** A guest's new reply, fork or declared winner: refused while the guest or its address is over its rate, and counted only when both allow it. */
+export function refuseGuestSend(request: Request, userId: string): Response | null {
+  const { guestSend, guestSendIp } = getLimiters();
+  return refuse(guestSend, guestSendIp, request, userId);
+}
+
+/** A guest's Explore rewrite, limited the same way. */
+export function refuseGuestRewrite(request: Request, userId: string): Response | null {
+  const { guestRewrite, guestRewriteIp } = getLimiters();
+  return refuse(guestRewrite, guestRewriteIp, request, userId);
+}
+
+function refuse(perGuest: RateLimiter, perIp: RateLimiter, request: Request, userId: string): Response | null {
+  const ip = clientIp(request);
+  const mine = perGuest.check(userId, false);
+  const shared = perIp.check(ip, false);
+  if (!mine.ok || !shared.ok) return tooMany(Math.max(mine.retryAfterMs, shared.retryAfterMs));
+  perGuest.check(userId);
+  perIp.check(ip);
+  return null;
 }
 
 export function tooMany(retryAfterMs: number): Response {

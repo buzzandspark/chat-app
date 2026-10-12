@@ -8,7 +8,7 @@ import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
 import { errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
-import { tooMany } from "@server/ratelimit";
+import { refuseGuestSend, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
 import { singleEventResponse, streamGeneration } from "@server/sse-response";
@@ -41,6 +41,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     // is never refused, and its regenerate never stops the very generation it names.
     const existing = engine.owner(body.generationId) !== null;
     if (!existing && isDraining()) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
+    if (!existing && user.role === "guest") {
+      const refused = refuseGuestSend(request, user.id);
+      if (refused) return refused;
+    }
     const scenario = body.scenario ? SCENARIOS[body.scenario] : undefined;
     if (!existing && body.replaceFromMessageId) {
       // Settle the replaced turns' generations first: deleting a running one's rows would strand its buffer.

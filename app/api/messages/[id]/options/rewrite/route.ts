@@ -5,6 +5,7 @@ import { getDb, schema } from "@db/client";
 import { ForkOptionsBody } from "@relay/options/schema";
 import { QuotaExceededError } from "@relay/quota";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import { refuseGuestRewrite, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import { env } from "@shared/env";
 
@@ -25,6 +26,10 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/message
       .get();
     if (!row) return jsonError(404, { error: "not_found" });
     if (row.userId !== user.id) return jsonError(403, { error: "forbidden" });
+    if (user.role === "guest") {
+      const refused = refuseGuestRewrite(request, user.id);
+      if (refused) return refused;
+    }
     try {
       const { options, trace } = await getRelay().options.rewrite(user.id, id, parsed.data.options, parsed.data.instruction);
       return Response.json({ options, trace: env.isProd ? null : trace }, { headers: { "cache-control": "no-store" } });
