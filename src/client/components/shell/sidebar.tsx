@@ -81,7 +81,14 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               <X />
             </IconButton>
           </div>
-          <div className="flex items-center">
+          {/* Docked, they close into the pinned toggle and open out of it: this offset cancels the contents' slide
+              and leaves them at the toggle (sidebar padding plus their own width). */}
+          <div
+            className={cn(
+              "flex items-center dock:transition-[translate,opacity] dock:duration-200 dock:ease-out motion-reduce:transition-none",
+              !desktopOpen && "dock:translate-x-[calc(1.25rem+2*var(--spacing-touch))] dock:opacity-0",
+            )}
+          >
             <IconButton label="Search chats" shortcut="⌘K" aria-keyshortcuts="Meta+K Control+K" onClick={onSearch}>
               <Search />
             </IconButton>
@@ -95,7 +102,12 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               data-tip-side="bottom"
               // At the sidebar's right edge: the tip opens leftward instead of spilling past it.
               data-tip-align="end"
-              className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "tip touch-target")}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon" }),
+                "tip touch-target dock:transition-[translate] dock:duration-200 dock:ease-out motion-reduce:transition-none",
+                // One more button's width, so it tucks behind the toggle with Search.
+                !desktopOpen && "dock:-translate-x-(--spacing-touch)",
+              )}
               onClick={onNavigate}
               onNavigate={(e) => {
                 e.preventDefault();
