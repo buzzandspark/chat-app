@@ -4,7 +4,7 @@
 
 /** The Explore button widens into the tab strip, then each tab grows into its slot. */
 export const EXPAND_MS = 280;
-/** Docked, the strip is above the thread, far from the button: the widened outline travels up to it first. */
+/** Docked, the strip is above the thread, far from the button: the outline's single grow-and-move takes this much longer. */
 export const MOVE_MS = 260;
 export const TAB_MS = 240;
 export const STAGGER_MS = 60;
@@ -72,8 +72,7 @@ export function playTabReveal(parentId: string, strip: HTMLElement, morph: HTMLE
   const expand = morph.animate(
     [
       { offset: 0, top: `${fromTop}px`, left: `${r.from.left - box.left}px`, width: `${r.from.width}px`, height: `${r.from.height}px`, borderRadius: "8px", opacity: 1, easing: ease },
-      // Widened in place first; docked, it then travels up to the strip.
-      ...(move ? [{ offset: EXPAND_MS / total, top: `${fromTop}px`, left: "0px", width: `${box.width}px`, height: `${r.from.height}px`, borderRadius: "8px", opacity: 1, easing: ease }] : []),
+      // One step from the button's box to the strip's: it grows and moves at once.
       { offset: (EXPAND_MS + move) / total, ...full, opacity: 1 },
       { offset: Math.min(1, (EXPAND_MS + move + TAB_MS) / total), ...full, opacity: 0 },
     ],
