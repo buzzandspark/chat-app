@@ -114,7 +114,8 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
             id="new-cap"
             type="number"
             min={0}
-            step="0.5"
+            // Any amount: a step would make the browser refuse caps between its increments.
+            step="any"
             inputMode="decimal"
             placeholder={`${defaultCapUsd} (default)`}
             disabled={noCap}
