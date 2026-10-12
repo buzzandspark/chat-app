@@ -28,8 +28,9 @@ export function UsageBar({ initial }: { initial: CapUsage }) {
   const share = usage.capUsd > 0 ? Math.min(1, usage.spentUsd / usage.capUsd) : 1;
   const label = `${usd(usage.spentUsd)} of ${usd(usage.capUsd)} used (${Math.round(share * 100)}%)`;
   return (
-    // Placed by this wrapper: `.tip` makes its own element relative, for the tooltip.
-    <div className="absolute inset-x-0 -bottom-1.5 z-10 h-3">
+    // Placed by this wrapper: `.tip` makes its own element relative, for the tooltip. z-20: above the fork
+    // tab strip right under the header (z-10, later in the page), below the phone sidebar's backdrop (z-30).
+    <div className="absolute inset-x-0 -bottom-1.5 z-20 h-3">
       <div
         tabIndex={0}
         role="meter"

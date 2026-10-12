@@ -154,6 +154,7 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
 /** The fork wins: it stays, with its history; the main chat and the other forks are deleted. */
 export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const store = useChatStore();
+  const declareRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +197,11 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
       onOpenChange={onOpenChange}
       title="Declare the winner?"
       description={`"${chat.title}" stays, with its history, and can be forked again from here. The main chat and the other forks will be deleted. This cannot be undone.`}
+      // Opens on Declare winner, so Enter confirms.
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        declareRef.current?.focus();
+      }}
     >
       {error ? (
         <p role="alert" className="text-small text-destructive">
@@ -206,7 +212,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
         <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
-        <Button type="button" className="touch-target bg-warning text-warning-foreground hover:bg-warning/85" disabled={busy} onClick={() => void confirm()}>
+        <Button ref={declareRef} type="button" className="touch-target bg-warning text-white hover:bg-warning/85" disabled={busy} onClick={() => void confirm()}>
           Declare winner
         </Button>
       </div>

@@ -90,6 +90,8 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               data-tip="New chat  ⌘⇧O"
               aria-keyshortcuts="Meta+Shift+O Control+Shift+O"
               data-tip-side="bottom"
+              // At the sidebar's right edge: the tip opens leftward instead of spilling past it.
+              data-tip-align="end"
               className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "tip touch-target")}
               onClick={onNavigate}
               onNavigate={(e) => {
