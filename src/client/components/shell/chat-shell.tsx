@@ -27,6 +27,8 @@ interface ChatShellProps {
   sidebarList: ReactNode;
   userLabel: ReactNode;
   account: ReactNode;
+  /** Spend against the cap, drawn on the header's bottom border (needs the session, so a streamed slot). */
+  usage: ReactNode;
   children: ReactNode;
 }
 
@@ -44,7 +46,7 @@ export function ChatShell(props: ChatShellProps) {
   );
 }
 
-function ChatShellInner({ sidebarList, userLabel, account, children }: ChatShellProps) {
+function ChatShellInner({ sidebarList, userLabel, account, usage, children }: ChatShellProps) {
   // Null until the viewport is known (server, hydration render); everything but the sidebar's
   // modality treats that as the phone base, as useIsDesktop does.
   const desktopOrNull = useIsDesktopOrNull();
@@ -166,7 +168,7 @@ function ChatShellInner({ sidebarList, userLabel, account, children }: ChatShell
       {/* min-h-0: a long thread must scroll inside the column, never push the composer below the fold.
           While the phone sidebar is open the column is inert, so the sidebar is a real modal (#56). */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" inert={!desktop && phoneOpen ? true : undefined}>
-        <header data-tip-boundary className="safe-top flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
+        <header data-tip-boundary className="safe-top relative flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] shrink-0 items-center gap-1 border-b border-border pl-[max(0.5rem,env(safe-area-inset-left,0px))] pr-[max(0.5rem,env(safe-area-inset-right,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] md:pr-[max(0.75rem,env(safe-area-inset-right,0px))]">
           {/* Docked and open, the sidebar's own header shows the toggle at this same spot. */}
           <IconButton ref={menuButtonRef} label="Show sidebar" aria-expanded={open} className={cn(desktopOpen && "dock:hidden")} onClick={toggle}>
             <Menu className="dock:hidden" />
@@ -176,6 +178,7 @@ function ChatShellInner({ sidebarList, userLabel, account, children }: ChatShell
           <Suspense fallback={<HeaderRouteFallback />}>
             <HeaderRoute onPathnameChange={closePhone} />
           </Suspense>
+          {usage}
         </header>
         {children}
       </div>

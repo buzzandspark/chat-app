@@ -105,3 +105,9 @@ export function getUserSettings(userId: string, db: Db = getDb()): UserSettings 
 export function updateUserSettings(userId: string, settings: UserSettings, db: Db = getDb()): boolean {
   return db.update(users).set(settings).where(eq(users.id, userId)).run().changes > 0;
 }
+
+/** The cap's own counter and the cap (null: no cap), for the header's usage bar. */
+export function capUsage(userId: string, db: Db = getDb()): { spentUsd: number; capUsd: number | null } {
+  const row = db.select({ cap: schema.users.costCapUsd, spent: schema.users.costSpentUsd }).from(schema.users).where(eq(schema.users.id, userId)).get();
+  return { spentUsd: row?.spent ?? 0, capUsd: row?.cap ?? null };
+}

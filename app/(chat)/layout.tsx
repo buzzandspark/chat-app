@@ -8,9 +8,10 @@ import { ShellUserProvider } from "@client/components/shell/shell-user";
 import { SidebarList, SidebarListSkeleton } from "@client/components/shell/sidebar-list";
 import { SignInButton } from "@client/components/shell/sign-in-button";
 import { SignOutButton } from "@client/components/shell/sign-out-button";
+import { UsageBar } from "@client/components/shell/usage-bar";
 import { listChats } from "@server/chats";
 import { getCurrentUser } from "@server/current-user";
-import { getUserSettings } from "@server/settings";
+import { capUsage, getUserSettings } from "@server/settings";
 
 /**
  * #20: the shell's chrome (sidebar frame, header, composer geometry) is in the static shell; only the
@@ -45,6 +46,11 @@ export default function ChatLayout({ children }: LayoutProps<"/">) {
           <Account />
         </Suspense>
       }
+      usage={
+        <Suspense fallback={null}>
+          <Usage />
+        </Suspense>
+      }
     >
       <Suspense fallback={<ChatViewSkeleton />}>
         <WithUser>{children}</WithUser>
@@ -61,6 +67,11 @@ async function SidebarListData() {
 async function UserLabel() {
   const user = await currentUser();
   return <>{user.role === "guest" ? "Guest" : user.email}</>;
+}
+
+async function Usage() {
+  const user = await currentUser();
+  return <UsageBar initial={capUsage(user.id)} />;
 }
 
 async function Account() {

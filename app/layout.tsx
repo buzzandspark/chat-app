@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import Script from "next/script";
 import { ThemeScript } from "@client/components/shell/theme-script";
 import "./globals.css";
 
@@ -59,13 +58,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             Shield would drop it only after it arrived), and it checks on every client-side navigation too. A
             static attribute, not a pathname check here, which would stop every route from prerendering. */}
         {process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN ? (
-          <Script
-            defer
-            data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN}
-            data-exclude="/invite/**"
-            src="https://plausible.io/js/script.exclusions.js"
-            strategy="afterInteractive"
-          />
+          // A plain deferred script: next/script cost 1.9 kB of every route's JS for one tag.
+          <script defer data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN} data-exclude="/invite/**" src="https://plausible.io/js/script.exclusions.js" />
         ) : null}
       </body>
     </html>
