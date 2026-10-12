@@ -206,13 +206,19 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
   };
 
   const scenario = settings.scenario;
+  // Haiku is reading the last reply for options: the border above the input breathes until it answers.
+  const scanning = lastMessage?.optionsStream?.count === null && !lastMessage.optionsStream.failed;
   const editingText = editing ? textOf(store.getMessage(editing.userMessageId)?.blocks ?? []) : "";
 
   return (
     <div
       ref={attachRoot}
       data-tip-boundary
-      className="relative order-2 shrink-0 border-t border-border bg-background safe-x pt-2 group-has-[[data-testid=fork-tabs]]/chat:border-t-0 group-has-[[data-testid=fork-tabs]]/chat:pt-0 dock:order-none dock:group-has-[[data-testid=fork-tabs]]/chat:border-t dock:group-has-[[data-testid=fork-tabs]]/chat:pt-2"
+      className={cn(
+        "relative order-2 shrink-0 border-t border-border bg-background safe-x pt-2 group-has-[[data-testid=fork-tabs]]/chat:border-t-0 group-has-[[data-testid=fork-tabs]]/chat:pt-0 dock:order-none dock:group-has-[[data-testid=fork-tabs]]/chat:border-t dock:group-has-[[data-testid=fork-tabs]]/chat:pt-2",
+        scanning && "composer-scanning",
+      )}
+      data-scanning={scanning || undefined}
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
       data-testid="composer"
     >

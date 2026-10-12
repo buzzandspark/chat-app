@@ -271,6 +271,15 @@
 .explore-border {
   animation: explore-march 1.2s linear infinite;
 }
+@keyframes composer-scan {
+  50% {
+    border-top-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+  }
+}
+/* While Haiku reads the last reply for options. Unlayered, so the border utility can't override it. */
+.composer-scanning {
+  animation: composer-scan 1.6s ease-in-out infinite;
+}
 @keyframes explore-sweep {
   0% {
     stroke-dashoffset: 0;
@@ -295,6 +304,9 @@
   }
   .explore-sweep {
     display: none;
+  }
+  .composer-scanning {
+    animation: none;
   }
 }
 

@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- While Haiku reads the last reply for options, the border above the input pulses lightly (not with reduced motion).
 - Picking a model from the desktop menu puts focus in the message input, ready to type (Escape or a click away still returns it to the picker).
 - The keyboard hint line under the composer is gone; the Search and New chat buttons show their shortcuts (⌘K, ⌘⇧O) in their hover tooltips.
 - Once the Explore button has popped up, a light runs once round its border (none with reduced motion).
