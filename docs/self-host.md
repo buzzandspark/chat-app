@@ -2,15 +2,7 @@
 
 Chat is one Node process with a SQLite file. Run it anywhere that can run a container and mount a volume.
 
-## Quick start
-
-```sh
-cp .env.example .env            # set ANTHROPIC_API_KEY, BETTER_AUTH_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
-pnpm install
-pnpm dev                        # http://localhost:3000
-```
-
-With no `ANTHROPIC_API_KEY` the app boots in replay mode: every model is served from recorded fixtures and nothing is spent.
+For local development see the README.
 
 ## Docker
 
@@ -37,7 +29,7 @@ Railway mounts volumes owned by root; the entrypoint hands `/data` to `node` at 
 
 ## Environment variables
 
-See `.env.example`. `ADMIN_PATH_SLUG` chooses where the admin console lives; non-admins get a 404 there.
+See `.env.example`. `ADMIN_PATH_SLUG` chooses where the admin console lives; non-admins get a 404 there. `GUEST_COST_CAP_USD` (default 0.25) caps each guest. `TRUST_PROXY_HOPS` (default 1 in production) is how many proxies sit in front of the app; rate limits key on the address that many entries from the right of `X-Forwarded-For`.
 
 ## Cost caps
 

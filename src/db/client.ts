@@ -13,8 +13,7 @@ interface DbHandle {
   path: string;
 }
 
-// One connection per process (D1). Cached on globalThis so dev HMR does not
-// open a new handle on every reload.
+// One connection per process, cached on globalThis so dev HMR does not open a new handle on every reload.
 const g = globalThis as unknown as { __chatDb?: DbHandle };
 
 export function openDatabase(filePath: string = process.env.DATABASE_PATH ?? "data/app.db"): DbHandle {

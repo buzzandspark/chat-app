@@ -12,13 +12,12 @@ SQLite via Drizzle and `better-sqlite3`. JSON columns are `text` with `{ mode: "
 
 Tables:
 
-- `users` (role `admin | user`, `cost_cap_usd` nullable, `cost_spent_usd`), `sessions`, `accounts`, `verifications`: the better-auth tables, plus the admin plugin fields.
+- `users` (role `admin | user | guest`, `cost_cap_usd` nullable, `cost_spent_usd`, `is_anonymous`), `sessions`, `accounts`, `verifications`: the better-auth tables, plus the admin and anonymous plugin fields.
 - `invites`: token hash, expiry, `used_at`, `revoked_at`.
-- `chats`.
-- `messages`: `position`, `content`, `status`, `requested_model`, `serving_model`, `stop_reason`, `refusal`, `error`, `timings`.
+- `chats` (with `forked_from`, `fork_position`, `pinned`, `tab_hidden`).
+- `messages`: `position`, `content`, `status`, `requested_model`, `serving_model`, `stop_reason`, `refusal`, `error`, `timings`, `last_seq`, `fork_options`.
 - `generations`: `status`, `interrupted_reason`, `iterations` (usage per attempt), `provider`, `scenario`.
 - `usage_events`: one row per iteration with model, tokens, cost, and `estimated`.
-- `feedback`.
 
 Partial persistence: the engine writes accumulated assistant content every 2 s while streaming and on every terminal event, so a crash loses at most 2 s of text.
 

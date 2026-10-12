@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { lastAssistant, openNewChat, runScenario, sendText, visible } from "./helpers";
 
-// D16 auto-follow and the thread's pinning (review findings on scroll).
 test.describe("scroll", () => {
   test("auto-follow survives a long thinking block collapsing", async ({ page }) => {
     await openNewChat(page);
@@ -82,7 +81,7 @@ test.describe("scroll", () => {
     await visible(page, "scenario-panel-trigger").click();
     await visible(page, "scenario-long_chat").click();
     await expect(page).not.toHaveURL(before, { timeout: 30_000 });
-    // The page ships the newest 100 of the 200 rows (#47); the rest load when the reader nears the top.
+    // The page ships the newest 100 of the 200 rows; the rest load when the reader nears the top.
     await expect(page.locator("[data-role]:visible")).toHaveCount(100, { timeout: 60_000 });
     await page.waitForTimeout(500);
     const firstTops = await page.evaluate(() => (window as Window & { __firstTops?: number[] }).__firstTops ?? []);
@@ -90,9 +89,8 @@ test.describe("scroll", () => {
     expect(firstTops.length).toBeGreaterThan(0);
     expect(Math.min(...firstTops)).toBeGreaterThan(0);
 
-    // Each step should move what is on screen by exactly the scrolled distance. scrollTop itself may
-    // legitimately differ where scroll anchoring compensates for rows above being sized, so the
-    // measure is the on-screen movement of the row at the top of the viewport.
+    // Measures on-screen movement of the top row, not scrollTop: scroll anchoring may adjust scrollTop
+    // as rows above are sized.
     const list = visible(page, "message-list");
     const moves: number[] = [];
     for (let i = 0; i < 20; i++) {

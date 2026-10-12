@@ -95,7 +95,7 @@ async function threeTurns() {
   return { t0, t1, t2 };
 }
 
-describe("replace races (#21)", () => {
+describe("replace races", () => {
   it("two Regenerates waiting on the same running reply: the later one is refused, not left to delete the first's rows", async () => {
     const { t0, t1 } = await threeTurns();
     const regenA1 = regenerate(t1);
@@ -153,7 +153,7 @@ describe("replace races (#21)", () => {
     const { t1 } = await threeTurns();
     const regenA1 = regenerate(t1);
     expect(await replace(regenA1)).toEqual({ created: true });
-    // Its target is gone by now and its own reply is running, but `exists` is answered first (D2).
+    // Its target is gone by now and its own reply is running, but `exists` is answered first.
     expect(engine.start(regenA1)).toEqual({ created: false, reason: "exists" });
   });
 });

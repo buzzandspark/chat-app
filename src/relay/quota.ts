@@ -21,10 +21,8 @@ interface Meter {
   chars: number;
 }
 
-// D22 (amended 2026-10-12): a reply starts while its estimated input still fits under the cap, and is
-// metered while it streams (input at the start, output from the streamed text at chars / 4). Once spend
-// plus every live meter of the user reaches the cap, the engine stops all of that user's replies. The
-// settled cost (real usage) replaces the meter, so the cap can be overshot by about one delta per stream.
+// A reply starts while its estimated input fits under the cap and is metered as it streams (output at chars / 4); once spend
+// plus the user's live meters reach the cap, all their replies stop. Settled cost replaces the meter, so the cap can overshoot by about one delta per stream.
 export class QuotaManager {
   private meters = new Map<string, Meter>();
   constructor(private db: Db) {}
@@ -70,7 +68,7 @@ export class QuotaManager {
     QuotaManager.addSpend(this.db, userId, costUsd);
   }
 
-  /** The spend increment on its own, so the engine can run it inside its final transaction (finding 6). */
+  /** The spend increment on its own, so the engine can run it inside its final transaction. */
   static addSpend(db: Pick<Db, "update">, userId: string, costUsd: number): void {
     if (costUsd <= 0) return;
     db.update(users)

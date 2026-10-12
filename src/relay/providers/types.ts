@@ -7,9 +7,9 @@ export interface ProviderRequest {
   thinking: ThinkingOptions;
   messages: readonly HistoryMessage[];
   userId?: string;
-  /** D24 scenario name; providers that do not know it ignore it. */
+  /** Scenario name; providers that do not know it ignore it. */
   scenario?: string;
-  /** D13: a fork's first request also caches the parent's final reply. */
+  /** A fork's first request also caches the parent's final reply. */
   cacheTail?: boolean;
 }
 
@@ -17,17 +17,13 @@ export interface ProviderStreamOptions {
   signal: AbortSignal;
 }
 
-/** Every output source yields raw Anthropic stream events, so nothing downstream knows which (D24). */
+/** Every output source yields raw Anthropic stream events, so nothing downstream knows which. */
 export interface Provider {
   readonly name: "anthropic" | "replay" | "scripted" | "recording";
   stream(request: ProviderRequest, options: ProviderStreamOptions): AsyncIterable<NormalizableEvent>;
 }
 
-/**
- * D22: only the live provider (and its recorder) spends money; scripted and replayed runs cost nothing.
- * Keyed by name rather than by instance so an orphan settled from its `generations.provider` column,
- * long after the provider object is gone, applies the same rule as `Engine.start`.
- */
+/** Only the live provider (and its recorder) spends money. Keyed by name so an orphan settled from its `generations.provider` column applies the same rule as `Engine.start`. */
 export function isBillableProvider(name: string): boolean {
   return name === "anthropic" || name === "recording";
 }

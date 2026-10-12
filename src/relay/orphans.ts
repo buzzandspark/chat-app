@@ -16,13 +16,8 @@ export interface OrphanRow {
 }
 
 /**
- * A generation whose process died while it ran: mark it interrupted and settle an estimated cost from
- * the saved text at four characters per token (no usage was written). Shared by the boot backstop and
- * by `Engine.resume`, which used to mark without settling (cap review, finding 3). The serving model is
- * read from the message, which the partial writer keeps current, and thinking text counts as output
- * (finding 5). A run that spends nothing (D22) still gets its estimated usage row, with its tokens
- * kept and cost zero as `Engine.free` writes them, and never touches the user's spend, so a restart
- * mid-scenario cannot eat a cap.
+ * Marks a generation whose process died as interrupted and settles a cost estimated from its saved text at 4 chars/token,
+ * thinking counted as output. A non-billable run gets its usage row at cost zero and never touches spend, so a restart mid-scenario cannot eat a cap.
  */
 export function settleOrphan(tx: Db, row: OrphanRow, now: Date): number {
   tx.update(generations).set({ status: "interrupted", interruptedReason: "crash", endedAt: now }).where(eq(generations.id, row.id)).run();

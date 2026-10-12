@@ -1,10 +1,7 @@
 import { BrowserClient, dedupeIntegration, defaultStackParser, globalHandlersIntegration, makeFetchTransport, setCurrentClient } from "@sentry/browser";
 import { redactInviteTokens } from "@shared/redact";
 
-/**
- * D25: the minimal client, assembled from named imports so the bundler keeps only what is used (the
- * convenience `init` drags in every default integration, 134 KiB gzipped for the 31 that errors need).
- */
+/** Assembled from named imports: the convenience `init` pulls in every default integration (134 KiB gzipped). */
 export function startSentry(dsn: string): void {
   const client = new BrowserClient({
     dsn,

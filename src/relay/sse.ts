@@ -1,6 +1,6 @@
 import type { RelayEvent } from "./events";
 
-// SSE encoder and decoder in one module so client and server cannot drift (D2).
+// SSE encoder and decoder in one module so client and server cannot drift.
 // Hand-written because EventSource cannot POST, set headers, or defer to our backoff.
 
 export const SSE_HEADERS: Record<string, string> = {
@@ -12,11 +12,7 @@ export const SSE_HEADERS: Record<string, string> = {
 
 export const SSE_KEEPALIVE = ": keepalive\n\n";
 
-/**
- * One `data:` line per event (#49): the client reads the type and seq from the JSON, so the `event:`
- * and `id:` lines were pure overhead; a text or thinking delta also drops `generationId` and `t`,
- * which the client restores from the stream it is reading. JSON never contains a raw newline.
- */
+/** One `data:` line per event: type and seq live in the JSON, and text/thinking deltas drop `generationId` and `t`, which the client restores. */
 export function encodeSse(event: RelayEvent): string {
   if (event.type === "text_delta" || event.type === "thinking_delta") {
     return `data: ${JSON.stringify({ type: event.type, seq: event.seq, index: event.index, text: event.text })}\n\n`;

@@ -135,7 +135,7 @@ describe("parseFence", () => {
     expect(parseFence(" ```py\n   x", false)).toEqual({ lang: "py", code: "  x" });
   });
 
-  it("splits incrementally to the same blocks as a full split at every streamed prefix (#25)", () => {
+  it("splits incrementally to the same blocks as a full split at every streamed prefix", () => {
     const text = [
       "## Why resume works",
       "",
@@ -187,7 +187,7 @@ describe("parseFence", () => {
     }
   });
 
-  it("keeps an indented fence inside its list item (#24)", () => {
+  it("keeps an indented fence inside its list item", () => {
     const text = ["- step one:", "", "  ```ts", "  const a = 1;", "  ```", "", "- step two"].join("\n");
     const blocks = splitBlocks(text);
     expect(blocks).toHaveLength(1);

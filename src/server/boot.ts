@@ -55,9 +55,8 @@ export async function boot(): Promise<void> {
   );
 }
 
-// D3/D22 backstop: a row still `running` at boot died un-drained; mark it interrupted and settle
-// an estimated cost from the saved text at four characters per token (no usage was written), zero
-// for a scripted or replayed run.
+// Backstop: a row still `running` at boot died un-drained; mark it interrupted and settle an estimated
+// cost from the saved text at four characters per token (zero for a scripted or replayed run).
 function backstopInterruptedGenerations(): void {
   const db = getDb();
   const running = db

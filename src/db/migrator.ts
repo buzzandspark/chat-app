@@ -12,19 +12,10 @@ interface ForeignKeyViolation {
 }
 
 /**
- * Applies pending drizzle-kit migrations with foreign key enforcement off, then checks the result.
- *
- * Why not drizzle's own `migrate()`: it runs every pending migration inside one BEGIN…COMMIT, and
- * SQLite ignores `PRAGMA foreign_keys` inside a transaction, so the `PRAGMA foreign_keys=OFF` that
- * drizzle-kit wraps around a table rebuild is a no-op. The rebuild's `DROP TABLE x` then runs as an
- * implicit DELETE with enforcement on and its ON DELETE CASCADE wipes every child row (dropping
- * `chats` takes all messages and generations with it). The pragma has to be set here, outside the
- * transaction; `PRAGMA foreign_key_check` before COMMIT stands in for the enforcement we turned off,
- * so a migration that leaves a dangling reference rolls back instead of committing it.
- *
- * The journal is drizzle's: the same `__drizzle_migrations` table and rows, files read by drizzle's
- * `readMigrationFiles`, and a migration is pending when its journal `when` is newer than the last
- * recorded one, so a database migrated by either runner carries on under the other.
+ * Applies drizzle-kit migrations with FK enforcement off. Not drizzle's `migrate()`: it runs them in one transaction,
+ * where SQLite ignores `PRAGMA foreign_keys`, so a table rebuild's DROP cascades and wipes every child row.
+ * `PRAGMA foreign_key_check` before COMMIT stands in for the enforcement turned off. The journal is drizzle's
+ * (`__drizzle_migrations`, pending by journal `when`), so a database migrated by either runner carries on under the other.
  */
 export function applyMigrations(sqlite: Database.Database, migrationsFolder: string = MIGRATIONS_FOLDER): void {
   const migrations = readMigrationFiles({ migrationsFolder });

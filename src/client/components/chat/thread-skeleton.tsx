@@ -1,6 +1,6 @@
 /**
- * D21/#17: the thread placeholder keeps the list's spacing and nothing else. A new chat's server HTML
- * carries it until hydration shows the empty state, so it must not pretend a conversation exists.
+ * Keeps the list's spacing and nothing else: a new chat's server HTML carries it until hydration shows the
+ * empty state, so it must not pretend a conversation exists.
  */
 export function ThreadSkeleton() {
   return (

@@ -10,7 +10,7 @@ export interface EditingState {
   text: string;
 }
 
-/** Stable for the life of the view: callbacks and ids. Rows subscribe to this one (#43). */
+/** Stable for the life of the view: callbacks and ids. Rows subscribe to this one. */
 export interface ChatActions {
   chatId: string;
   userId: string;
@@ -20,7 +20,7 @@ export interface ChatActions {
   send: (text: string, scenario?: string, edit?: EditingState | null) => void;
   /** Regenerate from a user message, dropping that reply and everything after it. */
   retry: (userMessageId: string, fromMessageId: string) => void;
-  /** D10: load a user message into the composer for editing. */
+  /** Load a user message into the composer for editing. */
   editMessage: (userMessageId: string) => void;
   /** A queued message back into the composer (and out of the queue). */
   editQueued: (id: string) => void;

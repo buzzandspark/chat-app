@@ -4,7 +4,7 @@ import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 import { singleEventResponse, streamGeneration } from "@server/sse-response";
 
-// D2: the single resume path. `after` is the last producer seq the client applied (-1 for none);
+// The single resume path. `after` is the last producer seq the client applied (-1 for none);
 // no buffer means a snapshot, no row means 404 and the client re-POSTs with the same ids.
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/generations/[id]/events">): Promise<Response> {
   try {

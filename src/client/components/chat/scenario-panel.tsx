@@ -14,7 +14,7 @@ interface ScenarioDialogProps {
 const ITEM =
   "flex min-h-12 w-full flex-col items-start rounded-lg px-3 py-2 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 active:bg-muted";
 
-/** D24: every entry is served by a scripted provider server-side, so nothing here can spend money. */
+/** Every entry is served by a scripted provider server-side, so nothing here can spend money. */
 export function ScenarioDialog({ open, onOpenChange, onPick, onSeedLongChat }: ScenarioDialogProps) {
   return (
     <ResponsiveDialog

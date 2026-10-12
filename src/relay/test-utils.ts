@@ -6,7 +6,6 @@ import { applyMigrations } from "@db/migrator";
 import type { RelayEvent } from "./events";
 import type { EventStore } from "./store";
 
-/** A fresh in-memory database with migrations applied, for engine tests. */
 export function createTestDb(): Db {
   const sqlite = new Database(":memory:");
   sqlite.pragma("foreign_keys = ON");
@@ -20,7 +19,6 @@ export function seedUser(db: Db, id: string, extra: Partial<typeof schema.users.
     .run();
 }
 
-/** Collects every event for a generation until its terminal event. */
 export function collectUntilTerminal(store: EventStore, generationId: string, timeoutMs = 10_000): Promise<RelayEvent[]> {
   return new Promise((resolve, reject) => {
     const events: RelayEvent[] = [];

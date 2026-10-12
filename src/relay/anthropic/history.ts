@@ -15,7 +15,7 @@ function lastFallbackIndex(content: readonly StoredContentBlock[]): number {
   return -1;
 }
 
-// Non-text blocks before the final fallback block are omitted: the fallback model never saw them (D9).
+// Non-text blocks before the final fallback block are omitted: the fallback model never saw them.
 // Thinking without a signature (an interrupted stream) is dropped: the API rejects it.
 export function assistantParams(content: readonly StoredContentBlock[]): Param[] {
   const boundary = lastFallbackIndex(content);
@@ -60,8 +60,8 @@ export interface HistoryOptions {
   cacheTail?: boolean;
 }
 
-// Refused and errored assistant messages are excluded (D9); trailing whitespace is trimmed so no
-// turn reads as a prefill; the newest user message carries the moving cache breakpoint (D13).
+// Refused and errored assistant messages are excluded; trailing whitespace is trimmed so no
+// turn reads as a prefill; the newest user message carries the moving cache breakpoint.
 export function buildHistory(messages: readonly HistoryMessage[], options: HistoryOptions = {}): Anthropic.Beta.BetaMessageParam[] {
   const out: Anthropic.Beta.BetaMessageParam[] = [];
   for (const m of messages) {

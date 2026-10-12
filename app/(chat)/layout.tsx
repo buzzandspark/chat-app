@@ -14,9 +14,8 @@ import { getCurrentUser } from "@server/current-user";
 import { capUsage, getUserSettings } from "@server/settings";
 
 /**
- * #20: the shell's chrome (sidebar frame, header, composer geometry) is in the static shell; only the
- * three things that need the session stream in, each behind its own Suspense: the chat list, the
- * user label and the page. One session check per request serves all three.
+ * The shell's chrome is static; only the chat list, the user label and the page need the session, each
+ * streaming in behind its own Suspense. One session check per request serves all three.
  */
 const currentUser = cache(async () => {
   const user = await getCurrentUser();

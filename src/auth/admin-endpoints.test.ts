@@ -87,7 +87,7 @@ describe("better-auth over HTTP", () => {
       cookie: adminCookie,
       body: { email, password: "password-1234", name: "Uncapped", role: "admin" },
     });
-    // Before the fix this row existed with role "admin" and cost_cap_usd NULL, which the quota reads as uncapped.
+    // Without the guard this row would exist with role "admin" and cost_cap_usd NULL, which the quota reads as uncapped.
     expect(getDb().select().from(schema.users).where(eq(schema.users.email, email)).get()).toBeUndefined();
     expect(res.status).toBe(404);
   });

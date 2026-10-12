@@ -14,7 +14,7 @@ function collect(chunks: string[], flush = true): SseMessage[] {
 }
 
 describe("sse codec", () => {
-  it("round-trips a delta compactly: one data line, the stream's generation id restored by the reader (#49)", () => {
+  it("round-trips a delta compactly: one data line, the stream's generation id restored by the reader", () => {
     const wire = encodeSse(sample);
     expect(wire).toMatch(/^data: /);
     expect(wire).not.toContain("event:");

@@ -50,7 +50,7 @@ function mulberry32(seed: number): () => number {
 }
 
 // Script to fixture lines with synthetic timestamps, no sleeping. ScriptedProvider and the on-disk
-// fixtures share this, so a scenario behaves identically from memory or disk (D24).
+// fixtures share this, so a scenario behaves identically from memory or disk.
 export function scriptToFixture(script: Script, seed = 1): FixtureLine[] {
   const rng = mulberry32(seed);
   const lines: FixtureLine[] = [];
@@ -210,7 +210,7 @@ function messageStart(model: string, inputTokens: number, seed: number): Anthrop
   } as unknown as Anthropic.Beta.BetaMessage;
 }
 
-/** D24: streams a script with its pacing, without touching disk. */
+/** Streams a script with its pacing, without touching disk. */
 export class ScriptedProvider implements Provider {
   readonly name = "scripted" as const;
   constructor(

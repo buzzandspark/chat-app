@@ -21,7 +21,7 @@ export function isDraining(): boolean {
   return state.draining;
 }
 
-/** Register work to run before exit; drains run last-registered first, closers after the streams have flushed (#70). */
+/** Register work to run before exit; drains run last-registered first, closers after the streams have flushed. */
 export function onShutdown(drain: Drain, phase: Phase = "drain"): void {
   (phase === "close" ? state.closers : state.drains).push(drain);
 }

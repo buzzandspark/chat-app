@@ -5,12 +5,8 @@ export type { HighlightLine } from "./highlight-core";
 export { resolveLanguage } from "./languages";
 
 /**
- * D15: highlighted lines by content hash, tokenised in a Web Worker when the browser has one and
- * in-thread otherwise (tests, very old browsers, a worker that failed to load). A block seen once,
- * in this chat or another, never tokenises again, so reopening a chat is a cache hit. The worker
- * handle, shiki and the fallback live in `highlight-runtime`, loaded on the first highlight: a raw
- * `new Worker` or `import()` target in a route module is listed in its client-reference manifest
- * and counted by the size gate, a chunk behind a lazy module is not.
+ * Cached by content hash, tokenised in a worker when available. The runtime sits behind a lazy module because a
+ * raw `new Worker`/`import()` in a route module lands in its client-reference manifest and the size gate.
  */
 const cache = new Map<string, HighlightLine[]>();
 const pending = new Map<string, Promise<HighlightLine[]>>();

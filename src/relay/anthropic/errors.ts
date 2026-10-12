@@ -26,7 +26,7 @@ export function isAbortError(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError";
 }
 
-/** SDK typed errors to the relay's error vocabulary (D9, D17). */
+/** SDK typed errors to the relay's error vocabulary. */
 export function toRelayError(err: unknown): RelayError {
   if (err instanceof Anthropic.RateLimitError) {
     return {
@@ -58,11 +58,8 @@ export function toRelayError(err: unknown): RelayError {
     return { kind: "network", message: "Lost the connection to the model provider", retryable: true };
   }
   if (err instanceof Anthropic.APIError) {
-    // No status means the SDK threw an SSE `event: error` from inside an HTTP 200 stream (core/streaming.js):
-    // `err.error` is the whole `{ type: "error", error: { type, message } }` body, `err.message` its raw JSON, and
-    // `err.type` the inner type. Classify by that type exactly as a fixture's error event is, or a mid-stream
-    // rate_limit_error / api_error lands as a non-retryable api_error with JSON for a message. Data that isn't JSON
-    // arrives as the bare string, which makeMessage would quote.
+    // No status: the SDK threw an SSE `event: error` inside a 200 stream, `err.type` the inner type. Classify by it as a fixture's error event is,
+    // or a mid-stream rate_limit_error lands as a non-retryable api_error. Non-JSON data arrives as a bare string, which makeMessage would quote.
     if (err.status === undefined) {
       const body = err.error as { error?: { type?: string; message?: string } } | string | undefined;
       const type = err.type ?? undefined;

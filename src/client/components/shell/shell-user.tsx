@@ -15,7 +15,7 @@ export interface ShellUser {
 
 const ShellUserContext = createContext<ShellUser | null>(null);
 
-/** Rendered by the layout once the session is known; everything that needs the user sits inside (#20). */
+/** Rendered by the layout once the session is known; everything that needs the user sits inside. */
 export function ShellUserProvider({ userId, guest, scenarioPanel, exploreOptions: initialExplore, children }: Omit<ShellUser, "setExploreOptions"> & { children: ReactNode }) {
   const [exploreOptions, setExploreOptions] = useState(initialExplore);
   // The store's reply-end watcher reads the switch outside React (ADR-0005: the store follows render).

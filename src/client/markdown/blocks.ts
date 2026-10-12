@@ -1,11 +1,10 @@
-/** D9: top-level blocks, fence- and table-aware with lists kept whole, so finished blocks memoise by hash. */
+/** Top-level blocks, fence- and table-aware with lists kept whole, so finished blocks memoise by hash. */
 
 type BlockKind = "fence" | "table" | "other";
 
 export interface MarkdownBlock {
   /** React key: stable while streaming. */
   key: string;
-  /** Memoisation key. */
   hash: string;
   source: string;
   /** False for an unclosed fence and always for the final block, which may still grow. */
@@ -46,9 +45,7 @@ function splitFrom(markdown: string, base: number, startIndex: number): Markdown
   let cur: string[] = [];
   let curStart = 0;
   let kind: BlockKind = "other";
-  // Some line of the block opened a list item, not just its first: Claude often leads a list with a
-  // label line (`**Steps:**` then `1. Install:`), and a block that starts with that label is a list
-  // block too, for the fences and blank-separated items that follow.
+  // Any line, not just the first: Claude often leads a list with a label line (`**Steps:**` then `1. Install:`).
   let listed = false;
   let fence: Open | null = null;
   let pendingBlanks = 0;
@@ -90,9 +87,8 @@ function splitFrom(markdown: string, base: number, startIndex: number): Markdown
 
     const open = FENCE_OPEN.exec(line);
     if (open && !(open[2]![0] === "`" && open[3]!.includes("`"))) {
-      // An indented fence that follows a list marker is part of that list item (#24): keep it in the
-      // list block so marked nests it and Copy gets the code without the indent. If the block isn't
-      // really a list (`1990. was` lazily continuing a paragraph), marked still renders it right.
+      // An indented fence after a list marker stays in the list block so marked nests it and Copy drops the
+      // indent; if it isn't really a list (`1990. was` continuing a paragraph), marked still renders it right.
       const inList = cur.length > 0 && kind === "other" && listed && open[1]!.length > 0;
       if (!inList) {
         flush(true);
@@ -140,11 +136,8 @@ export function splitBlocks(markdown: string): MarkdownBlock[] {
   return splitFrom(markdown, 0, 0);
 }
 
-// #25: while a reply streams, every frame appends to the same text. The blocks before the last one
-// are final (a later line can only extend the last block), so only the tail is re-split. A small
-// cache of recent results is kept here rather than in React state, so the renderer stays pure.
-// The exception is a last block that is one unfinished line: `2` (its `.` not in yet) closed the
-// list before it, but `2. b` continues that list, so the block before it is re-split too.
+// While streaming only the tail is re-split; the cache lives here, not in React state, so rendering stays pure.
+// A last block of one unfinished line (`2` before its `.`) may rejoin the list before it, so that block is re-split too.
 const RECENT = 8;
 const recent: Array<{ text: string; blocks: MarkdownBlock[] }> = [];
 

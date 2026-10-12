@@ -4,8 +4,8 @@ import { defineConfig, devices } from "@playwright/test";
 const port = Number(process.env.E2E_PORT ?? 3100);
 const baseURL = `http://127.0.0.1:${port}`;
 
-// Phone first (D0, D26): Pixel 7 is the default project and the only one with performance budgets,
-// since throttling goes through CDP; iPhone 14 (WebKit) covers layout, desktop is the expansion.
+// Phone first: Pixel 7 is the default project and the only one with performance budgets, since throttling
+// goes through CDP; iPhone 14 (WebKit) covers layout, desktop is the expansion.
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,

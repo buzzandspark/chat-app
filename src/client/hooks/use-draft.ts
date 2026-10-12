@@ -7,8 +7,7 @@ export function draftKey(userId: string, chatId: string): string {
   return `${PREFIX}${userId}:${chatId}`;
 }
 
-// D18: drafts per (user, chat) live here, outside React, and are saved to localStorage 300 ms after the
-// last change and at once when the page hides. Read lazily, so nothing is written until the user types.
+// Drafts per (user, chat) live outside React; saved 300 ms after the last change and at once when the page hides.
 const drafts = new Map<string, string>();
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const listeners = new Set<() => void>();
@@ -73,7 +72,7 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-/** The chat's draft; empty on the server and in hydration, which render the field empty. */
+/** Empty on the server and in hydration. */
 export function useDraft(key: string): string {
   return useSyncExternalStore(
     subscribe,

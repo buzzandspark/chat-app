@@ -11,7 +11,7 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** D23: a random 32-byte token; only its SHA-256 is stored. Revokes earlier open invites for the user. */
+/** A random 32-byte token; only its SHA-256 is stored. Revokes earlier open invites for the user. */
 export function issueInvite(userId: string): { token: string; expiresAt: Date } {
   const db = getDb();
   const token = randomBytes(32).toString("base64url");
@@ -64,7 +64,7 @@ export async function redeemInvite(token: string, password: string): Promise<Inv
   const now = new Date();
   let raced = false;
   db.transaction((tx) => {
-    // Single use, atomically: the row is claimed first, and a second redeemer in the same instant loses (#63).
+    // Single use, atomically: the row is claimed first, and a second redeemer in the same instant loses.
     const claimed = tx
       .update(schema.invites)
       .set({ usedAt: now })

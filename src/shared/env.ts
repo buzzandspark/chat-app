@@ -36,7 +36,7 @@ export const env = {
   ...parsed,
   isProd: parsed.NODE_ENV === "production",
   isDev: parsed.NODE_ENV === "development",
-  /** D24: a missing key or REPLAY_MODE=1 boots the whole app in replay mode. */
+  /** A missing key or REPLAY_MODE=1 boots the whole app in replay mode. */
   replayMode: flag(parsed.REPLAY_MODE) || !parsed.ANTHROPIC_API_KEY,
   record: flag(parsed.RECORD),
   e2e: flag(parsed.E2E),

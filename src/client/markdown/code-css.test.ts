@@ -5,7 +5,7 @@ import { createCssVariablesTheme } from "@shikijs/core";
 import { describe, expect, it } from "vitest";
 import { tokenize } from "./highlight-core";
 
-/** #22: every `--shiki-*` variable a token can carry must be defined in both palettes of code.css. */
+/** Every `--shiki-*` variable a token can carry must be defined in both palettes of code.css. */
 const css = readFileSync(fileURLToPath(new URL("./code.css", import.meta.url)), "utf8");
 
 function definedIn(selector: string): Set<string> {

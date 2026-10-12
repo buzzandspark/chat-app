@@ -2,13 +2,8 @@
 import { useCallback, useRef, useState } from "react";
 
 /**
- * D21: a Radix-backed control's chunk loads on the first sign of intent, not at mount. Hover, touch
- * and focus only warm the chunk: swapping the element on any event that precedes a click (mousedown
- * focuses the button) would lose the click. A press loads the chunk, then arms the real control (the
- * loaded component, `loaded`) and asks it to open; until then the stand-in stays, so nothing blinks. A
- * keyboard press is a click too, and Radix returns focus to the real trigger when it closes (a control
- * that goes back to its stand-in carries that focus over, see `closed`). A chunk that fails to load comes
- * back as `failed`, for the control to throw inside its ChunkBoundary, which shows a Retry in its place.
+ * Hover, touch and focus only warm the chunk: swapping the element before a click would lose the click.
+ * `failed` is for the control to throw inside its ChunkBoundary.
  */
 export function useIntent<T>(load: () => Promise<T>) {
   const [loaded, setLoaded] = useState<{ value: T } | null>(null);
@@ -32,12 +27,8 @@ export function useIntent<T>(load: () => Promise<T>) {
     },
     [load],
   );
-  // Back to the stand-in once the control has closed, so an armed row stops carrying its Radix tree (#44).
-  // Not on `onOpenChange(false)`: that unmounted the real trigger in the same commit, so Radix's close
-  // auto-focus (a timeout later) found no trigger and focus fell to <body>. `closed` is the content's
-  // `onCloseAutoFocus`; it runs before Radix's own handler, which focuses `trigger` unless the menu was
-  // closed by an interaction elsewhere (in a modal menu, a right-click), so the outcome is read a microtask later. If the trigger has focus
-  // then, the stand-in that replaces it takes it (`standIn`); if it doesn't, focus is left alone.
+  // Not on `onOpenChange(false)`: unmounting the trigger then sends Radix's close auto-focus to <body>.
+  // `closed` is `onCloseAutoFocus`, which runs before Radix focuses the trigger, so focus is read a microtask later.
   // Callback refs, not ref objects: the intent is passed to helpers during render (`intentProps`).
   const triggerEl = useRef<HTMLButtonElement | null>(null);
   const refocus = useRef(false);

@@ -33,8 +33,8 @@ async function adoptGuest(guestId: string, userId: string): Promise<void> {
 }
 
 /**
- * ADR-0004 (amended 2026-10-12): email + password with sign-up disabled, admin plugin for roles and bans,
- * and an anonymous guest for every visitor without a session (created only by /api/guest).
+ * ADR-0004: email + password with sign-up disabled, admin plugin for roles and bans, and an anonymous
+ * guest for every visitor without a session (created only by /api/guest).
  */
 function createAuth() {
   const adminPlugin = admin({ defaultRole: "user", adminRoles: ["admin"] });
@@ -82,10 +82,8 @@ function createAuth() {
         costSpentUsd: { type: "number", required: false, input: false },
       },
     },
-    // The admin plugin is here for its schema (role, banned, ban_reason) and its hook that refuses a
-    // banned user's sign-in. Its HTTP endpoints (/admin/create-user, set-role, ban-user, impersonate-user…)
-    // stay off: user management goes through app/api/admin/users, which enforces the cost cap, the
-    // self-demotion guard and stopping a banned user's generations. Server-side auth.api calls are unaffected.
+    // The admin plugin is here for its schema and its hook refusing a banned sign-in. Its HTTP endpoints stay off:
+    // app/api/admin/users enforces the cost cap, the self-demotion guard and stopping a banned user's generations.
     disabledPaths: Object.values(adminPlugin.endpoints).map((endpoint) => endpoint.path),
     plugins: [
       adminPlugin,

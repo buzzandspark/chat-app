@@ -54,11 +54,7 @@ export class SidebarStore {
     this.emit();
   }
 
-  /**
-   * Inserts a new chat, or merges into the known one: a send names only id, title and updatedAt, and
-   * replacing the entry would drop `pinned`, moving the row out of its section until a reload.
-   * Clearing it goes through `patch`, never through here.
-   */
+  /** Merges rather than replaces: a send names only id, title and updatedAt, and replacing would drop `pinned`. */
   upsert(chat: ChatSummary): void {
     const existing = this.chats.find((c) => c.id === chat.id);
     const rest = existing ? this.chats.filter((c) => c !== existing) : this.chats;
@@ -86,11 +82,7 @@ export async function patchChat(id: string, body: Record<string, unknown>): Prom
   }
 }
 
-/**
- * Pin: the row moves at once and the server is told; a refused or failed request (offline included)
- * puts the flag back, unless the user has changed it again since, so a late failure cannot undo a
- * newer change that the server did take.
- */
+/** Optimistic; a failure puts the flag back only if the user has not changed it since, so it cannot undo a newer change. */
 export async function patchChatOptimistic(store: SidebarStore, id: string, fields: { pinned: boolean }): Promise<boolean> {
   // An absent `pinned` reads as unpinned, as the sidebar renders it.
   const read = () => Boolean(store.get().find((x) => x.id === id)?.pinned);
@@ -116,10 +108,7 @@ export function getSidebarStore(): SidebarStore {
   return singleton;
 }
 
-/**
- * `initial` is the server's list: it is the server snapshot, so SSR and hydration render the real rows
- * (no "No chats yet." flash, no shift), and it seeds the store on the first client render.
- */
+/** `initial` is the server snapshot, so SSR and hydration render the real rows with no empty-state flash. */
 export function useSidebarChats(initial?: ChatSummary[]): ChatSummary[] {
   const store = getSidebarStore();
   const [seededWith, setSeededWith] = useState<ChatSummary[] | null>(null);
@@ -134,8 +123,7 @@ export function useSidebarChats(initial?: ChatSummary[]): ChatSummary[] {
   );
 }
 
-// The chat the user just asked for, before the router has committed the navigation: the sidebar row
-// highlights and the header title switches on click, not when the thread arrives (D21).
+// The chat the user just asked for, before the router commits, so the row and title switch on click.
 let pending: string | null = null;
 const listeners = new Set<() => void>();
 

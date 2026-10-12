@@ -23,9 +23,8 @@ export function ftsQuery(q: string): string {
 }
 
 /**
- * D19/#60: SQLite's FTS5 index over the messages' text (kept by triggers, migration 0006) answers in
- * index time with a snippet built by SQLite; the query is bounded by LIMIT, so a keystroke never scans
- * a user's whole history. Titles are matched separately with a case fold beyond ASCII.
+ * SQLite's FTS5 index over message text (kept by triggers) builds the snippet, and LIMIT bounds the query so a
+ * keystroke never scans a user's whole history. Titles are matched separately with a case fold beyond ASCII.
  */
 export async function GET(request: NextRequest): Promise<Response> {
   try {

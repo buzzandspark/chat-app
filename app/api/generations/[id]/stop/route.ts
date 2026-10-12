@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 
-/** D5: stop is explicit. Aborts upstream and appends `stopped`. */
+/** Stop is explicit: aborts upstream and appends `stopped`. */
 export async function POST(_request: NextRequest, ctx: RouteContext<"/api/generations/[id]/stop">): Promise<Response> {
   try {
     const user = await requireUser();

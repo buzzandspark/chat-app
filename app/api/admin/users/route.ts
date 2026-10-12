@@ -26,7 +26,7 @@ export async function GET(): Promise<Response> {
   }
 }
 
-/** D7, D23: create a user without a password and issue the first invite link. */
+/** Creates a user without a password and issues the first invite link. */
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAdmin();

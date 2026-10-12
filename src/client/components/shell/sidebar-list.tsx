@@ -17,16 +17,15 @@ import { hideRowTip, showRowTip } from "./row-tip";
 import { useModals, type ModalApi } from "../ui/modal-manager";
 import type { ChatItemMenu as ChatItemMenuComponent } from "./chat-item-menu";
 
-/** What the rows need from the sidebar around them (the list is a slot the layout streams in, #20). */
+/** What the rows need from the sidebar around them (the list is a slot the layout streams in). */
 export interface SidebarListContextValue {
   onNavigate: () => void;
 }
 export const SidebarListContext = createContext<SidebarListContextValue>({ onNavigate: () => {} });
 
-// D21: the row's Radix menu loads on first intent, not at mount; the dialogs' chunk is preloaded in idle time (load-dialogs.ts).
-// The row's hover tint and the ghost button's hover tint are the same colour, so the button's own hover
-// was invisible: it now takes a wash of the foreground and the full foreground colour. The dark variants
-// are needed because the ghost variant's own `dark:hover:bg-muted/50` outranks a plain `hover:` class.
+// The row's Radix menu loads on first intent; the dialogs' chunk is preloaded in idle time (load-dialogs.ts).
+// The row's hover tint matches the ghost button's, so the button hovers with a foreground wash instead. The dark
+// variants are needed because the ghost variant's `dark:hover:bg-muted/50` outranks a plain `hover:` class.
 const MENU_BUTTON =
   "size-10 shrink-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100";
 const loadChatItemMenu = chunk(() => import("./chat-item-menu").then((m) => m.ChatItemMenu));
@@ -58,7 +57,7 @@ function ChatItemMenuOnIntent({
   );
 }
 
-/** One row; memoised, with handlers built from the chat it shows, so a send or a switch re-renders two rows, not all (#44). */
+/** Memoised, with handlers built from its chat, so a send or a switch re-renders two rows, not all. */
 const SidebarRow = memo(function SidebarRow({
   chat,
   active,
@@ -109,7 +108,6 @@ const SidebarRow = memo(function SidebarRow({
   return (
     <li data-chat-row={chat.id}>
       <div
-        // The browser's own context menu gives way to the row's: a right-click opens the ⋯ menu.
         onContextMenu={(e) => {
           e.preventDefault();
           intent.press("menu");
@@ -167,16 +165,15 @@ export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
   const { onNavigate } = useContext(SidebarListContext);
   const pathname = usePathname();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
-  // D21: the clicked row is active at once; the router catches up when the thread arrives.
+  // The clicked row is active at once; the router catches up when the thread arrives.
   const pendingChatId = usePendingChat();
   const activeChatId = pendingChatId ?? currentChatId;
   const router = useRouter();
   const store = useChatStore();
   const { show } = useModals();
 
-  // D21: on intent (hover, focus, touchstart), and for the top five as they come into view (the sidebar
-  // opening, or at once when docked), warm the route shell and seed the chat's rows into the store, so the
-  // click renders from memory (ADR-0005).
+  // On intent (hover, focus, touchstart), and for the top five as they come into view, warm the route shell and
+  // seed the chat's rows into the store so the click renders from memory (ADR-0005).
   const warm = useCallback(
     (chatId: string) => {
       router.prefetch(`/c/${chatId}`);

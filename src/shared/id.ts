@@ -1,5 +1,5 @@
 // UUIDv7: time-ordered so SQLite's primary-key B-tree appends; generated on the client so a send is
-// idempotent across retries (D2). Depends only on crypto.getRandomValues.
+// idempotent across retries. Depends only on crypto.getRandomValues.
 let lastMs = 0;
 let seq = 0;
 

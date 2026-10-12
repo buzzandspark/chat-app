@@ -17,7 +17,7 @@ interface Hit {
   updatedAt: number;
 }
 
-/** D19 search (⌘/Ctrl+K): a sheet on phones, a modal at `md`, keyboard-safe. */
+/** ⌘/Ctrl+K: a sheet on phones, a modal at `md`, keyboard-safe. */
 export function SearchDialog({
   open,
   onOpenChange,
@@ -32,7 +32,7 @@ export function SearchDialog({
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [searching, setSearching] = useState(false);
-  // Keyboard: ↑/↓ move the active hit, Enter opens it (#68).
+  // Keyboard: ↑/↓ move the active hit, Enter opens it.
   const [cursor, setCursor] = useState(0);
 
   const active = open && query.trim().length >= 2;

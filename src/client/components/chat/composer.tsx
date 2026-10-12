@@ -20,7 +20,7 @@ import { IconButton } from "../ui/icon-button";
 import { ExploreOptionsIsland, UNDER_INPUT_WITH_TABS } from "./explore-options";
 import { useShellUser } from "../shell/shell-user";
 
-// D21: the panel's chunk (a Radix dialog) loads on intent.
+// The panel's chunk (a Radix dialog) loads on intent.
 function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" | "children">) {
   return (
     <IconButton label="Scenarios" tipSide="top" className="text-muted-foreground" {...props}>
@@ -113,7 +113,7 @@ export interface ComposerHandle {
   setValue: (text: string) => void;
 }
 
-/** D19/D18: sticky above the keyboard, 16 px text so iOS never zooms; Enter sends only with hover + md. */
+/** Sticky above the keyboard; 16 px text so iOS never zooms; Enter sends only with hover + md. */
 // `draftId`: the draft's key, the chat id except in a new chat at /c, whose draft is "new" until the first send.
 export const Composer = forwardRef<ComposerHandle, { chatId: string; draftId: string }>(function Composer({ chatId, draftId }, ref) {
   const { send, settings, setSettings, client, userId, editing, cancelEdit, editMessage, scenarioPanel } = useChatContext();
@@ -122,9 +122,8 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string; draftId: st
   const settingsKnown = useChatSettingsKnown(chatId);
   const { guest } = useShellUser();
   const key = draftKey(userId, draftId);
-  // The draft is empty in the server render and hydration (useDraft): read during hydration it would enable
-  // Send in React while the server-rendered button stays disabled in the DOM (hydration never patches
-  // attributes). D10/D18: an edit has text of its own, so the unsent draft is left as it is meanwhile.
+  // The draft is empty in the server render and hydration (useDraft): read then, it would enable Send while the
+  // server-rendered button stays disabled (hydration never patches attributes). An edit leaves the unsent draft alone.
   const draft = useDraft(key);
   const [editText, setEditText] = useState(editing?.text ?? "");
   const [editFor, setEditFor] = useState(editing);
@@ -156,9 +155,8 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string; draftId: st
   // The id list does not change when a reply ends; the last message's status decides Stop/Send and ↑.
   const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
   const streamingId = lastMessage?.role === "assistant" && lastMessage.status === "streaming" ? lastMessage.generationId : null;
-  // Stop shows a pending state until the stream actually ends (or the request fails) (#68).
-  // client.stop never rejects: a refusal, a network error or a timeout all settle false, which
-  // re-enables Stop and Esc so the user can try again; only that same stop's pending state clears.
+  // Stop shows a pending state until the stream ends or the request fails. client.stop never rejects: any failure
+  // settles false, re-enabling Stop and Esc for another try; only that same stop's pending state clears.
   const [stopping, setStopping] = useState<string | null>(null);
   const stop = (id: string) => {
     if (stopping === id) return;
@@ -194,7 +192,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string; draftId: st
       e.preventDefault();
       submit();
     } else if (e.key === "Escape") {
-      // D19: open dialogs and menus handle Esc themselves; here it cancels an edit, else stops.
+      // Open dialogs and menus handle Esc themselves; here it cancels an edit, else stops.
       if (editing) {
         e.preventDefault();
         cancelEdit();

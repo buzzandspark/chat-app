@@ -10,13 +10,13 @@ interface ThinkingBlockProps {
   streaming: boolean;
   startedAt: number | null;
   endedAt: number | null;
-  /** Auto-collapse on the first text delta only while auto-follow is engaged (D12). */
+  /** Auto-collapse on the first text delta only while auto-follow is engaged. */
   collapseSignal: boolean;
   onUserToggle?: (open: boolean) => void;
 }
 
 function label(startedAt: number | null, endedAt: number | null, streaming: boolean, now: number): string {
-  // A saved reply has no stamps (they are this client's clock): past tense, no number (#66).
+  // A saved reply has no stamps (they are this client's clock): past tense, no number.
   if (!streaming && (startedAt === null || endedAt === null)) return "Thought";
   if (startedAt === null || (endedAt === null && now === 0)) return "Thinking";
   const ms = (endedAt ?? now) - startedAt;

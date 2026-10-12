@@ -4,7 +4,7 @@ import { env } from "@shared/env";
 import { errorResponse, jsonError, requireAdmin } from "@server/current-user";
 import { findUser } from "@server/admin";
 
-/** D23: issue or regenerate an invite link (also the password-reset flow). */
+/** Issues or regenerates an invite link (also the password-reset flow). */
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/admin/users/[id]/invite">): Promise<Response> {
   try {
     await requireAdmin();

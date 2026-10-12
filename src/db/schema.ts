@@ -33,7 +33,7 @@ export const users = sqliteTable(
     banned: integer("banned", { mode: "boolean" }).notNull().default(false),
     banReason: text("ban_reason"),
     banExpires: timestamp("ban_expires"),
-    // D22 per-user all-time cost cap
+    // Per-user all-time cost cap
     costCapUsd: real("cost_cap_usd"),
     costSpentUsd: real("cost_spent_usd").notNull().default(0),
     lastActiveAt: timestamp("last_active_at"),
@@ -98,7 +98,7 @@ export const verifications = sqliteTable(
   (t) => [index("verifications_identifier_idx").on(t.identifier)],
 );
 
-/** D23 invite links: SHA-256 of a random 32-byte token, 7-day expiry, single use. */
+/** Invite links: SHA-256 of a random 32-byte token, 7-day expiry, single use. */
 export const invites = sqliteTable(
   "invites",
   {
@@ -151,7 +151,7 @@ export const messages = sqliteTable(
     role: text("role").$type<"user" | "assistant">().notNull(),
     /** Order within the chat. UUIDv7 also sorts by time, but this is explicit. */
     position: integer("position").notNull(),
-    /** Anthropic.ContentBlock[] with any `fallback` block kept in place (D8). */
+    /** Anthropic.ContentBlock[] with any `fallback` block kept in place. */
     content: text("content", { mode: "json" }).$type<StoredContentBlock[]>().notNull(),
     status: text("status").$type<MessageStatus>().notNull().default("done"),
     requestedModel: text("requested_model"),
@@ -165,9 +165,9 @@ export const messages = sqliteTable(
     thinking: text("thinking", { mode: "json" }).$type<ThinkingOptions>(),
     /** Haiku's fork prompts for a reply: null = not run, [] = no options. */
     forkOptions: text("fork_options", { mode: "json" }).$type<ForkOption[]>(),
-    /** The last producer seq folded into `content` by the write that saved it (D2 resume); null for user messages and old rows. */
+    /** The last producer seq folded into `content` by the write that saved it, for resume; null for user messages and old rows. */
     lastSeq: integer("last_seq"),
-    /** The text blocks of `content`, kept by a trigger for the FTS5 index (#60). */
+    /** The text blocks of `content`, kept by a trigger for the FTS5 index. */
     searchText: text("search_text"),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at").notNull().$defaultFn(now),
@@ -195,7 +195,7 @@ export const generations = sqliteTable(
     requestedModel: text("requested_model").notNull(),
     servingModel: text("serving_model"),
     stopReason: text("stop_reason"),
-    /** usage.iterations from the final message_delta (D8, D22). */
+    /** usage.iterations from the final message_delta. */
     iterations: text("iterations", { mode: "json" }).$type<IterationUsage>(),
     error: text("error", { mode: "json" }).$type<RelayError>(),
     provider: text("provider").notNull().default("anthropic"),
@@ -211,12 +211,12 @@ export const generations = sqliteTable(
   ],
 );
 
-/** One row per iteration (D8, D22); `estimated` when settled without final usage. */
+/** One row per iteration; `estimated` when settled without final usage. */
 export const usageEvents = sqliteTable(
   "usage_events",
   {
     id: text("id").primaryKey(),
-    // Spend outlives the reply it paid for: a replaced or truncated generation leaves its usage rows behind (#73).
+    // Spend outlives the reply it paid for: a replaced or truncated generation leaves its usage rows behind.
     generationId: text("generation_id").references(() => generations.id, { onDelete: "set null" }),
     userId: text("user_id")
       .notNull()

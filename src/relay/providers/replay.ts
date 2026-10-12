@@ -73,7 +73,7 @@ export interface ReplayOptions {
   speed?: number;
 }
 
-/** D24: replays a recorded `*.jsonl` stream from disk. */
+/** Replays a recorded `*.jsonl` stream from disk. */
 export class ReplayProvider implements Provider {
   readonly name = "replay" as const;
   constructor(private options: ReplayOptions) {}

@@ -20,7 +20,7 @@ interface AssistantActionsProps {
   defaultOpen?: "menu" | null;
 }
 
-/** Loaded after first paint (D21): the menu pulls in Radix, which the first frame does not need. */
+/** Loaded after first paint: the menu pulls in Radix, which the first frame does not need. */
 export function AssistantActions({ message, text, canRegenerate, onRegenerate, defaultOpen = null }: AssistantActionsProps) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(defaultOpen === "menu");
@@ -36,7 +36,7 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
       if (out.error) setError(out.error);
     });
   };
-  // Copy keeps the menu open long enough to show "Copied", then closes it (#68).
+  // Copy keeps the menu open long enough to show "Copied", then closes it.
   const onCopy = async (e: Event) => {
     e.preventDefault();
     try {

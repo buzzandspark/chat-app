@@ -6,7 +6,7 @@ import { CAP } from "./forks";
 import { prefetchChat } from "./prefetch";
 import { getSidebarStore, setPendingChat } from "./sidebar-store";
 
-// Loaded with the fork sheet or a reply's menu, not the chat route: nothing forks before one of those is open.
+// Loaded with the fork sheet or a reply's menu, not the chat route.
 
 export interface ForkOutcome {
   ok: boolean;

@@ -11,12 +11,12 @@ export interface GenerationBuffer {
 }
 
 export interface EventStoreOptions {
-  /** Completed generations are evicted this long after their terminal event (D3). */
+  /** Completed generations are evicted this long after their terminal event. */
   evictAfterMs?: number;
   now?: () => number;
 }
 
-// D3: seq numbers are the array index; append notifies synchronously so a connected client
+// Seq numbers are the array index; append notifies synchronously so a connected client
 // sees a delta in the same tick as the producer.
 export class EventStore {
   private buffers = new Map<string, GenerationBuffer>();

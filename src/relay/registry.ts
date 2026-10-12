@@ -16,7 +16,7 @@ export interface RegistryOptions {
   anthropic?: AnthropicProvider;
 }
 
-// Provider choice is server-side so the panel cannot spend money or bypass caps (D24):
+// Provider choice is server-side so the panel cannot spend money or bypass caps:
 // scenarios get scripted, replay mode gets replay, everything else goes live.
 export function createProviderResolver(options: RegistryOptions): ProviderResolver {
   const fixturesDir = options.fixturesDir ?? path.resolve(process.cwd(), "fixtures");

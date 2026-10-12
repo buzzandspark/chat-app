@@ -11,7 +11,7 @@ const Patch = z
   .object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional(), tabHidden: z.boolean().optional() })
   .refine((p) => p.title !== undefined || p.pinned !== undefined || p.tabHidden !== undefined);
 
-/** ADR-0005: the same rows the page seeds with, for prefetch on intent and the second-tab case; `?all=1` lifts the window (#47). */
+/** ADR-0005: the rows the page seeds with, for prefetch on intent and the second-tab case; `?all=1` lifts the window. */
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
   try {
     const user = await requireUser();
@@ -25,8 +25,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[i
   }
 }
 
-
-/** Rename, pin, or close the tab of a chat (D19 rename sheet; the ⋯ menu's Pin; a tab's ×). */
+/** Rename, pin, or close the tab of a chat. */
 export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/[id]">): Promise<Response> {
   try {
     const user = await requireUser();

@@ -22,7 +22,7 @@ const RATES: Record<string, Rates> = {
     cacheWrite: 0.125,
     longContext: { threshold: 100_000, input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625 },
   },
-  // Fallback targets the API may route to (D11).
+  // Fallback targets the API may route to.
   "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
@@ -82,7 +82,7 @@ export interface UsageRow extends TokenCounts {
   costUsd: number;
 }
 
-// D22: each iteration at its own model's rates. A declined attempt is a message entry for the
+// Each iteration at its own model's rates. A declined attempt is a message entry for the
 // declined model; the serving hop is fallback_message.
 export function priceIterations(iterations: IterationUsage, defaultModel: string): UsageRow[] {
   const rows: UsageRow[] = [];
@@ -119,7 +119,7 @@ export function summarize(rows: UsageRow[], estimated = false): UsageSummary {
   return s;
 }
 
-// Seed tokens/s per model for estimating billed output of stopped or interrupted generations (D22).
+// Seed tokens/s per model for estimating billed output of stopped or interrupted generations.
 const SEED_OUTPUT_TPS: Record<string, number> = {
   "claude-sonnet-5-5": 80,
   "claude-opus-5-5": 50,

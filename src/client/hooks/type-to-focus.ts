@@ -11,7 +11,7 @@ function visibleComposer(): HTMLTextAreaElement | null {
   return null;
 }
 
-/** Typing a character with nothing editable focused goes to the composer: focusing on keydown lets the character land there. */
+/** Focusing on keydown lets the typed character land in the composer. */
 function shouldFocusComposer(e: KeyboardEvent): boolean {
   if (e.defaultPrevented || e.isComposing || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return false;
   if (e.key.length !== 1 || e.key === " ") return false;

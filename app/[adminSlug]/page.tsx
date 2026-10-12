@@ -6,7 +6,7 @@ import { listUsersForAdmin } from "@server/admin";
 import { getCurrentUser } from "@server/current-user";
 import { env } from "@shared/env";
 
-/** D7: one page at /${ADMIN_PATH_SLUG}; anyone who is not an admin gets a 404. */
+/** One page at /${ADMIN_PATH_SLUG}; anyone who is not an admin gets a 404. */
 export default function AdminPage({ params }: PageProps<"/[adminSlug]">) {
   return (
     <Suspense fallback={null}>

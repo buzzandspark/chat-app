@@ -13,7 +13,7 @@ A reply that lays out alternatives invites the user to dig into each one, but a 
 - **Every fork request repeats the parent's last request.** The engine stores the effort a reply was asked with (`messages.thinking`); a fork takes model and effort from the parent's last assistant row, never from the client, so the system prompt, betas, fallbacks and `output_config` all match. The first fork's request adds a cache breakpoint on the parent's final reply; fork 1 starts alone, the rest wait for its `message_start` (10 s at most) and then read the entry it wrote. A test builds both requests and asserts equality in everything but the appended turns.
 - **A fork's first reply retries itself.** A request that fails before the API has begun a message is sent again, three times, after 1 s, 2 s and 4 s (longer when the API asks). After `message_start` the ordinary stopped and interrupted paths apply.
 - **No forks of forks, at most ten forks per parent.** Fork trees would need their own tab, divider and cache rules; the button never shows in a fork and the route refuses one.
-- **No running cap or send window.** The cost cap is the only limit; the feedback and seed endpoints keep their windows.
+- **No running cap or send window.** The cost cap is the only limit on spend.
 
 ## Alternatives rejected
 

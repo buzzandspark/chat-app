@@ -47,9 +47,8 @@ const DRAG_PX = 6;
 const scrollOpenTabIntoView = (slot: HTMLDivElement | null) => slot?.scrollIntoView({ block: "nearest", inline: "nearest" });
 
 /**
- * The main chat and its forks as tabs: above the thread when docked, folder tabs on the composer's input on a phone. A closed tab stays closed until
- * the chat is opened again (from the sidebar); Ctrl+Shift+[ and ] cycle; a right-click offers Declare
- * winner and Delete chat; forks reorder by dragging with a mouse or pen.
+ * The main chat and its forks as tabs. A closed tab stays closed until the chat is opened again from the sidebar;
+ * forks reorder by dragging with a mouse or pen.
  */
 export function ForkTabs({ chatId }: { chatId: string }) {
   const chats = useSidebarChats();
@@ -118,9 +117,8 @@ export function ForkTabs({ chatId }: { chatId: string }) {
     menuClosedAt.current = performance.now();
     setMenu(null);
   }, []);
-  // The morph's ref runs at commit, after the strip's (its earlier sibling), before paint: a strip that grows out
-  // of the Explore button never shows a frame at full size first. Loaded while the sheet was open, the chunk
-  // resolves in a microtask, still before the frame is painted.
+  // The morph's ref runs at commit, before paint, so a strip growing out of the Explore button never paints at full size;
+  // a chunk loaded while the sheet was open resolves in a microtask, still before paint.
   const parentId = model?.parentId ?? null;
   const attachMorph = (morph: HTMLDivElement | null) => {
     const strip = stripRef.current;
@@ -170,10 +168,8 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   };
 
   return (
-    // Docked, a browser-style strip above the thread. On a phone, CSS order moves it down to the composer as
-    // folder tabs on its input, in the input's column: it overlaps the input's top border by a pixel, so the
-    // open tab covers it and joins the input (the composer drops its own border and top padding meanwhile).
-    // No background on a phone: the pixel it overlaps is the input's border, which shows under the other tabs.
+    // On a phone, CSS order moves the strip onto the composer's input as folder tabs overlapping its top border by a pixel,
+    // so the open tab joins the input; no background there, so that border shows under the other tabs.
     <div className="relative z-10 order-1 -mb-px border-t border-border pt-2 safe-x dock:order-none dock:mb-0 dock:border-t-0 dock:bg-sidebar-accent dock:px-0! dock:pt-0 dock:shadow-[inset_0_-1px_0_var(--border)]">
       {/* Unpadded, so the reveal's outline is placed against exactly the strip's box. */}
       <div className="relative mx-auto max-w-thread dock:max-w-none">

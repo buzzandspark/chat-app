@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# D1: one long-lived Node process. Debian slim (glibc) because better-sqlite3 ships glibc
+# One long-lived Node process. Debian slim (glibc) because better-sqlite3 ships glibc
 # prebuilt binaries; Alpine (musl) would compile from source on every install.
 
 FROM node:24-bookworm-slim AS build
@@ -24,7 +24,7 @@ FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# Next's own SIGTERM handler exits at once; ours in instrumentation.ts drains generations first (D3).
+# Next's own SIGTERM handler exits at once; ours in instrumentation.ts drains generations first.
 ENV NEXT_MANUAL_SIG_HANDLE=true
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000

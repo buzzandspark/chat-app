@@ -11,7 +11,7 @@ const Body = z.object({
   done: z.number().optional(),
 });
 
-/** D20: client-clock stamps stored beside the server's; never compared across machines. */
+/** Client-clock stamps stored beside the server's; never compared across machines. */
 export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/messages/[id]/timings">): Promise<Response> {
   try {
     const user = await requireUser();

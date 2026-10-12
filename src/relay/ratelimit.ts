@@ -1,4 +1,4 @@
-// D17: in-memory per-user sliding window, 20 per minute and 300 per day by default.
+// In-memory per-user sliding window, 20 per minute and 300 per day by default.
 export interface RateLimitResult {
   ok: boolean;
   retryAfterMs: number;
@@ -38,7 +38,7 @@ export class RateLimiter {
     };
   }
 
-  /** Drops keys whose window has emptied (#62). */
+  /** Drops keys whose window has emptied. */
   sweep(): void {
     const dayAgo = this.now() - 86_400_000;
     for (const [key, list] of this.hits) {
@@ -46,11 +46,7 @@ export class RateLimiter {
     }
   }
 
-  /**
-   * Sweeps on a timer, at most one per limiter however often it is called: the owner holds the
-   * limiter on globalThis, so a dev reload reaches the same instance and its existing timer.
-   * Unref'd so an idle timer never keeps the process alive.
-   */
+  /** At most one timer per limiter: the owner holds it on globalThis, so a dev reload reaches the same instance. Unref'd so it never keeps the process alive. */
   startSweeper(intervalMs = 10 * 60 * 1000): void {
     if (this.sweeper) return;
     this.sweeper = setInterval(() => this.sweep(), intervalMs);

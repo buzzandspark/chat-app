@@ -17,7 +17,7 @@ function money(n: number | null): string {
   return n === null ? "no cap" : `$${n.toFixed(2)}`;
 }
 
-/** D7: phone-first (cards) and a table at md; every action is a 44 px target. */
+/** Phone-first (cards) and a table at md; every action is a 44 px target. */
 export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialUsers: AdminUserRow[]; selfId: string; defaultCapUsd: number }) {
   const [users, setUsers] = useState(initialUsers);
   const [email, setEmail] = useState("");
@@ -201,7 +201,7 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
                   onClick={() => {
                     const next = window.prompt(`Cost cap in USD, or "${NO_CAP}" for no cap`, u.costCapUsd === null ? NO_CAP : String(u.costCapUsd));
                     if (next === null) return;
-                    // Neither a typo nor an emptied answer becomes "no cap": only the word removes the cap (#64).
+                    // Neither a typo nor an emptied answer becomes "no cap": only the word removes the cap.
                     const parsed = parseCapText(next);
                     if (!parsed.ok || parsed.cap === undefined) {
                       setNotice(`"${next.trim()}" is not a cap. Enter a number of dollars, or ${NO_CAP} for no cap.`);

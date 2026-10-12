@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 export function UserActions({ text, onEdit, defaultOpen }: { text: string; onEdit: () => void; defaultOpen?: boolean }) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(Boolean(defaultOpen));
-  // Copy keeps the menu open long enough to show "Copied", then closes it (#68).
+  // Copy keeps the menu open long enough to show "Copied", then closes it.
   const onCopy = async (e: Event) => {
     e.preventDefault();
     try {

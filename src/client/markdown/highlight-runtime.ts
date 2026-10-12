@@ -1,6 +1,6 @@
 import { tokenize, type HighlightLine } from "./highlight-core";
 
-/** D15: the worker handle and the in-thread fallback; loaded on the first highlight, not with the route. */
+/** Loaded on the first highlight, not with the route. */
 type Waiter = { resolve: (lines: HighlightLine[]) => void; reject: (err: Error) => void };
 let worker: Worker | null = null;
 let workerUnavailable = false;

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { formText, signIn } from "./login-form";
 import { newChatHref } from "@client/hooks/use-new-chat";
 
-/** D23: set a password through the invite, then sign in with it (a form action; the browser checks the length). */
+/** Set a password through the invite, then sign in with it (a form action; the browser checks the length). */
 export function InviteForm({ token, email }: { token: string; email: string }) {
   const router = useRouter();
   const [error, formAction, pending] = useActionState(async (_previous: string | null, form: FormData) => {

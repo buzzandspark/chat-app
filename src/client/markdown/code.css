@@ -1,8 +1,5 @@
-/* D15/#12: tokens carry `color: var(--shiki-token-…)`; one tokenise serves both themes, and the
-   palette switches with the .dark class (GitHub light and dark, matched to the earlier themes).
-   Every variable the theme puts on a token is defined in both palettes (code-css.test guards it): an
-   undefined one leaves the token uncoloured, as diff lines were before #22. The light diff colours
-   are a shade darker than GitHub's so each reads at 4.5:1 or more on bg-code. */
+/* Every token variable must be defined in both palettes (code-css.test guards it) or the token is uncoloured.
+   Light diff colours are a shade darker than GitHub's to reach 4.5:1 on bg-code. */
 .markdown-code {
   --shiki-foreground: #24292e;
   --shiki-token-constant: #005cc5;
@@ -33,9 +30,8 @@
   --shiki-token-deleted: #fdaeb7;
   --shiki-token-changed: #ffab70;
 }
-/* D15: a committed line group lays out on its own and is skipped off screen, only where scroll
-   anchoring works (see theme-script.tsx); its intrinsic size is the block's longest line by the
-   group's line count, so skipping changes neither the vertical nor the horizontal scroll range. */
+/* Only where scroll anchoring works (see theme-script.tsx); the intrinsic size keeps both scroll ranges
+   unchanged when a group is skipped. */
 html[data-scroll-anchoring="yes"] .markdown-code .code-group {
   content-visibility: auto;
   contain-intrinsic-size: auto var(--group-w) auto var(--group-h);

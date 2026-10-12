@@ -13,7 +13,7 @@ export interface ModelParams {
   fallbacks?: "default";
 }
 
-// D11, checked against the Claude API reference on 2026-10-06. drop_block keeps chats with thinking
+// Checked against the Claude API reference on 2026-10-06. drop_block keeps chats with thinking
 // blocks working when the system prompt changes; the binding check is enforced for accounts created on or after 2026-08-31.
 export function modelParams(model: ModelId, opts: ThinkingOptions): ModelParams {
   switch (model) {

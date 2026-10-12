@@ -168,7 +168,7 @@ export const SCRIPTED_OPTIONS: ForkOption[] = [
   { title: "Embedded then managed", prompt: "Let's take option 3, embedded now and managed later. What has to be designed in up front?" },
 ];
 
-/** D24: scenario runs and replay mode never spend; the answer comes from the scenario name. */
+/** Scenario runs and replay mode never spend; the answer comes from the scenario name. */
 export class ScriptedOptionsMessenger implements OptionsMessenger {
   readonly name = "scripted" as const;
   constructor(private scenario: string | null) {}

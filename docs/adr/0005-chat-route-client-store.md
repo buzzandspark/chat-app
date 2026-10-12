@@ -1,6 +1,6 @@
 # ADR-0005: The chat route renders from the client store; the server seeds it
 
-Status: accepted · Date: 2026-10-07
+Status: accepted · Date: 2026-10-07, revised 2026-10-12
 
 ## Context
 
@@ -8,8 +8,8 @@ Switching chats took a full server round trip (about 650 ms in development and o
 
 ## Decision
 
-- **A chat id is chosen by the client.** "New chat" navigates straight to `/c/<uuidv7>`; the engine creates the `chats` row on the first send. An id the server has never seen renders an empty, usable view, not a 404. `/c/new` survives only as a 307 alias in `proxy.ts` for bookmarks and external links, so no "new" view is ever mounted.
-- **The client `ChatStore` is the source of truth for the view.** `ChatView` is a Client Component in the route's static shell: it reads the id from `useParams()`, which resolves synchronously during a client navigation, and renders the thread from the store at once. Per-chat settings (model, "Think harder", scenario) live in the store too, so neither a remount nor an Activity eviction resets them; drafts stay in `localStorage` per (user, chat).
+- **A chat id is chosen by the client.** A new chat lives at `/c` until its first send: in-app New chat pushes `/c?n=<id>` (the router keys views by address, so each New chat gets its own view) and the view drops `n` on mount; a cold load of `/c` picks a fresh id. The first send rewrites the address to `/c/<id>` with `history.replaceState`, so nothing remounts and the phone keyboard stays up. The engine creates the `chats` row on that send. An id the server has never seen renders an empty, usable view. `/` and `/c/new` redirect to `/c`.
+- **The client `ChatStore` is the source of truth for the view.** `ChatView` is a Client Component in the route's static shell: it reads the id from `useParams()`, which resolves synchronously during a client navigation, and renders the thread from the store at once. Per-chat settings (model, "Think harder", scenario) live in the store too, so neither a remount nor an Activity eviction resets them; drafts stay in `localStorage` per (user, chat), under `new` until the first send.
 - **Server rows are a seed, delivered through a Suspense child.** The page renders `<ChatView>` with a `<Suspense>` child that awaits `params`, reads SQLite and renders `SeedChat`, a Client Component that reconciles the rows into the store during its render and renders nothing. On a hard load the rows arrive in the same HTML stream; on a client navigation the view is already on screen when they arrive. Reconciliation keeps local in-flight messages, never replaces a finished local reply with a stale `streaming` row, and keeps optimistic messages the server has not listed yet (a POST still in flight, or one it refused with 429, 503 or 402).
 - **While a chat is unseeded the thread area shows a skeleton with the list's own spacing**; the composer is the real one, so nothing collapses. `GET /api/chats/:id` returns the same rows as the page, so the sidebar can seed a chat on hover, focus or `touchstart` and for the top five when it opens; a revisit needs no request.
 
@@ -24,6 +24,3 @@ Switching chats took a full server round trip (about 650 ms in development and o
 
 The server seed still streams on every navigation (the router fetches the route's dynamic hole), but the view never waits for it: for a loaded or prefetched chat it is a no-op reconcile. The page-level Suspense fallback is only ever seen on a hard load before the view's own chunk streams, and it mirrors the real layout class for class.
 
-## Amendment (2026-10-12): a new chat at /c
-
-A new chat now lives at `/c` until its first send. `/c` is a page that renders the same view with a client-chosen id: in-app New chat pushes `/c?n=<id>` (so each New chat gets a view of its own, since the router keys views by address) and the view drops `n` from the address on mount; a cold load of `/c` picks a fresh id. The first send rewrites the address to `/c/<id>` with `history.replaceState`, so nothing remounts (the phone keyboard stays up). A new chat's draft is kept under the key `new` until that send. `/c/new` and `/` redirect to `/c`.

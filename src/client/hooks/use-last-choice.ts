@@ -6,7 +6,7 @@ const PREFIX = "chat:settings:";
 
 type Choice = Pick<ChatSettings, "model" | "thinking">;
 
-/** #22: the model and effort last chosen by this user, so a new chat starts where the previous one left off. */
+/** The model and effort last chosen by this user, so a new chat starts where the previous one left off. */
 export function readLastChoice(userId: string): Partial<Choice> {
   try {
     const raw = localStorage.getItem(PREFIX + userId);

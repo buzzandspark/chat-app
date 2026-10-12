@@ -6,10 +6,8 @@ const NAVIGATION_WINDOW_MS = 1000;
 let navigationCloseAt = -Infinity;
 
 /**
- * Call right before closing a sheet because a navigation follows (a result link, "New chat" from
- * the sidebar, the long-chat seed, delete of the open chat): the sheet's history entry is then left
- * where it is. Going back ourselves would race the router's pending push and undo the navigation.
- * The effect cleanup that would go back runs whenever React flushes it, so the mark is a time window.
+ * Call right before closing a sheet because a navigation follows: going back ourselves would race the router's
+ * pending push. The cleanup runs whenever React flushes it, so the mark is a time window.
  */
 export function markNavigationClose(): void {
   navigationCloseAt = performance.now();
@@ -38,10 +36,8 @@ function listen(): void {
 }
 
 /**
- * On phones a sheet covers the page, so the system back gesture should close it rather than leave the
- * chat: an entry is pushed while it is open and a popstate closes it. Next's router keeps its own
- * state on the entry (its patched pushState copies it), so going back lands on the same route.
- * `open` is true only while the sheet covers the page: each caller decides that from its own layout.
+ * Back closes a covering sheet instead of leaving the chat. Next's patched pushState copies its router state,
+ * so going back lands on the same route. `open` is true only while the sheet covers the page.
  */
 export function useBackGesture(open: boolean, onClose: () => void): void {
   const close = useEffectEvent(onClose);

@@ -15,8 +15,8 @@ import { MAX_AUTO_RETRIES, rateLimitDelayMs } from "./rate-limit";
 import { ServedBy, StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
 
-// D21: the menu (Radix) loads on first intent, not at mount; the stand-in keeps the row's height. A stand-in
-// is never `disabled`: that dims a button, so it blinked as the real one replaced it.
+// The menu (Radix) loads on first intent; the stand-in keeps the row's height. It's never `disabled`:
+// that dims a button, so it blinked as the real one replaced it.
 // first:-ml-3.5: the icon sits on the text's left edge (the 44 px target centres a 16 px icon) unless "Served by" leads the row.
 const ACTION_BUTTON =
   "first:-ml-3.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
@@ -41,9 +41,8 @@ function ActionsStandIn({
 }
 const loadAssistantActions = chunk(() => import("./assistant-actions").then((m) => m.AssistantActions));
 
-// #83: the Markdown renderer (marked, 14 kB gzipped) is its own chunk, fetched when the route's JS
-// evaluates and again on a send. Once it is in, rows render it directly (markdown/ready.ts); until
-// then (a first reply whose tokens beat the chunk, or a chunk that failed to load) the text is plain.
+// The Markdown renderer (marked, 14 kB gzipped) is its own chunk, fetched when the route's JS evaluates and on a send;
+// until it is in (markdown/ready.ts), or if it fails to load, the text is plain.
 function PlainText({ text, className }: { text: string; streaming: boolean; className?: string }) {
   return <div className={cn("min-w-0 max-w-full whitespace-pre-wrap break-words text-body", className)}>{text}</div>;
 }
@@ -68,7 +67,7 @@ function ModelDivider({ from, to, category }: { from: string; to: string; catego
   );
 }
 
-/** Only rows with a thinking block subscribe to the follow state, so a scroll re-renders those alone (#43). */
+/** Only rows with a thinking block subscribe to the follow state, so a scroll re-renders those alone. */
 function ThinkingBlockFollowing({
   hasText,
   ...props
@@ -101,10 +100,8 @@ export function AssistantMessage({ message }: { message: MessageState }) {
     if (userMessageId) retry(userMessageId, message.id);
   };
 
-  // A 429 retries by itself with exponential backoff, four times at most, and only for a reply this
-  // client asked for (a saved error from an earlier session waits for the user). The timer dies with
-  // the row, so a hidden chat pauses and a manual Try again, which replaces the row, cancels it; a
-  // send after the error stops it too, since the reply is then no longer the last turn.
+  // A 429 retries itself with exponential backoff, four times at most, only for a reply this client asked for.
+  // The timer dies with the row, so hiding the chat, a manual Try again, or a later send all cancel it.
   const rateLimited = message.status === "error" && message.error?.kind === "rate_limited" && message.local && retryable;
   const attempt = message.retryAttempt;
   const retryAfterMs = message.error?.retryAfterMs;
@@ -136,7 +133,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
                 endedAt={message.thinkingEndedAt}
                 hasText={hasText}
                 onUserToggle={(open) => {
-                  // Opening a block to read it must not be scrolled away by the follow (#27).
+                  // Opening a block to read it must not be scrolled away by the follow.
                   if (open && streaming) autoFollow.disengage();
                 }}
               />
@@ -166,7 +163,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
         onContinue={() => send("Continue.", message.scenario ?? undefined)}
         onResume={() => client.resumeAll()}
       />
-      {/* The actions row's height is reserved while streaming, so the pinned end does not jump when it mounts (#78). */}
+      {/* Reserved while streaming, so the pinned end does not jump when the actions row mounts. */}
       <div className="min-h-11">
         {!streaming ? (
           <ChunkBoundary label="message actions">

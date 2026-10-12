@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Runs the standalone build as the Dockerfile does (D1): assets copied next to server.js,
+# Runs the standalone build as the Dockerfile does: assets copied next to server.js,
 # manual signal handling so our SIGTERM drain runs.
 set -eu
 cd "$(dirname "$0")/.."

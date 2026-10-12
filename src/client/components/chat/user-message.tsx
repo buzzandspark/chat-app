@@ -10,7 +10,7 @@ import { useChatActions } from "./chat-context";
 
 const USER_ACTION_BUTTON =
   "shrink-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/user:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100";
-/** D21: the menu's chunk loads on intent; the stand-in is the same button. */
+/** The menu's chunk loads on intent; the stand-in is the same button. */
 const loadUserActions = chunk(() => import("./user-actions").then((m) => m.UserActions));
 
 function UserActionsOnIntent(props: { text: string; onEdit: () => void }) {

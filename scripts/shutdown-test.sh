@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# D3 check against the built standalone server: SIGTERM mid-stream drains (partial saved, estimated
+# Drain check against the built standalone server: SIGTERM mid-stream drains (partial saved, estimated
 # usage, client gets `interrupted`); SIGKILL loses at most 2 s and the next boot's backstop marks it.
 set -eu
 cd "$(dirname "$0")/.."

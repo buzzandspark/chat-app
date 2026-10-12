@@ -62,12 +62,11 @@ test.describe("explore options", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     // No forks of forks.
     await expectExploreHidden(page);
-    // The sidebar marks the parent and nests the fork under it (rows are found by their own links: the database is shared across projects).
+    // Rows are found by href: the database is shared across projects.
     const parentPath = new URL(parentUrl).pathname;
     const aside = page.locator('aside[aria-label="Chats"]');
     await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveAttribute("aria-label", /^Forked: /);
     await expect(aside.locator(`a[href="${forkPath}"]`)).toHaveText("Keep SQLite");
-    // Tabs navigate on a click, the main one and a fork alike.
     await tabs(page).nth(2).click();
     await expect(tabs(page).nth(2)).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("moving to Postgres");

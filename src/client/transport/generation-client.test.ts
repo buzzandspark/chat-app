@@ -369,12 +369,12 @@ describe("GenerationClient", () => {
     const client = makeClient(() => new Response(JSON.stringify({ error: "rate_limited", retryAfterMs: 1 }), { status: 429 }));
     const edit = client.send({ chatId: "c1", text: "edited", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "u-original" });
     expect(client.retryReplaceFrom(await settle(edit.assistantMessageId))).toBe("u-original");
-    // The server never had the failed reply, and refuses a replace from an id it does not have (#21).
+    // The server never had the failed reply, and refuses a replace from an id it does not have.
     const plain = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
     expect(client.retryReplaceFrom(await settle(plain.assistantMessageId))).toBeUndefined();
   });
 
-  it("a replace refused while a turn it drops is still running is sent again with the same ids (#21)", async () => {
+  it("a replace refused while a turn it drops is still running is sent again with the same ids", async () => {
     let busy = 2;
     const client = makeClient((_url, init) => {
       if (busy-- > 0) return new Response(JSON.stringify({ error: "replace_running" }), { status: 409, headers: { "retry-after": "1" } });

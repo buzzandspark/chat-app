@@ -113,7 +113,7 @@ describe("ChatStore", () => {
     );
     const m = store.getMessage("a1")!;
     expect(m.status).toBe("interrupted");
-    // Interrupted snapshot keeps the longer local text (D2).
+    // Interrupted snapshot keeps the longer local text.
     expect(textOf(m.blocks)).toBe("local text that is longer");
     expect(m.lastSeq).toBe(2);
   });
@@ -260,7 +260,6 @@ describe("ChatStore", () => {
     });
   });
 
-
   describe("resume by seq", () => {
     it("seeds a streaming row with its covered seq and appends only the deltas after it", () => {
       const { store, runFrame } = makeStore();
@@ -327,14 +326,14 @@ describe("ChatStore", () => {
   it("records client timings once", () => {
     const { store } = makeStore();
     seed(store);
-    // Only a reply sent from this client carries client stamps (#46); the send sets `sent` first.
+    // Only a reply sent from this client carries client stamps; the send sets `sent` first.
     store.updateMessage("a1", { timings: { client: { sent: 1 } } });
     store.markClientTiming("a1", "firstByte", 5);
     store.markClientTiming("a1", "firstByte", 9);
     expect(store.getMessage("a1")!.timings?.client?.firstByte).toBe(5);
   });
 
-  it("setDefaultSettings seeds untouched empty chats and later new chats (#22)", () => {
+  it("setDefaultSettings seeds untouched empty chats and later new chats", () => {
     const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
     store.createChat("fresh");
     store.createChat("touched");
@@ -365,7 +364,7 @@ describe("ChatStore", () => {
     expect(store.settingsKnown("fresh")).toBe(true);
   });
 
-  it("never fabricates client timings for a reply this client did not send (#46)", () => {
+  it("never fabricates client timings for a reply this client did not send", () => {
     const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
     store.seedChat("c", "C", [
       { id: "a", chatId: "c", role: "assistant", content: [{ type: "text", text: "a", citations: null }], status: "done", requestedModel: "claude-sonnet-5-5", servingModel: "claude-sonnet-5-5", stopReason: "end_turn", refusal: null, error: null, timings: { server: { received: 1 } }, generationId: null, createdAt: 2 },
@@ -389,7 +388,7 @@ describe("ChatStore", () => {
     expect(store.removeQueued("q", "zzz")).toBeUndefined();
   });
 
-  it("evicts chats' rows but skips, and returns, one whose reply is still streaming (#72)", () => {
+  it("evicts chats' rows but skips, and returns, one whose reply is still streaming", () => {
     const { store } = makeStore();
     store.seedChat("c1", null, [row({ id: "u1", role: "user", content: [text("q")] })]);
     store.seedChat("c2", null, [row({ id: "u2", chatId: "c2", role: "user" }), row({ id: "a2", chatId: "c2", role: "assistant", status: "streaming", generationId: "g2" })]);
@@ -419,7 +418,6 @@ describe("ChatStore", () => {
     expect(retryable("a1")).toBe(true);
   });
 });
-
 
 describe("forks in the store", () => {
   const row = (id: string, role: "user" | "assistant", extra: Partial<SeedRow> = {}): SeedRow => ({

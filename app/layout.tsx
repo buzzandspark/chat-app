@@ -3,15 +3,15 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeScript } from "@client/components/shell/theme-script";
 import "./globals.css";
 
-// D21: next/font with metric-matched fallbacks; `optional` avoids a swap flash on slow loads.
+// `display: "optional"` avoids a font-swap flash on slow loads.
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
   display: "optional",
 });
 
-// Code is rare on a first paint, so the mono face is not preloaded; next/font's automatic fallback is
-// Arial-based, which is not monospace, so the real monospace stack stands in instead (#51).
+// Mono isn't preloaded (code is rare on a first paint); next/font's automatic fallback is Arial-based,
+// not monospace, so a real monospace stack stands in.
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
@@ -29,7 +29,6 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 };
 
-// D19: cover the notch, let the keyboard resize the layout, and never zoom.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -53,10 +52,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-dvh flex flex-col">
         {children}
-        {/* An invite link's token sets the account's password, so `/invite/*` must never become a pageview:
-            the exclusions build skips matching paths in the browser, before anything is sent (a dashboard
-            Shield would drop it only after it arrived), and it checks on every client-side navigation too. A
-            static attribute, not a pathname check here, which would stop every route from prerendering. */}
+        {/* An invite token sets the account's password, so `/invite/*` must never become a pageview: the exclusions
+            build drops it in the browser before sending. An attribute, since a pathname check here would end prerendering. */}
         {process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN ? (
           // A plain deferred script: next/script cost 1.9 kB of every route's JS for one tag.
           <script defer data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN} data-exclude="/invite/**" src="https://plausible.io/js/script.exclusions.js" />

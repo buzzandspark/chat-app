@@ -6,24 +6,20 @@ import { coalesceEvents, encodeSse, SSE_HEADERS, SSE_KEEPALIVE } from "@relay/ss
 import type { EventStore } from "@relay/store";
 import { streamClosed, streamOpened } from "./streams";
 
-/** Live deltas are held this long and sent together (#49); control and terminal events go at once. */
+/** Live deltas are held this long and sent together; control and terminal events go at once. */
 const BATCH_MS = 16;
 
 export interface StreamOptions {
-  /** D24 dropped-connection scenario: abort the response after this many events. */
+  /** Dropped-connection scenario: abort the response after this many events. */
   dropAfterEvents?: number;
-  /** D24 stalled-stream scenario: after this many events send nothing more, not even keepalives, and never close (a half-open socket). */
+  /** Stalled-stream scenario: after this many events send nothing more, not even keepalives, and never close (a half-open socket). */
   stallAfterEvents?: number;
   signal?: AbortSignal;
-  /** The request's Accept-Encoding: with gzip, the stream is compressed and flushed per batch (#49). */
+  /** The request's Accept-Encoding: with gzip, the stream is compressed and flushed per batch. */
   acceptEncoding?: string | null;
 }
 
-/**
- * Streams buffered events after `after`, then live events, until the terminal event. The replayed
- * slice is coalesced (one delta per run of text), live deltas are batched per 16 ms, and the whole
- * stream is gzipped when the client accepts it (#49).
- */
+/** Replays buffered events after `after` coalesced (one delta per run of text), then live events batched per 16 ms. */
 export function streamGeneration(store: EventStore, generationId: string, after: number, options: StreamOptions = {}): Response {
   const encoder = new TextEncoder();
   let closed = false;
@@ -61,8 +57,8 @@ export function streamGeneration(store: EventStore, generationId: string, after:
         }
         streamClosed();
       };
-      // D24 dropped connection: end the response without a terminal event, as a
-      // proxy timeout or a lost radio does. The client resumes from its last seq.
+      // Dropped-connection scenario: end without a terminal event, as a proxy timeout or a lost radio does.
+      // The client resumes from its last seq.
       const drop = () => close();
       options.signal?.addEventListener("abort", close, { once: true });
       keepalive = setInterval(() => {

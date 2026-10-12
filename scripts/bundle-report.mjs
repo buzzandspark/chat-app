@@ -1,4 +1,4 @@
-// D21: attributes the chat route's gzipped JS by source, from `SOURCEMAPS=1 pnpm build` maps.
+// Attributes the chat route's gzipped JS by source, from `SOURCEMAPS=1 pnpm build` maps.
 // Bytes per source are generated chars between mapping segments, scaled by each chunk's gzip ratio.
 import fs from "node:fs";
 import path from "node:path";

@@ -41,7 +41,7 @@ describe("StatusFooter", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("offers Reload, not Retry, for a replace another request already made (#21)", () => {
+  it("offers Reload, not Retry, for a replace another request already made", () => {
     const message = createMessageState({
       id: "a1",
       chatId: "c1",

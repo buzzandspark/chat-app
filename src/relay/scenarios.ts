@@ -5,7 +5,7 @@ import { type ScenarioName } from "./scenario-catalog";
 
 export { SCENARIO_NAMES, SCENARIOS, isScenarioName, type ScenarioName } from "./scenario-catalog";
 
-// Server-only scenario scripts (D24); the client-safe catalogue is scenario-catalog.ts.
+// Server-only scenario scripts; the client-safe catalogue is scenario-catalog.ts.
 const LOREM = [
   "The relay keeps every generation in an in-memory buffer keyed by id, with sequence numbers as array indices.",
   "A client that reconnects asks for events after the last sequence it saw, and the server replays the slice before attaching it live.",
@@ -182,7 +182,7 @@ export function scenarioScript(name: ScenarioName, request: ProviderRequest): Sc
   }
 }
 
-/** Replay fixture per model for REPLAY_MODE (the harness and local development), varied by turn (D6). */
+/** Replay fixture per model for REPLAY_MODE (the harness and local development), varied by turn. */
 export function replayFixture(model: ModelId, turn: number): string {
   const pool = ["normal", "long_reply", "table_mid_stream", "thinking_long", "giant_code_block"] as const;
   return `${model}/${pool[turn % pool.length]}`;

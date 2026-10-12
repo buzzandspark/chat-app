@@ -7,7 +7,7 @@ import { parseFence, splitBlocksIncremental, type MarkdownBlock } from "./blocks
 import { CodeBlock } from "./CodeBlock";
 import { decodeEntities } from "./entities";
 
-/** D9: finished blocks memoise by hash; marked's lexer tokens render to React text nodes, never innerHTML. */
+/** Finished blocks memoise by hash; marked's lexer tokens render to React text nodes, never innerHTML. */
 
 interface MarkdownProps {
   text: string;
@@ -34,11 +34,8 @@ export function Markdown({ text, streaming, className, onBlockRender }: Markdown
 }
 
 /**
- * marked reads \r\n and a lone \r as \n, but the splitter's line patterns would leave a trailing \r
- * on every line: no blank line or fence opener would match, so the whole reply became one block,
- * re-lexed on every chunk. Normalised once here, before the split and every hash. A chunk that ends
- * between \r and \n still yields a prefix of the next text (the lone \r and the \r\n both become one
- * \n), so the incremental split keeps its cache.
+ * The splitter's line patterns would otherwise leave a trailing \r and the whole reply becomes one block.
+ * A chunk ending between \r and \n still yields a prefix of the next text, so the incremental split keeps its cache.
  */
 function normalizeNewlines(text: string): string {
   return text.includes("\r") ? text.replace(/\r\n?/g, "\n") : text;
@@ -56,8 +53,7 @@ function BlockImpl({ block, closed, onRender }: BlockProps) {
     const { lang, code } = parseFence(block.source, block.closed);
     return <CodeBlock code={code} lang={lang} closed={closed && block.closed} />;
   }
-  // While a table streams its last row is still being typed: leave it out, so the rows that show are
-  // complete and the lexer sees the same shape on every chunk (#23).
+  // A streaming table's last row is still being typed: leave it out so the lexer sees the same shape each chunk.
   const streamingTable = block.kind === "table" && !closed;
   const source = streamingTable ? dropIncompleteRow(block.source) : block.source;
   const tokens = Lexer.lex(source, { gfm: true });
@@ -138,11 +134,7 @@ function alignClass(align: "center" | "left" | "right" | null): string | undefin
   return undefined;
 }
 
-/**
- * Where a token sits in its block: "closed" once the block is final; "open" inside a block that is
- * still streaming; "tail" on the path to that block's last token, the one still being written. Only
- * a fence nested in a list or quote reads it: a top-level fence is a block of its own.
- */
+/** "tail" is the path to the token still being written. Only a fence nested in a list or quote reads it. */
 type Growth = "closed" | "open" | "tail";
 
 function childGrowth(growth: Growth, last: boolean): Growth {
@@ -187,10 +179,8 @@ function renderToken(token: Token, key: number, streamingTable = false, growth: 
     }
     case "text": {
       const t = token as Tokens.Text;
-      // A block text token (a tight list item) renders its inline tokens. An inline one's `text` has
-      // marked's numeric references decoded but not its named ones, so decoding it again would turn
-      // `&#38;amp;` into `&`; its `raw` is the source as typed, decoded here once. Code spans, fences
-      // and backslash escapes are other token types and stay literal, as CommonMark has them.
+      // An inline token's `text` already has numeric references decoded, so decoding it again would turn
+      // `&#38;amp;` into `&`; `raw` is decoded here once instead.
       return <span key={key}>{t.tokens ? children(t) : decodeEntities(t.raw)}</span>;
     }
     case "strong":
@@ -209,9 +199,8 @@ function renderToken(token: Token, key: number, streamingTable = false, growth: 
     }
     case "link": {
       const t = token as Tokens.Link;
-      // References resolve in a destination and title, decoded before safeHref sees the scheme, so
-      // `&#106;avascript:` is refused like `javascript:`. marked has already removed backslash escapes
-      // there, so `\&amp;` in a destination decodes too; rare enough to leave. An autolink is literal.
+      // Decoded before safeHref sees the scheme, so `&#106;avascript:` is refused like `javascript:`.
+      // marked already removed backslash escapes, so `\&amp;` decodes too; rare enough to leave.
       return (
         <a
           key={key}
@@ -297,11 +286,8 @@ function renderToken(token: Token, key: number, streamingTable = false, growth: 
     }
     case "code": {
       const t = token as Tokens.Code;
-      // marked ends an unclosed fence at its container's end, so while the list or quote streams a
-      // nested fence's text grows chunk by chunk. Called closed then, each chunk would tokenise the
-      // whole partial code in the worker, flash colours, revert, and push real entries out of the
-      // highlight cache. It closes once its closing fence is in and a later token proves that line
-      // done; a block that is final closes everything in it.
+      // marked ends an unclosed fence at its container's end; treating it as closed then would tokenise each
+      // chunk, flash colours and evict cache entries. It closes once a later token proves the closing fence done.
       const closed = growth === "closed" || (growth === "open" && hasClosingFence(t.raw));
       return <CodeBlock key={key} code={t.text} lang={t.lang ? t.lang.split(/\s+/)[0]! : null} closed={closed} />;
     }
@@ -342,8 +328,7 @@ function renderToken(token: Token, key: number, streamingTable = false, growth: 
 }
 
 function renderListItem(item: Tokens.ListItem, key: number, growth: Growth = "closed"): ReactNode {
-  // Task items carry a leading checkbox token; render the rest inline after it. A loose item (blank
-  // lines between paragraphs) keeps its paragraphs as blocks; a tight one stays inline.
+  // Task items carry a leading checkbox token. A loose item keeps its paragraphs as blocks; a tight one stays inline.
   return (
     <li key={key} className={cn(item.task && "list-none -ml-6 pl-0", item.loose && "space-y-2")}>
       {item.tokens.map((t, i) =>

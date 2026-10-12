@@ -1,6 +1,6 @@
 import { tokenize } from "./highlight-core";
 
-/** D15: tokenising a 600-line block takes about 1.8 s on a throttled phone; it happens here, off the main thread. */
+/** Tokenising a 600-line block takes about 1.8 s on a throttled phone, so it runs off the main thread. */
 interface Job {
   id: number;
   code: string;

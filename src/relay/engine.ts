@@ -54,7 +54,7 @@ export interface ProviderContext {
 export type ProviderResolver = (ctx: ProviderContext) => Provider;
 
 interface EngineFaults {
-  /** D24 producer restart: abort this generation after N relayed events and emit `interrupted`. */
+  /** Producer restart: abort this generation after N relayed events and emit `interrupted`. */
   interruptAfterEvents?: number;
 }
 
@@ -81,9 +81,8 @@ export interface EngineOptions {
   quota?: QuotaManager;
   tps?: TpsStats;
   now?: () => number;
-  /** D3: partial content is written this often while streaming. */
   partialPersistMs?: number;
-  /** D16: a generation whose upstream sends nothing for this long ends as `interrupted { reason: "upstream" }`. 0 disables. */
+  /** A generation whose upstream sends nothing for this long ends as `interrupted { reason: "upstream" }`. 0 disables. */
   upstreamIdleMs?: number;
   isDraining?: () => boolean;
   afterDone?: (info: ReplyDoneInfo) => void;
@@ -95,7 +94,7 @@ export interface StartInput {
   userId: string;
   userRole: UserRole;
   userMessageId: string;
-  /** D10/#21: drop this message and everything after it in the same transaction that starts the new generation. */
+  /** Drop this message and everything after it in the same transaction that starts the new generation. */
   replaceFromMessageId?: string;
   assistantMessageId: string;
   /** Omitted when retrying: the user message already exists. */
@@ -106,7 +105,7 @@ export interface StartInput {
   faults?: EngineFaults;
   /** Awaited before the upstream request; rows, buffer and `started` exist meanwhile, so a client can attach. */
   gate?: Promise<void>;
-  /** Also cache the final assistant message, so forks that share it as a prefix read one entry (D13). */
+  /** Also cache the final assistant message, so forks that share it as a prefix read one entry. */
   cacheTail?: boolean;
   /** Re-send a request that fails before the API begins a message, with exponential backoff. */
   retry?: RetryPolicy;
@@ -162,7 +161,7 @@ interface Active {
   billable: boolean;
 }
 
-/** Relay engine (D2 to D5, D22): a generation runs as a detached promise that outlives the response. */
+/** A generation runs as a detached promise that outlives the response. */
 export class Engine {
   private db: Db;
   private store: EventStore;
@@ -189,7 +188,7 @@ export class Engine {
     this.afterDone = options.afterDone ?? null;
   }
 
-  /** Idempotent on `generationId` (D2): a duplicate returns `created: false`. */
+  /** Idempotent on `generationId`: a duplicate returns `created: false`. */
   start(input: StartInput): StartOutcome {
     if (this.store.has(input.generationId)) return { created: false, reason: "exists" };
     const existingRow = this.db
@@ -240,10 +239,8 @@ export class Engine {
         if (chat && chat.userId !== input.userId) throw new ForbiddenError("Not your chat");
         let victims: string[] = [];
         if (input.replaceFromMessageId) {
-          // Edit and Regenerate replace in one request: no separate truncate round trip, and a failed
-          // start leaves the server's turns exactly as they were. The caller's stop was awaited, so the
-          // turns are checked again here, where nothing can interleave: deleting a running reply's rows
-          // fails its finalize and loses its usage rows, and a target already gone would append (#21).
+          // Replace happens in the start transaction, so a failed start leaves the turns as they were. Turns are rechecked here, where nothing
+          // interleaves: deleting a running reply's rows loses its usage rows, and a target already gone would append.
           const from = tx
             .select({ position: messages.position })
             .from(messages)
@@ -387,13 +384,13 @@ export class Engine {
     return { created: true };
   }
 
-  /** Stops and settles every running generation of a user (admin delete or ban, #69). */
+  /** Stops and settles every running generation of a user (admin delete or ban). */
   async stopUser(userId: string): Promise<void> {
     const ids = [...this.active.values()].filter((a) => a.userId === userId).map((a) => a.id);
     await Promise.all(ids.map((id) => this.stopAndWait(id)));
   }
 
-  /** D5: aborts upstream and appends `stopped`. Returns false if not running here. */
+  /** Aborts upstream and appends `stopped`. Returns false if not running here. */
   stop(generationId: string): boolean {
     const active = this.active.get(generationId);
     if (!active || active.abortReason) return false;
@@ -416,7 +413,7 @@ export class Engine {
     await Promise.all(ids.map((id) => this.stopAndWait(id)));
   }
 
-  /** D2 resume branches. Ownership is checked before any buffer is served. */
+  /** Ownership is checked before any buffer is served. */
   resume(generationId: string, userId: string | null): ResumeOutcome {
     const owner = this.owner(generationId);
     if (owner === null) return { kind: "not_found" };
@@ -425,9 +422,7 @@ export class Engine {
     const row = this.db.select().from(generations).where(eq(generations.id, generationId)).get();
     if (!row) return { kind: "not_found" };
     if (row.status === "running") {
-      // The process restarted while this was running: nothing can finish it. Settle its estimated
-      // cost as the boot backstop does (cap review, finding 3); the provider column keeps a crashed
-      // scenario run free (D22).
+      // The process restarted mid-run: settle its estimated cost as the boot backstop does; the provider column keeps a crashed scenario run free.
       const now = new Date(this.now());
       this.db.transaction((tx) => {
         settleOrphan(tx as unknown as Db, { id: row.id, messageId: row.messageId, chatId: row.chatId, userId: row.userId, requestedModel: row.requestedModel, provider: row.provider }, now);
@@ -471,7 +466,7 @@ export class Engine {
     return this.active.size;
   }
 
-  /** D3 shutdown: abort every upstream request and wait for each to settle. */
+  /** Shutdown: abort every upstream request and wait for each to settle. */
   async drain(): Promise<void> {
     const all = [...this.active.values()];
     for (const active of all) {
@@ -569,7 +564,7 @@ export class Engine {
           }
           if (body.type === "error") return body.error;
           this.append(active, body);
-          // D22: metered as it streams; at the cap every running reply of the user stops.
+          // Metered as it streams; at the cap every running reply of the user stops.
           if ((body.type === "text_delta" || body.type === "thinking_delta") && active.billable && this.quota.meter(active.id, body.text.length)) {
             this.stopAtCap(active.userId);
           }
@@ -608,7 +603,7 @@ export class Engine {
     active.relayed++;
   }
 
-  /** D16: the next upstream event, or "idle" when none arrives within `upstreamIdleMs` (a half-open socket must not hold a generation open for ever). */
+  /** The next upstream event, or "idle" when none arrives within `upstreamIdleMs` (a half-open socket must not hold a generation open for ever). */
   private nextOrIdle(iterator: AsyncIterator<NormalizableEvent>): Promise<IteratorResult<NormalizableEvent> | "idle"> {
     const next = iterator.next();
     if (this.upstreamIdleMs <= 0) return next;
@@ -698,7 +693,7 @@ export class Engine {
     if (reason === "stop") {
       const servingModel = resolveServingModel(active.acc);
       timings.done = this.now();
-      // A stop that lands after the final usage frame has exact numbers; only an earlier one estimates (finding 4).
+      // A stop that lands after the final usage frame has exact numbers; only an earlier one estimates.
       const exact = active.acc.stopReason !== null;
       const rows = exact ? this.free(active, this.priceFinal(active, servingModel ?? active.requestedModel)) : this.estimateRows(active, servingModel ?? active.requestedModel);
       const usage = rows.length ? summarize(rows, !exact) : null;
@@ -738,15 +733,11 @@ export class Engine {
     );
   }
 
-  /**
-   * The terminal event, the cost settlement and the cleanup happen whatever the
-   * database says: a chat deleted mid-stream must not leave a buffer without an
-   * end, a quota reservation held, or spend unrecorded.
-   */
+  /** The terminal event, cost settlement and cleanup happen whatever the database says: a chat deleted mid-stream must not
+   * leave a buffer without an end, a quota reservation held, or spend unrecorded. */
   private settle(active: Active, final: FinalState, terminal: RelayEventBody): void {
     const cost = final.rows.reduce((s, r) => s + r.costUsd, 0);
-    // The spend increment rides in the final transaction with the usage rows (finding 6); only when
-    // that transaction fails is it attempted on its own, so spend and rows never disagree.
+    // The spend increment rides in the final transaction with the usage rows; only when that fails is it attempted alone, so spend and rows never disagree.
     let finalized = false;
     try {
       this.finalize(active, final, cost);
@@ -793,7 +784,7 @@ export class Engine {
     return active.billable ? rows : rows.map((r) => ({ ...r, costUsd: 0 }));
   }
 
-  // D22: input tokens are exact from message_start; output is elapsed time times measured tokens/s,
+  // Input tokens are exact from message_start; output is elapsed time times measured tokens/s,
   // because billed output includes full thinking while only its summary is visible.
   private estimateRows(active: Active, servingModel: string): UsageRow[] {
     const u = active.acc.usage;
@@ -869,7 +860,6 @@ export class Engine {
       tx.update(chats).set({ updatedAt: now, lastMessageAt: now }).where(eq(chats.id, active.chatId)).run();
     });
   }
-
 
   private loadHistory(chatId: string, assistantMessageId: string): HistoryMessage[] {
     const target = this.db

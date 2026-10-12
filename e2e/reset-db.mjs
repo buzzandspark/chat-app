@@ -1,6 +1,5 @@
-// Each run starts from an empty database so titles and counts are deterministic. This runs as the
-// first half of the web server command: Playwright starts the server before globalSetup, so a reset
-// there deleted the file under a running server (new connections saw an empty, unlinked database).
+// Empties the database before the web server starts; globalSetup runs after Playwright starts the
+// server, so a reset there would delete the file under a running server.
 import fs from "node:fs";
 import path from "node:path";
 

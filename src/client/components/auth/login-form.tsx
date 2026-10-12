@@ -25,10 +25,8 @@ export function formText(form: FormData, name: string): string {
 }
 
 /**
- * Server-rendered (no `useSearchParams`, so no Suspense gap and no heading jump, #52); `next` is read
- * from the URL at submit. One plain POST to better-auth's sign-in endpoint instead of its React client
- * (13 kB gzipped for one call, #81). A form action with uncontrolled fields: what was typed before
- * hydration is simply in the fields, and a failed attempt keeps the email (the form resets to its default).
+ * Server-rendered (no `useSearchParams`, so no Suspense gap or heading jump); `next` is read at submit. A plain POST
+ * instead of better-auth's React client (13 kB gzipped for one call); uncontrolled fields keep what was typed before hydration.
  */
 export function LoginForm() {
   const router = useRouter();

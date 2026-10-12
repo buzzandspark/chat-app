@@ -32,14 +32,12 @@ test.describe("streaming", () => {
     const queued = page.getByTestId("queued-message");
     await expect(queued).toHaveCount(2);
     await expect(queued.first()).toContainText("queued one");
-    // Nothing went out yet: still one user row, Stop still offered, and the composer is clear again.
     await expect(page.locator('[data-role="user"]:visible')).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
     await expect(box).toHaveValue("");
     await queued.nth(1).getByRole("button", { name: "Remove" }).click();
     await expect(queued).toHaveCount(1);
     await expect(first).toHaveAttribute("data-status", "done", { timeout: 60_000 });
-    // The queued message is sent as soon as the reply ends.
     await expect(page.locator('[data-role="user"]:visible')).toHaveCount(2, { timeout: 15_000 });
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("queued one");
     await expect(queued).toHaveCount(0);
@@ -89,7 +87,7 @@ test.describe("reliability", () => {
   });
 
   // The slow_tokens scenario streams exactly this sentence; a resume that replayed from the saved
-  // partial's start would show it twice (the review measured 6,414 characters against 5,444).
+  // partial's start would show it twice.
   const SLOW_TOKENS_TEXT =
     "The relay keeps every generation in an in-memory buffer keyed by id, with sequence numbers as array indices.";
 

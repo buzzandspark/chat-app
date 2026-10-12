@@ -15,7 +15,7 @@ const Patch = z.object({
   role: z.enum(["admin", "user"]).optional(),
 });
 
-/** D7: edit cap, disable/enable (ban), change role. */
+/** Edit cap, disable/enable (ban), change role. */
 export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/users/[id]">): Promise<Response> {
   try {
     const admin = await requireAdmin();
@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
     if (id === admin.id && (parsed.data.banned || parsed.data.role === "user")) {
       return jsonError(400, { error: "cannot_demote_self" });
     }
-    // A disabled user's running replies stop (and settle) before their sessions go (#69).
+    // A disabled user's running replies stop (and settle) before their sessions go.
     if (parsed.data.banned) await getRelay().engine.stopUser(id);
     const db = getDb();
     const now = new Date();

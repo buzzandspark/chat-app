@@ -36,7 +36,7 @@ function textOf(events: RelayEvent[]): string {
   return events.map((e) => (e.type === "text_delta" ? e.text : "")).join("");
 }
 
-describe("streamGeneration (#49)", () => {
+describe("streamGeneration", () => {
   it("replays a buffered slice coalesced, then batches live deltas, and loses nothing", async () => {
     const store = new EventStore();
     store.open("g");

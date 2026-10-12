@@ -4,7 +4,7 @@ import { textOf, type ChatStore, type MessageState } from "./chat-store";
 
 const SENTENCE_END = /[.!?](\s|$)/g;
 
-/** Markdown to something a screen reader can say: code and tables become a short description (#55). */
+/** Code and tables become a short description for screen readers. */
 function speakable(markdown: string): string {
   return markdown
     .replace(/```[^\n]*\n([\s\S]*?)(```|$)/g, (_m, body: string) => ` Code block, ${body.split("\n").filter((l) => l.trim()).length} lines. `)
@@ -37,9 +37,8 @@ function ending(m: MessageState): string | null {
   }
 }
 
-// D19/#54: what each chat's live region says, kept here outside React. A reply followed while its chat is the
-// page on screen (from a send or retry, or by the live region when the chat comes on screen mid-reply) announces
-// its completed sentences at most every 2 s, then how it ended; a chat opened on a finished reply says nothing.
+// Live region text, kept outside React. A followed reply announces completed sentences at most every 2 s,
+// then how it ended; a chat opened on a finished reply says nothing.
 const said = new Map<string, string>();
 const listeners = new Set<() => void>();
 const following = new Set<string>();

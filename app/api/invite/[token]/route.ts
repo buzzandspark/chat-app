@@ -5,7 +5,7 @@ import { errorResponse, jsonError } from "@server/current-user";
 
 const Body = z.object({ password: z.string().min(10).max(200) });
 
-/** D23: single use; the token is never stored, only its hash. */
+/** Single use; the token is never stored, only its hash. */
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/invite/[token]">): Promise<Response> {
   try {
     const { token } = await ctx.params;

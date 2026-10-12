@@ -80,7 +80,7 @@ function newBlock(type: StoredContentBlock["type"]): BlockAcc {
   };
 }
 
-/** One raw Anthropic event in, relay event bodies out, accumulator updated (D9). Pure. */
+/** One raw Anthropic event in, relay event bodies out, accumulator updated. Pure. */
 export function normalizeEvent(raw: NormalizableEvent, acc: StreamAccumulator): RelayEventBody[] {
   switch (raw.type) {
     case "message_start": {
@@ -199,7 +199,7 @@ export function normalizeEvent(raw: NormalizableEvent, acc: StreamAccumulator): 
 }
 
 // The last fallback block's to.model wins, else message_start's model. Sticky-routed turns have
-// no block, so a fallback_message iteration entry is the cross-check (D9).
+// no block, so a fallback_message iteration entry is the cross-check.
 export function resolveServingModel(acc: StreamAccumulator): string | null {
   const lastBoundary = acc.boundaries[acc.boundaries.length - 1];
   if (lastBoundary) return lastBoundary.to;
@@ -208,7 +208,7 @@ export function resolveServingModel(acc: StreamAccumulator): string | null {
   return acc.startModel;
 }
 
-/** True when a model declined before any output and a fallback served the turn (D20). */
+/** True when a model declined before any output and a fallback served the turn. */
 export function hadDeclinedAttempt(acc: StreamAccumulator): boolean {
   const first = acc.boundaries[0];
   return first !== undefined && !first.visible;

@@ -63,10 +63,8 @@ const DISENGAGE_PX = 48;
 const LOAD_EARLIER_PX = 400;
 
 /**
- * D16 auto-follow by intent (#27): a wheel or touch scroll upwards, or a scroll key, disengages at once;
- * a scrollbar drag that leaves the end by 48 px disengages too; reaching the end or sending re-engages.
- * A content shrink (a thinking block collapsing) moves scrollTop without any of those and keeps following.
- * D14: rows use content-visibility.
+ * Auto-follow by intent: an upward wheel/touch scroll or a scroll key disengages at once, as does a scrollbar drag
+ * 48 px from the end; reaching the end or sending re-engages. Rows use content-visibility.
  */
 export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFollowChange?: (engaged: boolean) => void }>(
   function MessageList({ chatId, onFollowChange }, ref) {
@@ -104,9 +102,8 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
 
     useImperativeHandle(ref, () => ({ engage, disengage }), [engage, disengage]);
 
-    // Intent, not position: an upward wheel, an upward touch drag or a scroll key means "I am reading".
-    // Only in the thread itself (React events also bubble here from portals, a row's open ⋯ menu), and only
-    // when it can scroll: a chat that fits on screen has no "latest" to jump back to.
+    // Intent, not position. Only in the thread itself (React events bubble here from portals such as a row's menu),
+    // and only when it can scroll: a chat that fits has no "latest" to jump back to.
     const touchY = useRef(0);
     const inThread = (e: { currentTarget: HTMLElement; target: EventTarget }) =>
       e.target instanceof Node && e.currentTarget.contains(e.target) && e.currentTarget.scrollHeight - e.currentTarget.clientHeight > 2;
@@ -125,13 +122,11 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
       if (inThread(e) && (e.key === "ArrowUp" || e.key === "PageUp" || e.key === "Home")) setEngaged(false);
     };
 
-    // The scroller's ref: before paint, a long chat starts at its end instead of oldest-first and then jumping
-    // (once per chat: Activity re-attaches it on reveal, and the reading position must stay). Its observer then
-    // keeps a following thread pinned to the end as content grows, and as the viewport shrinks (the Android
-    // keyboard); with per-frame store flushes it fires at most once per frame.
+    // Before paint, a long chat starts at its end (once per chat: Activity re-attaches on reveal). The observer then
+    // keeps a following thread pinned as content grows or the viewport shrinks (Android keyboard), at most once per frame.
     const scrolledForRef = useRef<string | null>(null);
-    // A search hit in this chat: once its row is here (after loading the rest of a long chat), it is shown
-    // instead of the end. Tried on attach, as rows land, and when a search picks this chat while it is open.
+    // A search hit in this chat is shown instead of the end once its row is here: tried on attach, as rows land,
+    // and when a search picks this chat while it is open.
     const revealLoadingRef = useRef(false);
     const tryReveal = useCallback(() => {
       const el = scrollRef.current;

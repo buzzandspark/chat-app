@@ -139,8 +139,7 @@ describe("applyMigrations", () => {
   });
 });
 
-// One initial migration (the history was collapsed on 2026-10-09 before anything shipped): the schema,
-// plus the search index and its triggers, which drizzle-kit cannot express.
+// One initial migration: the schema, plus the search index and its triggers, which drizzle-kit cannot express.
 describe("the initial migration", () => {
   it("builds the whole schema with the search index and its triggers in one step", () => {
     applyMigrations(sqlite, migrationsThrough("0000_init"));

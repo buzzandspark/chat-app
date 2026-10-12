@@ -1,4 +1,4 @@
-/** D15: fence info strings to shiki language ids; small enough to ship with the route. */
+/** Fence info strings to shiki language ids; small enough to ship with the route. */
 const LANG_ALIASES: Record<string, string> = {
   ts: "typescript",
   typescript: "typescript",

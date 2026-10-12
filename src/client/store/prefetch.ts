@@ -10,7 +10,7 @@ interface ChatJson {
 
 const forkOf = (chat: ChatJson["chat"]) => ({ from: chat.forkedFrom ?? null, position: chat.forkPosition ?? null });
 
-/** #47: the rest of a long chat, on request; the store's id list becomes the full one. */
+/** The rest of a long chat, on request; the store's id list becomes the full one. */
 export async function loadEarlierMessages(store: ChatStore, chatId: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/chats/${chatId}?all=1`);
@@ -25,10 +25,7 @@ export async function loadEarlierMessages(store: ChatStore, chatId: string): Pro
 
 const inflight = new Map<string, Promise<void>>();
 
-/**
- * D21: fetch a chat's rows into the store on intent (hover, focus, touchstart, sidebar open), so the
- * click that follows renders from memory. A seeded chat is skipped; a 404 marks the chat empty.
- */
+/** Fetches on intent (hover, focus, touchstart) so the click that follows renders from memory. */
 export function prefetchChat(store: ChatStore, chatId: string): Promise<void> {
   if (store.getChat(chatId).seeded) return Promise.resolve();
   const existing = inflight.get(chatId);

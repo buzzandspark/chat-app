@@ -30,11 +30,11 @@ export interface MessageState {
   usage: UsageSummary | null;
   generationId: string | null;
   interruptedReason: InterruptedReason | null;
-  /** D17: painted partial text on a no-fallback refusal is dimmed and not saved. */
+  /** Painted partial text on a no-fallback refusal is dimmed and not saved. */
   discardedText: boolean;
   connection: ConnectionState;
   reconnectAttempt: number;
-  /** Client-clock timestamps for the thinking duration label (D12). */
+  /** Client-clock timestamps for the thinking duration label. */
   thinkingStartedAt: number | null;
   thinkingEndedAt: number | null;
   /** The last producer seq applied; control events never move it. */
@@ -42,15 +42,14 @@ export interface MessageState {
   createdAt: number;
   /** Added by this client and not yet listed by the server (a POST in flight, or one it refused). */
   local: boolean;
-  /** Retries already made for this user message in the current rate-limited streak (0 for a first reply). */
+  /** Retries already made for this user message in the current rate-limited streak. */
   retryAttempt: number;
   /** The scripted scenario this reply comes from, so Continue and retries keep it. */
   scenario: string | null;
-  /** Row position on the server; null until the server has listed the message. */
+  /** Null until the server has listed the message. */
   position: number | null;
   /** Fork prompts for a reply: null = not run or unknown, [] = none. */
   options: ForkOption[] | null;
-  /** While the options stream: the count once known, the options complete so far, and whether the stream failed. */
   optionsStream: OptionsStream | null;
 }
 
@@ -60,11 +59,11 @@ interface OptionsStream {
   failed: boolean;
 }
 
-/** Per-chat composer settings (ADR-0005): kept here so a remount or an Activity eviction never resets them. */
+/** Kept in the store so a remount or an Activity eviction never resets them (ADR-0005). */
 export interface ChatSettings {
   model: ModelId;
   thinking: ThinkingOptions;
-  /** An armed scenario with its label, so the composer chip needs no catalogue (D21). */
+  /** Carries its label so the composer chip needs no catalogue. */
   scenario: { name: string; title: string } | null;
 }
 
@@ -74,14 +73,13 @@ export interface ChatState {
   id: string;
   messageIds: string[];
   title: string | null;
-  /** True once the server's rows have been applied (or the chat was created locally), so an empty list means a new chat. */
+  /** Server rows applied (or created locally), so an empty list means a new chat. */
   seeded: boolean;
   settings: ChatSettings;
   /** True once the user changed a setting here; a seed then leaves the model alone. */
   settingsTouched: boolean;
-  /** Messages before the window the server sent (#47); 0 once everything is loaded. */
+  /** Messages before the window the server sent; 0 once everything is loaded. */
   older: number;
-  /** Messages typed while a reply was streaming; the first goes out when that reply ends. */
   queue: QueuedMessage[];
   /** Set on a fork: the chat its rows were copied from, and the position of its first own message. */
   forkedFrom: string | null;
@@ -161,11 +159,7 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
   };
 }
 
-/**
- * Stream block index to position among the client blocks of saved content. The accumulator writes
- * blocks in stream order and only omits empty ones, which are trailing in practice (a block that
- * has started but not received a delta), so position and index agree for every saved block.
- */
+/** The accumulator only omits empty blocks, which are trailing in practice, so position and index agree. */
 function blockIndexFromContent(content: readonly StoredContentBlock[]): Map<number, number> {
   const map = new Map<number, number>();
   let pos = 0;
@@ -182,19 +176,16 @@ export function textOf(blocks: readonly ClientBlock[]): string {
 }
 
 /**
- * A failed reply can be retried (Try again, the 429 countdown, Regenerate) only while it is the chat's
- * last message. A retry drops the reply and everything after it here, but a reply whose POST was refused
- * never reached the server, so the server's `replaceFrom` matches nothing and keeps the later turns,
- * appending the retry after them; a later user message that was itself refused would be gone everywhere.
- * Once a newer turn exists, the failed reply keeps its error and offers nothing.
+ * Only while it is the chat's last message: a refused reply never reached the server, so its `replaceFrom`
+ * would match nothing there and later turns would diverge between client and server.
  */
 export function canRetryReply(chat: Pick<ChatState, "messageIds">, message: Pick<MessageState, "id" | "status">): boolean {
   return message.status !== "error" || chat.messageIds.at(-1) === message.id;
 }
 
-/** D10: per-message subscribers; producer events batch per frame, dedupe by seq; control events always apply. */
+/** Per-message subscribers; producer events batch per frame, dedupe by seq; control events always apply. */
 export class ChatStore {
-  /** Model and effort for chats that have no reply to inherit from (#22): the user's last choice, set by the shell. */
+  /** Model and effort for chats with no reply to inherit from: the user's last choice, set by the shell. */
   private defaults: ChatSettings = DEFAULT_SETTINGS;
   /** Whether the shell has read that choice yet; until then an empty chat's model is not known. */
   private defaultsLoaded = false;
@@ -229,7 +220,7 @@ export class ChatStore {
   private queue: RelayEvent[] = [];
   private flushHandle: number | null = null;
   private replyEndListeners = new Set<(message: MessageState) => void>();
-  /** The Settings switch, kept here for the reply-end watcher (ShellUserProvider keeps it current). */
+  /** Kept here for the reply-end watcher; ShellUserProvider keeps it current. */
   exploreOptions = true;
   setExploreOptions(on: boolean): void {
     this.exploreOptions = on;
@@ -319,10 +310,8 @@ export class ChatStore {
   }
 
   /**
-   * Reconciles the server's rows into the store (ADR-0005). Local in-flight messages win; a finished
-   * local reply is never replaced by a stale `streaming` row; optimistic messages the server has
-   * not listed yet stay, after the server's rows. deferNotify: the caller seeds during its own
-   * render, so subscribers are notified in a microtask.
+   * Local in-flight messages win and unlisted optimistic ones stay after the server's rows (ADR-0005).
+   * deferNotify: the caller seeds during its own render, so subscribers are notified in a microtask.
    */
   seedChat(
     chatId: string,
@@ -406,7 +395,7 @@ export class ChatStore {
     this.notifyMessage(message.id);
   }
 
-  /** Remove this message and everything after it in its chat (edit-last-message, D10). */
+  /** Remove this message and everything after it in its chat. */
   truncateFrom(id: string): void {
     const m = this.messages.get(id);
     if (!m) return;
@@ -426,7 +415,7 @@ export class ChatStore {
   }
 
   /**
-   * Drops the rows of the given chats (#72: opened long ago); a view that still shows one re-seeds from its own rows.
+   * Drops the rows of the given chats; a view that still shows one re-seeds from its own rows.
    * Returns the chats it skipped because a reply is still streaming.
    */
   evictChats(ids: Iterable<string>): string[] {
@@ -465,7 +454,7 @@ export class ChatStore {
     this.notifyChat(chatId);
   }
 
-  /** A message typed while a reply streams waits here; the generation client sends the first one when that reply ends. */
+  /** The generation client sends the first queued message when the streaming reply ends. */
   enqueueMessage(chatId: string, item: QueuedMessage): void {
     const chat = this.chats.get(chatId) ?? this.emptyChat(chatId);
     this.chats.set(chatId, { ...chat, queue: [...chat.queue, item] });
@@ -523,7 +512,7 @@ export class ChatStore {
   markClientTiming(id: string, key: keyof NonNullable<Timings["client"]>, at: number = this.now()): void {
     const m = this.messages.get(id);
     if (!m) return;
-    // Only a reply sent from this client has client stamps; a saved or resumed reply gets none (#46).
+    // Only a reply sent from this client has client stamps; a saved or resumed reply gets none.
     if (!m.timings?.client) return;
     const client = { ...m.timings.client };
     if (client[key] !== undefined) return;
@@ -531,10 +520,7 @@ export class ChatStore {
     this.updateMessage(id, { timings: { ...(m.timings ?? {}), client } });
   }
 
-  /**
-   * D20: a reply this client sent paints its first text in the render this commit notifies; the paint is
-   * stamped in a task after the next frame (#46).
-   */
+  /** The first text paints in the render this commit notifies; stamped in a task after the next frame. */
   private markFirstPaint(id: string): void {
     if (typeof requestAnimationFrame !== "function") return;
     requestAnimationFrame(() => {
@@ -552,7 +538,6 @@ export class ChatStore {
     };
   }
 
-  /** Commits applied drafts, notifies their subscribers, then reports the replies that stopped streaming. */
   private commit(ids: Iterable<string>, drafts: Map<string, MessageState>): void {
     const ended: MessageState[] = [];
     for (const id of ids) {
@@ -716,10 +701,8 @@ export class ChatStore {
   }
 
   /**
-   * D2: a final row (done, refused) replaces local state. Otherwise the side that covers more of the
-   * stream wins: by the saved seq when the row carries one, by text length for rows written before it
-   * existed. Taking the server's content moves the cursor past the seq it covers, so a late replay of
-   * the same deltas is dropped as duplicates instead of appended.
+   * A final row replaces local state; otherwise the side covering more of the stream wins (by seq, else text
+   * length for older rows). Moving the cursor past the covered seq makes a late replay dedupe instead of append.
    */
   private applySnapshot(d: MessageState, snapshot: MessageSnapshot, status: MessageStatus, internal: Internal): void {
     const serverBlocks = toClientBlocks(snapshot.content as StoredContentBlock[]);
@@ -756,7 +739,6 @@ function sameRow(existing: MessageState, row: SeedRow): boolean {
   return textOf(blocks) === textOf(existing.blocks);
 }
 
-/** Server-rendered message rows to client state. */
 function messageStateFromRow(row: SeedRow): MessageState {
   const blocks = toClientBlocks(row.content);
   return createMessageState({

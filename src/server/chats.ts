@@ -59,10 +59,10 @@ export function listChats(userId: string, limit = 200): ChatSummary[] {
     .map((c) => ({ ...c, updatedAt: c.updatedAt.getTime() }));
 }
 
-/** The newest messages the page ships; the rest load on request (#47). */
+/** The newest messages the page ships; the rest load on request. */
 const SEED_WINDOW = 100;
 
-/** Thinking signatures and redacted payloads never leave the server: the client has no use for them (#47). */
+/** Thinking signatures and redacted payloads never leave the server: the client has no use for them. */
 function stripForClient(content: StoredContentBlock[]): StoredContentBlock[] {
   return content.map((b) => {
     if (b.type === "thinking") return { ...b, signature: "" };

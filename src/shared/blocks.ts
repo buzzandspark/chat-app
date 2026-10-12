@@ -1,10 +1,10 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
-/** What `messages.content` stores: the API's content blocks, fallback blocks kept in place (D8). */
+/** What `messages.content` stores: the API's content blocks, fallback blocks kept in place. */
 export type StoredContentBlock = Anthropic.Beta.BetaContentBlock;
 export type IterationUsage = NonNullable<Anthropic.Beta.BetaUsage["iterations"]>;
 
-/** What the client renders; a divider marks a mid-stream fallback (D12). Tool use collapses to nothing. */
+/** What the client renders; a divider marks a mid-stream fallback. Tool use collapses to nothing. */
 export type ClientBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; text: string; redacted?: boolean }
@@ -26,7 +26,7 @@ export function toClientBlocks(content: readonly StoredContentBlock[]): ClientBl
         out.push({ type: "thinking", text: "", redacted: true });
         break;
       case "fallback":
-        // The live stream shows a divider only after text was painted; a saved reply reads the same way (#67).
+        // The live stream shows a divider only after text was painted; a saved reply reads the same way.
         if (hasText) {
           out.push({
             type: "divider",

@@ -3,8 +3,8 @@ import path from "node:path";
 import { expect, test, type CDPSession, type Page } from "@playwright/test";
 import { ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, runScenario, sendText, sidebar, visible } from "./helpers";
 
-// D0, D26: budgets run only on Pixel 7, where CPU 4x and Fast 3G throttling go through CDP;
-// results append to docs/perf/ so the design doc quotes measured numbers.
+// Budgets run only on Pixel 7, where CPU 4x and Fast 3G throttling go through CDP;
+// results append to test-results/perf/<date>.json.
 test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
   test.skip(({ browserName, isMobile }) => browserName !== "chromium" || !isMobile, "budgets are measured on the Pixel 7 project only");
 
@@ -22,7 +22,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
   }
 
   function record(name: string, data: Record<string, unknown>) {
-    const dir = path.resolve("docs/perf");
+    const dir = path.resolve("test-results/perf");
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `${new Date().toISOString().slice(0, 10)}.json`);
     const existing = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>) : {};
@@ -70,7 +70,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
         transferredKb: Math.round(performance.getEntriesByType("resource").reduce((s, r) => s + ((r as PerformanceResourceTiming).transferSize || 0), 0) / 1024),
       };
     });
-    // D21: scripts fetched after hydration with no interaction (Radix chunks used to load at mount).
+    // Scripts fetched after hydration with no interaction (Radix chunks used to load at mount).
     const chunksAfterHydration = await page.evaluate(() => {
       const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
       const hydrated = nav ? nav.domContentLoadedEventEnd : 0;
@@ -121,7 +121,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     await visible(page, "scenario-long_chat").click();
     await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/, { timeout: 60_000 });
     const loadStart = Date.now();
-    // The page ships the newest 100 rows (#47); the rest load on request.
+    // The page ships the newest 100 rows; the rest load on request.
     await page.getByRole("button", { name: /earlier message/ }).click();
     await expect(page.locator('[data-role]:visible')).toHaveCount(200, { timeout: 60_000 });
     await expect(visible(page, "composer")).toHaveAttribute("data-hydrated", "true", { timeout: 60_000 });
@@ -148,9 +148,8 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     expect(longFrames / Math.max(1, frames.length)).toBeLessThan(0.1);
   });
 
-  // D21 (ADR-0005): click to thread painted, in animation frames after the click (the event that starts
-  // the navigation), for a chat the store already holds, one prefetched on hover, and one tapped before
-  // the sidebar's own top-five prefetch has landed.
+  // Click to thread painted, in frames after the click: a chat the store holds, one prefetched on hover,
+  // and one tapped before the sidebar's top-five prefetch lands.
   test("click to thread: loaded, prefetched and cold chats", async ({ page }) => {
     await throttle(page);
     const titles = ["alpha nav", "bravo nav", "charlie nav"] as const;
@@ -270,8 +269,8 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     const sorted = [...frames].sort((a, b) => a - b);
     const p = (q: number) => Number((sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0).toFixed(1));
     const maxFrame = Number(Math.max(0, ...frames).toFixed(1));
-    // D15: reopening the chat must not tokenise or commit the block in one go either. The hidden view
-    // keeps its chat (Activity), so the usual reopen shows the very same element; a remount is a cache hit.
+    // Reopening must not tokenise or commit the block in one go: the hidden view keeps its chat
+    // (Activity), so a reopen shows the same element and a remount is a cache hit.
     const chatUrl = page.url();
     await lastAssistant(page).locator(".markdown-code").evaluate((el) => {
       (el as HTMLElement & { __kept?: boolean }).__kept = true;
@@ -317,19 +316,14 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     });
     expect(source).toBe("worker");
     expect(["kept", "cache"]).toContain(reopenSource);
-    // Measured 2026-10-07 at 4x CPU: longest frame 317 ms when the reply finishes and 367 ms on reopen
-    // (about 80 and 90 ms unthrottled), 4 to 5 frames over 50 ms in a 2,000-frame window, p99 33 ms.
-    // The review's 1.8 s freeze was tokenising on the main thread plus one commit of the whole block;
-    // tokenising is now off-thread (source "worker"), reopening keeps the element or hits the cache, and commits touch one
-    // contained line group. The remaining spikes recur every ~30 groups and grow with the committed
-    // DOM, which points at garbage collection or style work, not at tokenising; they are gated here.
+    // Measured at 4x CPU: longest frame ~317 ms at reply end, ~367 ms on reopen. Remaining spikes recur
+    // every ~30 groups and grow with the DOM (GC or style work, not tokenising).
     expect(maxFrame).toBeLessThan(500);
     expect(reopenMaxFrame).toBeLessThan(500);
   });
 });
 
-// The sidebar is docked at md by CSS from the first paint, so a desktop cold load must not shift (the
-// review measured CLS 0.20 when the dock appeared only after hydration).
+// The sidebar is docked at md by CSS from the first paint, so a desktop cold load must not shift.
 test.describe("desktop cold load", () => {
   test.skip(({ browserName, isMobile }) => browserName !== "chromium" || !!isMobile, "measured on the desktop project");
 
@@ -369,8 +363,8 @@ test.describe("desktop cold load", () => {
     });
     const html = await (await page.request.get(page.url())).text();
     const dockedInHtml = /<aside[^>]*aria-label="Chats"[^>]*class="[^"]*dock:w-72/.test(html);
-    fs.mkdirSync(path.resolve("docs/perf"), { recursive: true });
-    const file = path.join(path.resolve("docs/perf"), `${new Date().toISOString().slice(0, 10)}.json`);
+    fs.mkdirSync(path.resolve("test-results/perf"), { recursive: true });
+    const file = path.join(path.resolve("test-results/perf"), `${new Date().toISOString().slice(0, 10)}.json`);
     const existing = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>) : {};
     existing.desktop_shell = { ...metrics, dockedInHtml, at: new Date().toISOString() };
     fs.writeFileSync(file, `${JSON.stringify(existing, null, 2)}\n`);

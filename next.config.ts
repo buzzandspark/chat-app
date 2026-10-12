@@ -21,7 +21,7 @@ const API_HEADERS = [
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
-  // `SOURCEMAPS=1 pnpm build` for scripts/bundle-report.mjs (D21 attribution).
+  // `SOURCEMAPS=1 pnpm build` for scripts/bundle-report.mjs.
   productionBrowserSourceMaps: process.env.SOURCEMAPS === "1",
   cacheComponents: true,
   partialPrefetching: true,
@@ -32,10 +32,8 @@ const nextConfig: NextConfig = {
     // A restored dev cache lacks HMR's asset registry, so pages reloaded every second (HMR `restart`); compile fresh.
     turbopackFileSystemCacheForDev: false,
   },
-  // The invite page's URL holds a password-setting token: no request it makes (the analytics and Sentry
-  // scripts, fonts, the redeem POST, the page after it) may carry it in a Referer, nor `document.referrer` on
-  // the next page. A header rather than a <meta>, so it holds before the head is parsed.
-  // Last match wins for a repeated key, so the invite rule comes after the site-wide one.
+  // The invite page's URL holds a password-setting token, so nothing it loads or links to may carry it in a Referer.
+  // A header rather than a <meta>, so it holds before the head is parsed; it comes after the site-wide rule as last match wins.
   // No landing page: the root opens a new chat (sign-in first, through the proxy).
   redirects: async () => [{ source: "/", destination: "/c", permanent: false }],
   headers: () => [

@@ -17,7 +17,7 @@ interface RelaySingleton {
 
 const g = globalThis as unknown as { __chatRelay?: RelaySingleton };
 
-/** One engine per process (D1), created lazily and cached across dev reloads. */
+/** One engine per process, created lazily and cached across dev reloads. */
 export function getRelay(): RelaySingleton {
   if (g.__chatRelay) return g.__chatRelay;
   const db = getDb();

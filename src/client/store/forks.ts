@@ -24,11 +24,7 @@ export async function streamOptions(messageId: string, onEvent: (event: OptionsE
   }
 }
 
-/** Follows a reply's options into the store: pending, then the count, then the final list; the trace goes to the console. */
-/**
- * The fork options are a side effect of a reply this client sent: watched once it ends as the chat's last
- * turn, in a main chat with room for forks, while Explore options is on. Never for a chat opened already done.
- */
+/** Only for a reply this client sent, never for a chat opened already done. */
 export function watchOptionsOnReplyEnd(store: ChatStore, reply: MessageState): void {
   if (reply.role !== "assistant" || reply.status !== "done" || !reply.local || !store.exploreOptions) return;
   const chat = store.getChat(reply.chatId);

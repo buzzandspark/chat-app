@@ -1,4 +1,4 @@
-// Client-safe scenario catalogue (D24); the scripts live in scenarios.ts and stay out of the client bundle.
+// Client-safe scenario catalogue; the scripts live in scenarios.ts and stay out of the client bundle.
 export const SCENARIO_NAMES = [
   "normal",
   "long_reply",

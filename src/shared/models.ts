@@ -1,4 +1,4 @@
-// Client-safe model catalogue (D11); request params live in thinking-config.ts, prices in pricing.ts.
+// Client-safe model catalogue; request params live in thinking-config.ts, prices in pricing.ts.
 export const MODEL_IDS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"] as const;
 export type ModelId = (typeof MODEL_IDS)[number];
 export const DEFAULT_MODEL: ModelId = "claude-sonnet-5-5";
@@ -7,7 +7,7 @@ export interface ModelInfo {
   id: ModelId;
   name: string;
   short: string;
-  /** Context window in tokens (D12). */
+  /** Context window in tokens. */
   contextWindow: number;
   /** Every current model thinks adaptively; "Think harder" maps to effort. */
   thinking: "adaptive";

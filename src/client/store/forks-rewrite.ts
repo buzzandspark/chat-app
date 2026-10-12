@@ -6,7 +6,6 @@ import { CAP, logOptionsTrace } from "./forks";
 
 export type RewriteOutcome = { ok: true; options: ForkOption[] } | { ok: false; error: string };
 
-/** The sheet's instruction applied to every prompt; the call's trace goes to the console in development. */
 export async function rewriteOptions(messageId: string, instruction: string, options: readonly ForkOption[]): Promise<RewriteOutcome> {
   const asked = performance.now();
   try {

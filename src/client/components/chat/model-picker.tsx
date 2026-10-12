@@ -12,7 +12,7 @@ import { useIsDesktop } from "@client/hooks/use-media-query";
 import { MODEL_IDS, MODELS, type ModelId, GUEST_MODEL } from "@shared/models";
 import type { ThinkingOptions } from "@shared/types";
 
-// Shown only in the picker, so the main chunk carries names, not copy (D21).
+// Shown only in the picker, so the main chunk carries names, not copy.
 const MODEL_BLURBS: Record<ModelId, string> = {
   "claude-sonnet-5-5": "Fast and capable for everyday work",
   "claude-opus-5-5": "Deepest reasoning for hard problems",
@@ -64,7 +64,7 @@ interface ModelPickerProps {
   guest?: boolean;
 }
 
-/** One picker (D0): a bottom sheet on phones, a menu at `md`. */
+/** A bottom sheet on phones, a menu at `md`. */
 export function ModelPicker({ model, thinking, onChange, defaultOpen = false, onPicked, guest = false }: ModelPickerProps) {
   const locked = (id: ModelId) => guest && id !== GUEST_MODEL;
   const blurb = (id: ModelId) => (locked(id) ? "Sign in to use this model" : MODEL_BLURBS[id]);
@@ -83,10 +83,8 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
   );
 
   if (desktop) {
-    // A Radix menu, not a popover of buttons: a popover portalled to the end of <body> let Tab from the
-    // trigger skip to the next composer control and dismiss it, so the options were out of a keyboard's
-    // reach. The menu takes focus (its first row when opened from the keyboard, the menu itself with a
-    // pointer, so no ring shows), arrows walk the models and the toggle, and Enter/Space picks.
+    // A Radix menu, not a popover of buttons: a popover portalled to the end of <body> put the options out of
+    // keyboard reach (Tab skipped past them). The menu takes focus; arrows walk the rows and Enter/Space picks.
     return (
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
@@ -121,7 +119,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
           <MenuPrimitive.CheckboxItem
             checked={thinking.harder}
             onCheckedChange={(harder) => onChange({ thinking: { harder } })}
-            // Toggling keeps the menu open, as the switch did in the popover.
+            // Toggling keeps the menu open.
             onSelect={(e) => e.preventDefault()}
             className={cn(ROW, "mt-1")}
           >

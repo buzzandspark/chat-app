@@ -1,4 +1,4 @@
-// D21 budget for the chat route. Turbopack keeps per-route manifests under .next/server/app/<route>/:
+// Chat route budget. Turbopack keeps per-route manifests under .next/server/app/<route>/:
 // runtime chunks in page/build-manifest.json, client component chunks in page_client-reference-manifest.js.
 const fs = require("node:fs");
 const path = require("node:path");
@@ -21,10 +21,8 @@ module.exports = [
   {
     name: "chat route JS (gzip)",
     path: paths,
-    // 200 kB until 2026-10-07 with 0.7 kB of headroom; the review's required additions (error
-    // boundaries, back gesture, stand-ins for lazy controls, the scroll-anchoring flag, sign out)
-    // cost about 5 kB of app code, and the only cut left is replacing `marked` (14 kB), the next
-    // lever named in the design doc. Raised to 205 kB, not silently: see CHANGELOG 2026-10-07.
+    // Raised from 200 kB on 2026-10-07: error boundaries, back gesture, lazy-control stand-ins and sign out cost
+    // about 5 kB of app code; the next cut is replacing `marked` (14 kB).
     limit: "205 kB",
     gzip: true,
   },

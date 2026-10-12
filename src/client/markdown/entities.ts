@@ -1,10 +1,6 @@
 /**
- * marked leaves character references in its tokens for its HTML renderer to emit and the browser to
- * decode; rendered as React text they would show literally (`AT&amp;T`). This decodes them without
- * the DOM, so server and client render the same text. One pass, so `&amp;lt;` stays `&lt;`.
- * Numeric references follow CommonMark (NUL, surrogates and out-of-range code points become U+FFFD);
- * named ones come from a short table of what replies actually use, and an unknown name stays as typed
- * rather than pulling the 2,000-entry HTML table into the chat route's bundle.
+ * marked leaves character references in tokens; as React text they'd show literally. Decoded without the DOM,
+ * one pass; named ones from a short table rather than shipping the 2,000-entry HTML table.
  */
 const NAMED: Record<string, string> = {
   amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",

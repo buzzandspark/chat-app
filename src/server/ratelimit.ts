@@ -10,7 +10,7 @@ interface Limiters {
 
 const g = globalThis as unknown as { __chatLimiters?: Limiters };
 
-/** Per-IP or per-user windows for the open write endpoints (one process, D1). */
+/** Per-IP or per-user windows for the open write endpoints (in memory: one process). */
 export function getLimiters(): Limiters {
   if (g.__chatLimiters) return g.__chatLimiters;
   const limiters: Limiters = {
@@ -29,9 +29,8 @@ export function getLimiters(): Limiters {
 }
 
 /**
- * The client address as the trusted proxy saw it (#62): with `TRUST_PROXY_HOPS` proxies in front
- * (1 on Railway), the address is that many entries from the right of X-Forwarded-For; the leftmost
- * entry is whatever the client wrote and must never key a limiter.
+ * The client address as the trusted proxy saw it: `TRUST_PROXY_HOPS` entries from the right of X-Forwarded-For
+ * (1 on Railway). The leftmost entry is whatever the client wrote and must never key a limiter.
  */
 export function clientIp(request: Request): string {
   const hops = Number(process.env.TRUST_PROXY_HOPS ?? (env.isProd ? 1 : 0));

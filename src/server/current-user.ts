@@ -19,7 +19,7 @@ export interface CurrentUser {
 // falls back to the seeded dev user; everyone else is sent to become a guest first (proxy.ts).
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   // better-sqlite3 is synchronous, so only `connection()` tells the prerenderer this is request
-  // time; it keeps the database out of the build and the shell static (D21).
+  // time; it keeps the database out of the build and the shell static.
   await connection();
   const reqHeaders = await headers();
   const session = await getAuth().api.getSession({ headers: reqHeaders });

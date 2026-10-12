@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { StoredContentBlock } from "@shared/blocks";
 import type { StreamAccumulator } from "./parse-stream";
 
-/** Content blocks to persist, fallback blocks in place; callable at any point in the stream (D9). */
+/** Content blocks to persist, fallback blocks in place; callable at any point in the stream. */
 export function toContentBlocks(acc: StreamAccumulator): StoredContentBlock[] {
   const out: StoredContentBlock[] = [];
   for (const index of acc.order) {

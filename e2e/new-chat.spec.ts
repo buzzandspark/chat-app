@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, sidebar, waitForComposer, NEW_CHAT_URL } from "./helpers";
 
-// Reproduces the review's critical bug: send in a new chat, click New chat, send again. The second
-// thread went blank, the URL stayed /c/new and the reply streamed where nothing displayed it.
+// Regression: send in a new chat, click New chat, send again; the second thread went blank and the
+// URL stayed /c/new while the reply streamed out of view.
 test.describe("new chat", () => {
   test("a second New chat in the same session gets its own thread and URL", async ({ page }, info) => {
     // Titles are unique per project: the projects share one database within a run.

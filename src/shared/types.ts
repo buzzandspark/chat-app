@@ -5,7 +5,7 @@ export type { ModelId };
 /** A guest is an anonymous visitor: Haiku only, a small cost cap, its chats move to the account it signs in to. */
 export type UserRole = "admin" | "user" | "guest";
 
-/** generations.status (D2, D4, D5). */
+/** generations.status. */
 export type GenerationStatus = "running" | "done" | "stopped" | "interrupted" | "error";
 
 /** messages.status for assistant messages. User messages are always `done`. */
@@ -34,7 +34,7 @@ export interface RefusalInfo {
   explanation: string | null;
 }
 
-// D20: server stamps on the server clock, client stamps on the client clock; intervals are derived
+// Server stamps on the server clock, client stamps on the client clock; intervals are derived
 // on the side that owns both endpoints, never across machines.
 export interface Timings {
   server?: {
@@ -63,7 +63,7 @@ export interface UsageSummary {
 }
 
 export interface ThinkingOptions {
-  /** "Think harder" (D11): effort high on Sonnet/Opus, budgeted thinking on Haiku. */
+  /** "Think harder": effort high on Sonnet/Opus, budgeted thinking on Haiku. */
   harder: boolean;
 }
 
@@ -83,7 +83,7 @@ type ErrorKind =
   | "unavailable"
   /** The server knew this generation and no longer does: its chat was deleted. */
   | "gone"
-  /** An Edit or Regenerate whose turns the server could not replace now (#21); nothing was added. */
+  /** An Edit or Regenerate whose turns the server could not replace now; nothing was added. */
   | "conflict"
   | "unknown";
 

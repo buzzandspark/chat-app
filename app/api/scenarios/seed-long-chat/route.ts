@@ -11,7 +11,7 @@ const FILLER = [
   "Stop is explicit: closing a tab never stops a generation, because the next device to open the chat should see the whole reply.",
 ];
 
-/** D14/D24: seeds 200 finished turns so the long-chat scenario measures real list cost. */
+/** Seeds 200 finished turns so the long-chat scenario measures real list cost. */
 export async function POST(): Promise<Response> {
   try {
     const user = await requireUser();

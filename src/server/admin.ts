@@ -15,7 +15,7 @@ export interface AdminUserRow {
   invite: { expiresAt: number; usedAt: number | null; revokedAt: number | null } | null;
 }
 
-/** D7: the one admin table. */
+/** The one admin table. */
 export function listUsersForAdmin(): AdminUserRow[] {
   const db = getDb();
   // Guests are anonymous visitors, not accounts to manage.

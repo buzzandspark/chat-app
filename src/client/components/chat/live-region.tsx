@@ -4,8 +4,8 @@ import { followReply, useAnnouncement } from "@client/store/announcer";
 import { useChatStore } from "@client/store/hooks";
 
 /**
- * D19/#54: the chat's screen-reader announcements (store/announcer.ts decides what and when). Coming on screen
- * (mounted, or revealed by Activity) mid-reply, it has that reply followed; replies sent here are followed anyway.
+ * The chat's screen-reader announcements (store/announcer.ts decides what and when). Coming on screen
+ * mid-reply, it has that reply followed; replies sent here are followed anyway.
  */
 export function LiveRegion({ chatId }: { chatId: string }) {
   const store = useChatStore();

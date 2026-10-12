@@ -25,10 +25,8 @@ test.describe("theme", () => {
     expect(timing.darkAt).not.toBeNull();
     if (timing.firstPaint !== null) expect(timing.darkAt!).toBeLessThanOrEqual(timing.firstPaint);
 
-    // In the document, every script ahead of ours is an `async` chunk React hoisted to the top of
-    // <head> (it cannot run before it is fetched, and Next paints nothing until the payload below
-    // arrives); ours is the first script that executes synchronously, before the RSC payload and
-    // before any non-async Next script.
+    // Scripts ahead of ours are `async` chunks React hoisted into <head>; ours is the first synchronous
+    // script, before the RSC payload and any non-async Next script.
     const html = await (await page.request.get(page.url())).text();
     const theme = html.indexOf('id="chat-theme"');
     expect(theme).toBeGreaterThan(-1);

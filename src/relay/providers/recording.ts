@@ -3,7 +3,7 @@ import path from "node:path";
 import type { NormalizableEvent } from "../anthropic/parse-stream";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./types";
 
-/** Wraps a provider and records each stream as a replayable jsonl fixture (D24). */
+/** Wraps a provider and records each stream as a replayable jsonl fixture. */
 export class RecordingProvider implements Provider {
   readonly name = "recording" as const;
   constructor(

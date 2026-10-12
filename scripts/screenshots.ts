@@ -1,4 +1,4 @@
-// D0/D28: design-review screenshots into docs/design/<label>/: phone frame first, then desktop.
+// Design-review screenshots into test-results/screenshots/<label>/: phone frame first, then desktop.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -7,7 +7,7 @@ import { chromium, devices, type Page } from "@playwright/test";
 const label = process.argv[2] ?? new Date().toISOString().slice(0, 10);
 const port = 3125;
 const base = `http://127.0.0.1:${port}`;
-const out = path.resolve("docs/design", label);
+const out = path.resolve("test-results/screenshots", label);
 fs.mkdirSync(out, { recursive: true });
 
 async function waitForServer(): Promise<void> {

@@ -1,4 +1,4 @@
-// D24: deterministic fixtures/<model>/<scenario>.jsonl from the scenario scripts, so replay mode
+// Deterministic fixtures/<model>/<scenario>.jsonl from the scenario scripts, so replay mode
 // needs no recordings or API key. RECORD=1 recordings in fixtures/recorded/ can replace them.
 import fs from "node:fs";
 import path from "node:path";

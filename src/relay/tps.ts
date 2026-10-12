@@ -1,7 +1,6 @@
 import { seedOutputTps } from "./anthropic/pricing";
 
-// Rolling output tokens/s per model, seeded, for estimating billed output when only elapsed time
-// is known (D22).
+// Rolling output tokens/s per model, seeded, for estimating billed output when only elapsed time is known.
 export class TpsStats {
   private ema = new Map<string, number>();
   constructor(private alpha = 0.2) {}

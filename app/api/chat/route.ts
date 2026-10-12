@@ -21,11 +21,11 @@ const Body = z.object({
   model: z.enum(MODEL_IDS),
   thinking: z.object({ harder: z.boolean() }).default({ harder: false }),
   scenario: z.enum(SCENARIO_NAMES).optional(),
-  /** D10/#21: Edit and Regenerate name the first message to drop; the engine replaces in one transaction. */
+  /** Edit and Regenerate name the first message to drop; the engine replaces in one transaction. */
   replaceFromMessageId: z.string().uuid().optional(),
 });
 
-/** D2: idempotent on `generationId`; a duplicate POST attaches to the existing generation. */
+/** Idempotent on `generationId`; a duplicate POST attaches to the existing generation. */
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireUser();
@@ -34,9 +34,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     // A guest runs Haiku only, whatever the request names (a reply seeded or saved on another model included).
     const body = user.role === "guest" ? { ...parsed.data, model: GUEST_MODEL } : parsed.data;
     const { engine, store } = getRelay();
-    // A duplicate POST for an id that already exists goes straight to start's `exists` and the attach
-    // below (D2): the drain gates new work only, so an owner reconnecting while the reply is still
-    // live is never refused it, and its regenerate never stops the very generation it names.
+    // The drain gates new work only: a duplicate POST still attaches below, so an owner reconnecting mid-reply
+    // is never refused, and its regenerate never stops the very generation it names.
     const existing = engine.owner(body.generationId) !== null;
     if (!existing && isDraining()) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
     const scenario = body.scenario ? SCENARIOS[body.scenario] : undefined;
@@ -75,7 +74,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         replaceFromMessageId: body.replaceFromMessageId,
         faults: scenario?.interruptAfterEvents ? { interruptAfterEvents: scenario.interruptAfterEvents } : undefined,
       });
-      // The start re-checks the turns this replace drops (#21): one still running is worth a retry in a
+      // The start re-checks the turns this replace drops: one still running is worth a retry in a
       // moment (it stops that one too); a target already gone means another request replaced it.
       if (!outcome.created && outcome.reason === "replace_running") return jsonError(409, { error: "replace_running" }, { "retry-after": "1" });
       if (!outcome.created && outcome.reason === "replace_gone") return jsonError(409, { error: "replace_gone" });

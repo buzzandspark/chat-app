@@ -1,11 +1,8 @@
 import type { HighlighterCore } from "shiki/core";
 
-/**
- * D15: shiki core with the JavaScript regex engine and one chunk per language; shared by the worker
- * and the in-thread fallback. Loaded lazily (see highlight-runtime), never with the route.
- */
+/** Shared by the worker and the in-thread fallback. Loaded lazily (see highlight-runtime), never with the route. */
 
-/** `c` is the text; `l` its colour, a `var(--shiki-token-…)` reference the stylesheet resolves per theme (#12). */
+/** `c` is the text; `l` its colour, a `var(--shiki-token-…)` reference the stylesheet resolves per theme. */
 type HighlightToken = { c: string; l?: string };
 export type HighlightLine = HighlightToken[];
 
@@ -53,8 +50,7 @@ function getHighlighter(): Promise<HighlighterCore> {
         import("@shikijs/core"),
         import("shiki/engine/javascript"),
       ]);
-      // One theme whose colours are CSS variables: tokenising happens once, and code.css picks the
-      // light or dark palette, so a theme switch is a repaint and never a re-tokenise (#12).
+      // CSS-variable colours: a theme switch is a repaint in code.css, never a re-tokenise.
       const theme = createCssVariablesTheme({ name: "css-variables", variablePrefix: "--shiki-", variableDefaults: {}, fontStyle: false });
       return createHighlighterCore({
         engine: createJavaScriptRegexEngine({ forgiving: true }),

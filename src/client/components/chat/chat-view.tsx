@@ -20,10 +20,7 @@ import { MessageList, type MessageListHandle } from "./message-list";
 import { useShellUser } from "../shell/shell-user";
 import { ThreadSkeleton } from "./thread-skeleton";
 
-/**
- * ADR-0005: the view renders from the client store at once; the id comes from the URL and the
- * server's rows arrive through `children` (a Suspense child that seeds the store) whenever they do.
- */
+/** ADR-0005: renders from the client store at once; the server's rows arrive through `children`, a Suspense child that seeds the store. */
 export function ChatView({ children }: { children: ReactNode }) {
   const params = useParams<{ id?: string }>();
   const search = useSearchParams();
@@ -62,9 +59,8 @@ export function ChatView({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [isEmpty, chatId]);
 
-  // The URL already is this chat's own, so a send only has to name it. The header title is local
-  // and immediate; the sidebar row waits until the server has accepted the generation, so a refused
-  // or lost first POST leaves no ghost entry behind.
+  // The header title updates immediately; the sidebar row waits until the server accepts the generation,
+  // so a refused or lost first POST leaves no ghost entry.
   const announceChat = useCallback(
     (text: string) => {
       const title = chat.title ?? text.slice(0, 60);
@@ -74,20 +70,19 @@ export function ChatView({ children }: { children: ReactNode }) {
     [chatId, chat.title, store],
   );
 
-  // `edit` is explicit (#36): only the composer's own submit replaces a message. Continue and a
-  // scenario pick while an edit is open leave the edited turns alone and cancel the edit instead.
+  // Only the composer's own submit replaces a message; Continue and a scenario pick cancel an open edit instead.
   const dispatch = useCallback(
     (text: string, scenario?: string, edit: EditingState | null = null) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      // Read from the store when called, so the callbacks stay stable while the user changes settings (#43).
+      // Read from the store when called, so the callbacks stay stable while the user changes settings.
       const current = store.getChat(chatId).settings;
       const opts = { chatId, model: current.model, thinking: current.thinking, scenario: scenario ?? current.scenario?.name };
       const hooks = { onAccepted: announceChat(trimmed) };
       // The reply will need the Markdown renderer's chunk; fetch it while the request is in flight.
       void ensureMarkdown();
       if (edit) {
-        // D10: replace the edited user message and everything after it in the same request (#21).
+        // Replace the edited user message and everything after it in the same request.
         store.truncateFrom(edit.userMessageId);
         client.send({ ...opts, text: trimmed, replaceFrom: edit.userMessageId }, hooks);
       } else {
@@ -98,15 +93,14 @@ export function ChatView({ children }: { children: ReactNode }) {
       if (newChatRoute && window.location.pathname === "/c") window.history.replaceState(null, "", `/c/${chatId}`);
       setEditing(null);
       listRef.current?.engage();
-      // Only where a keyboard is physical: on a phone, focusing pops the keyboard over the reply (#32).
+      // Only with a physical keyboard: on a phone, focusing pops the keyboard over the reply.
       if (window.matchMedia("(hover: hover) and (min-width: 768px)").matches) composerRef.current?.focus();
     },
     [chatId, client, store, announceChat, newChatRoute],
   );
 
-  // One generation at a time, but typing never has to wait: a message sent while a reply streams
-  // joins the chat's queue and goes out when that reply ends. An edit cannot be queued (it would
-  // replace the turns that are still being written), so it is ignored while a reply streams.
+  // A message sent while a reply streams joins the chat's queue. An edit can't be queued (it would replace
+  // turns still being written), so it is ignored while a reply streams.
   const send = useCallback(
     (text: string, scenario?: string, edit: EditingState | null = null) => {
       const trimmed = text.trim();
@@ -216,10 +210,8 @@ export function ChatView({ children }: { children: ReactNode }) {
 }
 
 /**
- * The skeleton stands in until the chat is seeded and, for a chat with rows, until the Markdown chunk is
- * in (#83): rows that paint with empty bodies and fill in later would shift everything below them.
- * A chat seeded empty (its first send) and a chunk that failed to load do not wait: rows show plain
- * text until the renderer arrives.
+ * Waits for the seed and, for a chat with rows, the Markdown chunk: bodies filling in later would shift rows below.
+ * An empty seed or a failed chunk doesn't wait; rows show plain text until the renderer arrives.
  */
 function Thread({
   chatId,

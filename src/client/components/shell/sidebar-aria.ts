@@ -1,13 +1,7 @@
 /**
- * The sidebar's modality, which depends on the mode it is in rather than on either open flag alone:
- * the phone overlay closed is off-screen, so it leaves the tab order and the accessibility tree; open,
- * it is the modal (the shell makes the column behind it inert), focusable itself so opening can move focus
- * onto it and a screen reader announces "Chats, dialog". The desktop dock collapsed is inert too, and open
- * is a plain landmark.
- *
- * `desktop` is null on the server and in the hydration render, where the viewport is unknown: nothing
- * is set then, so the server HTML matches the hydration render and a desktop's docked list is never
- * inert before hydration. React re-renders with the real viewport straight after hydrating.
+ * The sidebar's modality depends on the mode, not either open flag: the phone overlay closed leaves the tab order and
+ * a11y tree, open it is the modal (focusable so focus can move onto it); the dock collapsed is inert, open a landmark.
+ * `desktop` is null on the server and in hydration: nothing is set then, so a docked list is never inert before hydration.
  */
 export function sidebarAria(
   desktop: boolean | null,

@@ -6,10 +6,8 @@ import { highlight, highlightSource, resolveLanguage, type HighlightLine } from 
 import "./code.css";
 
 /**
- * D15: closed fences only. Tokens come from a worker (or the main thread where there is none) and
- * are cached by content hash, so a block highlights once per session; the spans are committed in
- * groups of lines across idle callbacks, so no single frame inserts thousands of nodes. Plain and
- * highlighted text share one <pre> and identical metrics, so highlighting changes paint only.
+ * Closed fences only. Spans commit in line groups across idle callbacks so no frame inserts thousands of
+ * nodes; plain and highlighted text share identical metrics, so highlighting changes paint only.
  */
 
 const GROUP_LINES = 16;
@@ -96,9 +94,8 @@ function CodeBlockImpl({ code, lang, closed, className }: CodeBlockProps) {
       });
   };
 
-  // The block is always groups of lines, streaming or closed (#26): a delta changes one group's text
-  // node and lays out one contained block, not the whole <pre>. Shiki splits lines as we do; if ever
-  // not, the tokens are dropped rather than risk the text.
+  // Always line groups, so a delta re-lays out one contained group, not the whole <pre>. If shiki ever
+  // splits lines differently, the tokens are dropped rather than risk the text.
   const usable = closed && lines && lines.length === plainLines.length ? lines : null;
   const body: ReactNode = renderGroups(usable, plainLines, usable ? committed : 0);
 
@@ -133,11 +130,7 @@ function CodeBlockImpl({ code, lang, closed, className }: CodeBlockProps) {
 const LINE_PX = 13 * 1.55; // code.css: 0.8125rem at 1.55
 const CH_PX = 13 * 0.6; // monospace advance at 0.8125rem
 
-/**
- * One group of lines, a block with its own layout containment: a change inside it is laid out on
- * its own, and off screen it is skipped entirely. Memoised on the token array and range, so later
- * commits do not reconcile it again.
- */
+/** Memoised on the token array and range, so later commits do not reconcile it again. */
 const LineGroup = memo(function LineGroup({
   lines,
   text,
@@ -147,12 +140,12 @@ const LineGroup = memo(function LineGroup({
   widthPx,
 }: {
   lines: HighlightLine[] | null;
-  /** The group's own lines, joined: a streaming delta changes only the last group's string, so earlier groups skip. */
+  /** A streaming delta changes only the last group's string, so earlier groups skip. */
   text: string;
   start: number;
   end: number;
   last: boolean;
-  /** The block's longest line, so a skipped group still reports its width and the <pre> keeps its horizontal scroll range. */
+  /** The block's longest line, so a skipped group keeps the <pre>'s horizontal scroll range. */
   widthPx: number;
 }) {
   const style = { "--group-w": `${widthPx}px`, "--group-h": `${Math.round((end - start) * LINE_PX)}px` } as CSSProperties;

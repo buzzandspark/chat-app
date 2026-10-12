@@ -1,19 +1,14 @@
 #!/bin/sh
-# Container entrypoint (D1). A volume mounted over /data at runtime keeps its own ownership, not the
-# image's chown: Railway's volumes mount owned by root, so the `node` user couldn't open the
-# database. Started as root, give the database directory to `node` and drop to it; started as
-# anyone else (`--user`), just run. Each step `exec`s, so Node ends up as PID 1 and receives SIGTERM
-# directly for the drain (D3).
+# Container entrypoint. Volumes can mount root-owned, so as root chown the DB directory to `node` and
+# drop to it; each step `exec`s so Node is PID 1 and receives SIGTERM for the drain.
 set -eu
 if [ "$(id -u)" = "0" ]; then
   db="${DATABASE_PATH:-/data/app.db}"
   if [ "$db" != ":memory:" ]; then
     dir="$(dirname "$db")"
     mkdir -p "$dir"
-    # Never chown the filesystem root (DATABASE_PATH=/app.db); only the directory and the database's own files.
-    # `node` can write in that directory, so any of these names may be a symlink it planted (say
-    # app.db-journal -> /usr/local/bin/chat-entrypoint). A symlink is skipped, never followed, and
-    # `-h` keeps chown on the name itself even if a file is swapped for a link after the test.
+    # Never chown / (DATABASE_PATH=/app.db). `node` can plant symlinks here, so links are skipped and
+    # `-h` keeps chown on the name itself if a file is swapped for a link after the test.
     if [ "$dir" != "/" ]; then
       chown -h node:node "$dir"
       for f in "$db" "$db-wal" "$db-shm" "$db-journal"; do

@@ -3,7 +3,6 @@ import { ImageResponse } from "next/og";
 export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
 
-// Own mark (D28): three bars of rising height on a teal field.
 export default function Icon() {
   return new ImageResponse(
     (

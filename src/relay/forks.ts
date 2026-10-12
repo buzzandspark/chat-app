@@ -63,11 +63,7 @@ export interface ForkDeps {
   gateMs?: number;
 }
 
-/**
- * Each fork copies every parent row, then asks the parent's model, at the parent's effort, the
- * prompt as its first own turn. Fork 1 goes first alone so its request writes the cache entry
- * for the parent's final reply; the rest start once the API has begun that message.
- */
+/** Fork 1 goes first alone so its request writes the cache entry for the parent's final reply; the rest start once the API has begun that message. */
 export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFork[] {
   const { db, engine, store } = deps;
   const now = new Date(deps.now?.() ?? Date.now());
@@ -84,7 +80,7 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
   const lastGeneration = lastReply?.generationId
     ? db.select({ scenario: generations.scenario }).from(generations).where(eq(generations.id, lastReply.generationId)).get()
     : undefined;
-  // A scenario reply forks as a scripted reply too: never a live prompt out of a script (D22).
+  // A scenario reply forks as a scripted reply too: never a live prompt out of a script.
   const scenario = lastGeneration?.scenario ? "normal" : undefined;
   const forkPosition = (rows.at(-1)?.position ?? -1) + 1;
 
@@ -161,11 +157,7 @@ export interface Duplicate {
   forkOrder: number;
 }
 
-/**
- * A reply's "Duplicate": a new fork of the main chat (a fork duplicates as its sibling) holding the
- * chat's rows up to and including that reply, and nothing more; the next turn is the user's to write.
- * Counts toward the main chat's fork cap.
- */
+/** A reply's "Duplicate": a new sibling fork holding the chat's rows up to and including that reply. Counts toward the fork cap. */
 export function duplicateChat(db: Db, input: { userId: string; chatId: string; messageId: string; newChatId: string; now?: number }): Duplicate {
   const now = new Date(input.now ?? Date.now());
   const source = db.select().from(chats).where(and(eq(chats.id, input.chatId), eq(chats.userId, input.userId))).get();
@@ -248,7 +240,6 @@ export function setForkOrder(db: Db, userId: string, parentId: string, ids: stri
   return true;
 }
 
-
 export interface Winner {
   id: string;
   deleted: string[];
@@ -268,7 +259,6 @@ export async function declareWinner(db: Db, engine: Engine, userId: string, chat
   });
   return { id: chat.id, deleted: losers };
 }
-
 
 /** Every fork of a main chat is deleted; the main chat stays, unless `withMain` (the sidebar's Delete group). */
 export async function deleteForks(db: Db, engine: Engine, userId: string, parentId: string, withMain = false): Promise<{ deleted: string[] } | null> {

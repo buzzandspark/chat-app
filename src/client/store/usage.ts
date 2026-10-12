@@ -10,7 +10,7 @@ export interface CapUsage {
 let snapshot: { seq: number; usage: CapUsage | null } = { seq: 0, usage: null };
 const listeners = new Set<() => void>();
 
-/** A reply's cost is settled by the time its end reaches the page: read the counter again then. */
+/** A reply's cost is settled by the time its end reaches the page. */
 export function refreshUsage(): void {
   fetch("/api/usage")
     .then((res) => (res.ok ? (res.json() as Promise<CapUsage>) : null))

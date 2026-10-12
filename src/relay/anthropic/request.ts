@@ -14,7 +14,7 @@ export interface RequestInput {
 
 export type StreamParams = Parameters<Anthropic["beta"]["messages"]["stream"]>[0];
 
-/** The one request builder (D11, D13): the providers and the cache test share it. */
+/** The one request builder: the providers and the cache test share it. */
 export function buildRequest(input: RequestInput): StreamParams {
   const params = modelParams(input.model, input.thinking);
   const request: StreamParams = {

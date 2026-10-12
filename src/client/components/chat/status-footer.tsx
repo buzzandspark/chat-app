@@ -23,7 +23,7 @@ function Countdown({ until }: { until: number }) {
   return <span>{Math.max(0, Math.ceil((until - now) / 1000))}s</span>;
 }
 
-/** D17: every terminal and non-terminal state has its own wording and action. */
+/** Every terminal and non-terminal state has its own wording and action. */
 export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusFooterProps) {
   const newChat = useNewChat();
   const action = (label: ReactNode, onClick: () => void) => (
@@ -45,7 +45,6 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
       {label}
     </Link>
   );
-  // What to say, what to offer, and whether the browser should announce it.
   let text: ReactNode;
   let offer: ReactNode = null;
   let live = false;
@@ -145,7 +144,7 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
         offer = action("New chat", newChat);
         break;
       case "conflict":
-        // Nothing was added on the server (#21). A retry would only be refused again once another
+        // Nothing was added on the server. A retry would only be refused again once another
         // request has replaced these turns: show what the server has instead.
         text = e.retryable ? "An earlier reply was still finishing." : "These turns were already replaced in another request.";
         offer = e.retryable ? retry : action("Reload", () => window.location.reload());

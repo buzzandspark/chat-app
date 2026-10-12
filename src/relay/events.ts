@@ -10,7 +10,7 @@ import type {
 import type { StoredContentBlock } from "@shared/blocks";
 
 // Producer events carry seq, their index in the buffer; control events (snapshot, GET-path terminals)
-// carry seq null and bypass dedupe. t is ms since generation start on the server clock (D2, D3).
+// carry seq null and bypass dedupe. t is ms since generation start on the server clock.
 interface RelayEventBase {
   seq: number | null;
   generationId: string;
@@ -36,7 +36,7 @@ export interface MessageSnapshot {
   error: RelayError | null;
   timings: Timings | null;
   generationId: string | null;
-  /** The last producer seq the saved content covers; a client ahead of it keeps its own text (D2). */
+  /** The last producer seq the saved content covers; a client ahead of it keeps its own text. */
   lastSeq?: number | null;
 }
 
@@ -71,7 +71,7 @@ export type RelayEventBody =
       from: string;
       to: string;
       category: string | null;
-      /** False when the switch happened before any text was streamed (D9). */
+      /** False when the switch happened before any text was streamed. */
       visible: boolean;
     }
   | { type: "refusal"; category: string | null; explanation: string | null; hadText: boolean }

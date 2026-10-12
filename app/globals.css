@@ -3,10 +3,9 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
-/* #31: the docked layout needs height as well as width; a landscape phone keeps the overlay sidebar. */
+/* The docked layout needs height as well as width; a landscape phone keeps the overlay sidebar. */
 @custom-variant dock (@media (min-width: 48rem) and (min-height: 30rem));
 
-/* D28 tokens: phone first, extended at md; a warm paper neutral with a sea-teal accent. */
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -44,7 +43,6 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  /* App-specific semantic colours */
   --color-bubble: var(--bubble);
   --color-bubble-foreground: var(--bubble-foreground);
   --color-code: var(--code);
@@ -63,7 +61,6 @@
   --radius-sheet: var(--sheet-radius);
   --radius-bubble: var(--bubble-radius);
 
-  /* Phone-first type ramp. Inputs never go below 16px so iOS does not zoom. */
   --text-caption: 0.75rem;
   --text-caption--line-height: 1rem;
   --text-small: 0.875rem;
@@ -75,7 +72,6 @@
   --text-display: 1.75rem;
   --text-display--line-height: 2rem;
 
-  /* Layout */
   --spacing-gutter: var(--gutter);
   --spacing-thread: var(--thread-width);
   --spacing-touch: 2.75rem; /* 44px minimum tap target */
@@ -171,7 +167,6 @@
   --sidebar-ring: oklch(0.6 0.08 200);
 }
 
-/* Desktop expansion (D0, D19): wider gutters, larger radii. */
 @media (min-width: 768px) {
   :root {
     --gutter: 1.5rem;
@@ -212,7 +207,7 @@
   input,
   textarea,
   select {
-    /* 16px floor prevents iOS Safari from zooming on focus (D19). */
+    /* 16px floor prevents iOS Safari from zooming on focus. */
     font-size: max(1rem, 1em);
   }
   code,
@@ -247,9 +242,8 @@
   min-width: var(--spacing-touch);
 }
 
-/* Streaming caret (D10): drawn by CSS after the last block so it is inline with the text. */
-/* The caret follows prose: a trailing list, code block, table or quote would otherwise get an empty
-   line under it (#53). Lists carry it on their last item, quotes on their last paragraph. */
+/* Streaming caret, drawn inline after the last prose block: a trailing list, code block, table or quote
+   would otherwise get an empty line under it. */
 .streaming-caret > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
 .streaming-caret > :is(ul, ol):last-child > li:last-child:not(:has(> p))::after,
 .streaming-caret > :is(ul, ol):last-child > li:last-child > p:last-child::after,
@@ -366,7 +360,6 @@
     left: 0;
     transform: none;
   }
-  /* Instant: no delay and no fade, in or out. */
   .tip:hover::after,
   .tip:focus-visible::after {
     opacity: 1;

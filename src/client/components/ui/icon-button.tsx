@@ -20,9 +20,8 @@ type IconButtonProps = ComponentProps<typeof Button> & {
 const MARGIN = 4;
 
 /**
- * Picks the alignment just before the tooltip shows. The pseudo-element has layout while hidden (it
- * fades in), so its width is readable; the container is the nearest `[data-tip-boundary]` (the
- * sidebar, the header, the composer), else the viewport.
+ * Picks the alignment just before the tooltip shows; the hidden pseudo-element still has layout, so its width is readable.
+ * The container is the nearest `[data-tip-boundary]`, else the viewport.
  */
 function alignTip(el: HTMLElement): void {
   const width = Number.parseFloat(getComputedStyle(el, "::after").width);

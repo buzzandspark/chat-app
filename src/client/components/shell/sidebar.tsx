@@ -11,7 +11,7 @@ import { SidebarListContext } from "./sidebar-list";
 import { ThemeToggle } from "./theme-toggle";
 
 interface SidebarProps {
-  /** The chat list, streamed in by the layout once the session is known (#20). */
+  /** The chat list, streamed in by the layout once the session is known. */
   list: ReactNode;
   /** Which mode the viewport is in: the dock or the phone overlay; null where it is not known yet (server, hydration render). */
   desktop: boolean | null;
@@ -33,7 +33,7 @@ interface SidebarProps {
   asideRef: RefObject<HTMLElement | null>;
 }
 
-/** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
+/** Overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
 export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, account, asideRef }: SidebarProps) {
   const newChat = useNewChat();
   const listContext = useMemo(() => ({ onNavigate }), [onNavigate]);
@@ -53,14 +53,14 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
         data-tip-boundary
         aria-label="Chats"
         data-open={open}
-        // Hidden in the current mode it is inert; the phone overlay open is the modal (#56). Keyed off the
-        // mode: desktopOpen stays true on a phone, so the open flags alone cannot tell which one applies.
+        // Inert when hidden in the current mode; the open phone overlay is the modal. Keyed off the mode: desktopOpen
+        // stays true on a phone, so the open flags alone cannot tell which applies.
         {...sidebarAria(desktop, phoneOpen, desktopOpen)}
         className={cn(
           // outline-none: it is focused only programmatically, as the dialog, never by Tab.
           "fixed inset-y-0 left-0 z-40 flex w-full flex-col bg-sidebar text-sidebar-foreground outline-none",
           "border-r border-sidebar-border transition-transform duration-200 ease-out",
-          // Full width on a phone, so both insets apply in landscape (#30); docked, only the left one.
+          // Full width on a phone, so both insets apply in landscape; docked, only the left one.
           "safe-top pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] dock:pr-0",
           phoneOpen ? "translate-x-0" : "-translate-x-full",
           // Docked it slides: the width closes to 0 while the contents move left in step.

@@ -3,10 +3,8 @@ import { LogOut } from "lucide-react";
 import { IconButton } from "../ui/icon-button";
 
 /**
- * A plain POST to better-auth's endpoint, not the auth client: the client library (with its store
- * dependency) is 13 kB gzipped and belongs to the login and invite pages, not the chat route (D21).
- * A full navigation afterwards: the client store, drafts in memory and the router cache all belong
- * to the old session.
+ * A plain POST, not the auth client (13 kB gzipped, kept off the chat route). A full navigation afterwards: the client
+ * store, in-memory drafts and the router cache all belong to the old session.
  */
 export function SignOutButton() {
   const signOut = async () => {

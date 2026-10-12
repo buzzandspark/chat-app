@@ -12,24 +12,24 @@ export interface SendInput {
   model: ModelId;
   thinking: ThinkingOptions;
   scenario?: string;
-  /** D10: an edit replaces this message and everything after it, in the same request. */
+  /** An edit replaces this message and everything after it, in the same request. */
   replaceFrom?: string;
 }
 
 export interface SendHooks {
-  /** The server accepted the generation (the POST answered 2xx, or a resume found it): safe to list the chat. */
+  /** The server accepted the generation (POST 2xx, or a resume found it): safe to list the chat. */
   onAccepted?: () => void;
 }
 
 export interface RetryInput {
   chatId: string;
   userMessageId: string;
-  /** The user message's text, so a retry after a refused first POST (the server never saw it) can create it. */
+  /** Lets a retry after a refused first POST (the server never saw it) create the user message. */
   text?: string;
   model: ModelId;
   thinking: ThinkingOptions;
   scenario?: string;
-  /** Regenerate replaces the old reply (and anything after it) in the same request; see retryReplaceFrom. */
+  /** See retryReplaceFrom. */
   replaceFrom?: string;
   /** Automatic retries after a 429 count up here; the footer's backoff reads it. */
   attempt?: number;
@@ -54,23 +54,15 @@ export interface BackoffOptions {
 }
 
 const DEFAULT_BACKOFF: BackoffOptions = { baseMs: 500, maxMs: 8000, maxAttempts: 10 };
-/**
- * D2: re-POSTs after a resume found the server never saw the generation. A POST that keeps failing
- * at the network level while the GET gets through (a proxy resetting on the body, an extension
- * blocking /api/chat) is not a flaky connection: after this many the reply ends as a network error.
- */
+/** A POST that keeps failing while the resume GET gets through (proxy, extension blocking /api/chat) is not flakiness. */
 const MAX_REPOSTS = 3;
-/** A replace refused because a turn it drops is still running is sent again this many times (#21). */
+/** A replace refused because a turn it drops is still running is sent again this many times. */
 const MAX_BUSY_REPOSTS = 5;
-/** D16 watchdog: the server writes a keepalive every 15 s, so longer silence is a half-open socket. */
+/** The server writes a keepalive every 15 s, so longer silence is a half-open socket. */
 const DEFAULT_IDLE_MS = 25_000;
 /**
- * The idle watchdog only starts once a response exists, so a request sent into a half-open socket
- * (a phone handing over between cells) would wait for the OS TCP timeout, minutes. Both routes
- * answer headers before any model work (the stream is returned as soon as the generation starts),
- * so a healthy server answers in well under a second; 15 s still leaves room for a slow upload of
- * a long message, and a timeout that fires on a slow but live request costs only a retry, which is
- * idempotent (D2): the GET or the duplicate POST attaches to the generation the first one started.
+ * Without it a request into a half-open socket waits for the OS TCP timeout. Headers come before any model
+ * work, so 15 s is generous; a false timeout costs only an idempotent retry.
  */
 const DEFAULT_HEADERS_MS = 15_000;
 
@@ -80,7 +72,7 @@ interface Inflight {
   nudge: (() => void) | null;
 }
 
-/** D2/D16: failures after the POST go through the resume path with backoff; ids are chosen here. */
+/** Failures after the POST go through the resume path with backoff; ids are chosen client-side so retries are idempotent. */
 export class GenerationClient {
   private inflight = new Map<string, Inflight>();
   private bodies = new Map<string, PostBody>();
@@ -119,11 +111,7 @@ export class GenerationClient {
     }
   }
 
-  /**
-   * One generation at a time per chat: a message sent while a reply streams waits in the chat's queue, and
-   * one goes out per finished reply, on the reply's chat settings, whether or not the chat is on screen. A
-   * failed reply keeps the queue and leaves the decision (Try again, or send anyway) to the user.
-   */
+  /** One generation at a time per chat; a failed reply keeps the queue and leaves the decision to the user. */
   private sendQueued(reply: MessageState): void {
     if (reply.role !== "assistant" || reply.status === "error") return;
     // After the store's commit, not inside it; and only while that reply is still the chat's last.
@@ -224,13 +212,8 @@ export class GenerationClient {
   }
 
   /**
-   * What a retry of this reply replaces from. A reply the server accepted is a row there (an error
-   * mid-stream included), so the retry replaces from it. One whose POST was refused, or never got
-   * through, changed nothing on the server: if it was an Edit or a Regenerate, the turns it was to
-   * replace are all still there, and the failed reply's own id matches nothing there, so the retry
-   * would be refused. It carries that attempt's target instead, which a chain of refused
-   * retries passes along unchanged. A refused plain send had no target, so neither has its retry:
-   * the server refuses a target it does not have rather than append (#21).
+   * An accepted reply is a server row, so the retry replaces from it. An unaccepted one changed nothing there,
+   * so the retry carries that attempt's original target (none for a plain send); the server refuses unknown targets.
    */
   retryReplaceFrom(reply: Pick<MessageState, "id" | "generationId">): string | undefined {
     const gid = reply.generationId;
@@ -239,11 +222,8 @@ export class GenerationClient {
   }
 
   /**
-   * D5: ask the server to stop. Never rejects: the composer holds Stop disabled ("Stopping") until
-   * this settles false or the stream ends, so a network error, an unreadable body or a request sent
-   * into a half-open socket (the same headers timeout as the stream's) has to come back as false,
-   * or Stop and Esc stay dead while the reply keeps generating. False is also safe to retry: a
-   * second stop of a generation that did stop answers `stopped: false` and changes nothing.
+   * Never rejects: the composer holds Stop disabled until this settles, so every failure must come back as
+   * false or Stop stays dead. False is safe to retry; a second stop changes nothing.
    */
   async stop(generationId: string): Promise<boolean> {
     const controller = new AbortController();
@@ -269,15 +249,9 @@ export class GenerationClient {
     void this.resume(generationId, messageId);
   }
 
-  /**
-   * D16: `online` and `visibilitychange` trigger an immediate attempt for every pending message. A
-   * loop already in flight is nudged: a request still waiting for headers or a read that went quiet
-   * is cancelled and a backoff sleep is cut short, so recovery does not wait for a watchdog or the
-   * next scheduled attempt.
-   */
+  /** A loop already in flight is nudged, so recovery does not wait for a watchdog or the next backoff. */
   resumeAll(): void {
-    // A hidden tab runs no animation frames, so a reply that finished meanwhile still has its
-    // terminal event queued and reads as streaming: apply it first, or it is resumed for nothing.
+    // A hidden tab runs no rAF, so a finished reply's terminal event may still be queued: apply it first.
     this.store.flush();
     for (const m of this.store.pendingMessages()) {
       if (!m.generationId) continue;
@@ -327,8 +301,7 @@ export class GenerationClient {
           return finished || controller.signal.aborted ? "done" : "cut";
         }
         const json = await safeJson(res);
-        // A turn this Edit or Regenerate drops was still running there (#21): the server changed
-        // nothing, so the same POST goes again in a moment, and that one stops it first.
+        // A turn this replace drops was still running; the server changed nothing, and the next POST stops it first.
         if (json.error === "replace_running" && busy < MAX_BUSY_REPOSTS) {
           const retryAfter = Number(res.headers.get("retry-after"));
           await this.sleepImpl(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000, controller.signal);
@@ -344,10 +317,8 @@ export class GenerationClient {
   }
 
   /**
-   * Resume from the last seq; when the server never saw the POST, send it again with the same ids
-   * (D2) and resume after that. A loop, not post and resume calling each other, so a POST that
-   * keeps failing does not grow a promise chain, and the backoff attempt carries across re-POSTs:
-   * otherwise each resume starts at attempt 0, which skips the sleep, and the POST/GET pair spins.
+   * A loop rather than mutual recursion, so a failing POST grows no promise chain and the backoff attempt
+   * carries across re-POSTs (restarting at 0 skips the sleep and the POST/GET pair spins).
    */
   private async resume(generationId: string, messageId: string): Promise<void> {
     let attempt = 0;
@@ -370,11 +341,7 @@ export class GenerationClient {
     }
   }
 
-  /**
-   * The resume GET loop, starting at `start` on the backoff schedule. Resolves to the attempt at
-   * which a 404 said the server never saw the POST and there is a body to send again; null when
-   * the loop ended any other way.
-   */
+  /** Resolves to the attempt at which a 404 said the server never saw the POST (and a body exists); else null. */
   private async resumeOnce(generationId: string, messageId: string, start: number): Promise<number | null> {
     if (this.inflight.has(generationId)) return null;
     const controller = new AbortController();
@@ -393,7 +360,6 @@ export class GenerationClient {
         if (retryNow) retryNow = false;
         else if (attempt > 0 || waitMs > 0) {
           const backoff = attempt > 0 ? Math.min(this.backoff.maxMs, this.backoff.baseMs * 2 ** (attempt - 1)) * (0.7 + Math.random() * 0.6) : 0;
-          // A nudge (online, visible) cuts the sleep short; aborting the loop ends it.
           const wake = new AbortController();
           entry.nudge = () => wake.abort();
           await this.sleepImpl(Math.max(backoff, waitMs), anySignal(controller.signal, wake.signal));
@@ -406,7 +372,6 @@ export class GenerationClient {
         const res = await this.fetchAttempt(entry, `/api/generations/${generationId}/events?after=${after}`, {});
         if (typeof res === "string") {
           if (controller.signal.aborted) return null;
-          // A nudge means the network just came back: the next attempt goes now, not after a sleep.
           retryNow = res === "nudged";
           continue;
         }
@@ -420,7 +385,7 @@ export class GenerationClient {
             });
             return null;
           }
-          // The server never received the POST: the caller re-POSTs with the same ids (D2).
+          // The server never received the POST: the caller re-POSTs with the same ids.
           if (!this.bodies.has(generationId)) {
             this.store.updateMessage(messageId, {
               status: "error",
@@ -432,8 +397,7 @@ export class GenerationClient {
           return attempt;
         }
         if (!res.ok) {
-          // A server that is restarting, overloaded or rate limiting still has the reply: keep trying.
-          // Only a definite answer about this client or this generation ends the loop.
+          // A restarting, overloaded or rate-limiting server still has the reply: keep trying.
           if (res.status >= 500 || res.status === 429 || res.status === 408) {
             const retryAfter = Number(res.headers.get("retry-after"));
             waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 0;
@@ -445,9 +409,8 @@ export class GenerationClient {
         this.accept(generationId);
         const finished = await this.consume(res, entry, generationId, messageId);
         if (finished || controller.signal.aborted) return null;
-        // Nothing left to fetch for a reply that has already ended here.
         if (this.isSettled(messageId)) return null;
-        // Stream ended without a terminal event: try again, counting progress as a fresh start.
+        // Progress counts as a fresh start on the backoff schedule.
         if ((this.store.getMessage(messageId)?.lastSeq ?? -1) > after) attempt = -1;
       }
       this.store.setConnection(messageId, "offline", this.backoff.maxAttempts);
@@ -458,11 +421,8 @@ export class GenerationClient {
   }
 
   /**
-   * One request, on its own controller so that dropping it is a failed attempt and not a give-up:
-   * the headers timeout and a nudge abort only this attempt, while the loop's controller (chained
-   * in) still aborts the request and, once it answers, the body. Resolves to the response, or to
-   * why there is none: "nudged", or "dropped" (a network error, the headers timeout, or the loop's
-   * own abort, which the caller tells apart by checking the loop's signal).
+   * Own controller so the headers timeout or a nudge drops only this attempt, not the loop.
+   * "dropped" also covers the loop's own abort; callers check the loop's signal.
    */
   private async fetchAttempt(entry: Inflight, url: string, init: RequestInit): Promise<Response | "dropped" | "nudged"> {
     const attempt = new AbortController();
@@ -482,19 +442,16 @@ export class GenerationClient {
     }
   }
 
-  /** Resolves true when a terminal event arrived. */
   private async consume(res: Response, entry: Inflight, generationId: string, messageId: string): Promise<boolean> {
     const { signal } = entry.controller;
     this.store.setConnection(messageId, "streaming", 0);
     if (!res.body) return false;
     const reader = res.body.getReader();
-    // A nudge (online, visible) treats the current read as stale: cancel it and resume from the last seq.
     entry.nudge = () => void reader.cancel().catch(() => {});
     const decoder = new TextDecoder();
     let terminal = false;
     let firstByte = false;
-    // D16 watchdog: cancelling the reader ends the read loop without a terminal event, and the
-    // caller resumes from the last seq with the usual backoff.
+    // Idle watchdog: cancelling the reader ends the loop without a terminal event, so the caller resumes.
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const armIdle = () => {
       if (this.idleMs <= 0) return;
@@ -524,7 +481,6 @@ export class GenerationClient {
       parser.flush();
     } catch {
       if (signal.aborted) return terminal;
-      // connection dropped mid-stream
     } finally {
       entry.nudge = null;
       if (idleTimer) clearTimeout(idleTimer);
@@ -542,7 +498,7 @@ export class GenerationClient {
     return terminal;
   }
 
-  /** D20: client stamps join the server's by message id; first paint lands a frame after `done`. */
+  /** Delayed because first paint lands a frame after `done`. */
   private persistClientTimings(messageId: string): void {
     setTimeout(() => {
       const client = this.store.getMessage(messageId)?.timings?.client;
@@ -557,7 +513,7 @@ export class GenerationClient {
 
   private dispatch(event: RelayEvent, messageId: string): void {
     if (event.type === "snapshot") {
-      // The snapshot's message id is authoritative but the local placeholder may differ after a reload.
+      // The local placeholder id may differ from the snapshot's after a reload.
       if (event.message.id !== messageId && !this.store.getMessage(event.message.id)) {
         event = { ...event, message: { ...event.message, id: messageId } };
       }
@@ -648,7 +604,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 const clients = new WeakMap<ChatStore, GenerationClient>();
-/** One transport per store; on the server that is per request and never used. */
+/** On the server a store is per request and its client never used. */
 export function getGenerationClient(store: ChatStore): GenerationClient {
   let client = clients.get(store);
   if (!client) {
