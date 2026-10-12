@@ -189,7 +189,7 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
                   {inviteState === "open" ? "Regenerate invite" : "Issue invite"}
                 </Button>
                 {inviteState === "open" ? (
-                  <Button size="sm" variant="ghost" className="touch-target" disabled={busy} onClick={() => void act("Revoke", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "DELETE" }))}>
+                  <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void act("Revoke", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "DELETE" }))}>
                     Revoke
                   </Button>
                 ) : null}

@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- The sidebar header no longer shows a name; the admin console's Revoke button is an outline button like the ones beside it.
 - The out-of-budget message no longer links to the source repository.
 - The admin console's new-user cost cap takes any amount (the field stepped by 0.5, so the browser refused values in between).
 - A main chat with forks has Delete all chats in its sidebar menu: it removes the main chat and every fork in one transaction (`POST /api/chats/:id/delete-all`), after a confirmation that opens on Delete all.
