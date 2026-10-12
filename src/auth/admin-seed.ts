@@ -1,19 +1,26 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
 import { getDb, schema } from "@db/client";
 import { uuidv7 } from "@shared/id";
 
 /** ADR-0004: the first admin comes from ADMIN_EMAIL / ADMIN_PASSWORD; idempotent, never downgrades. */
-export async function seedAdmin(email: string | undefined, password: string | undefined): Promise<void> {
+export async function seedAdmin(rawEmail: string | undefined, password: string | undefined): Promise<void> {
+  // better-auth looks a sign-in up by the lowercased email, so the stored one must be lowercase too.
+  const email = rawEmail?.trim().toLowerCase();
   if (!email || !password) return;
   const db = getDb();
-  const existing = db.select({ id: schema.users.id, role: schema.users.role }).from(schema.users).where(eq(schema.users.email, email)).get();
+  const existing = db
+    .select({ id: schema.users.id, role: schema.users.role, email: schema.users.email })
+    .from(schema.users)
+    .where(sql`lower(${schema.users.email}) = ${email}`)
+    .orderBy(sql`${schema.users.email} = ${email} desc`)
+    .get();
   const now = new Date();
   if (existing) {
-    if (existing.role !== "admin") {
-      db.update(schema.users).set({ role: "admin", updatedAt: now }).where(eq(schema.users.id, existing.id)).run();
-      console.log(`[boot] promoted ${email} to admin`);
+    if (existing.role !== "admin" || existing.email !== email) {
+      db.update(schema.users).set({ role: "admin", email, updatedAt: now }).where(eq(schema.users.id, existing.id)).run();
+      if (existing.role !== "admin") console.log(`[boot] promoted ${email} to admin`);
     }
     return;
   }

@@ -111,6 +111,23 @@ describe("better-auth over HTTP", () => {
     }
   });
 
+  it("seeds a mixed-case or padded ADMIN_EMAIL lowercased, so the admin can sign in", async () => {
+    await seedAdmin("  Mixed.Case@Example.COM ", ADMIN_PASSWORD);
+    const row = getDb().select().from(schema.users).where(eq(schema.users.email, "mixed.case@example.com")).get();
+    expect(row?.role).toBe("admin");
+    expect((await signIn("Mixed.Case@Example.com", ADMIN_PASSWORD)).res.status).toBe(200);
+  });
+
+  it("lowercases an admin row stored under a mixed-case email and adds no second row", async () => {
+    const email = "Upper.Admin@Example.com";
+    await seedAdmin("upper.admin@example.com", ADMIN_PASSWORD);
+    getDb().update(schema.users).set({ email, role: "user" }).where(eq(schema.users.email, "upper.admin@example.com")).run();
+    await seedAdmin(email, ADMIN_PASSWORD);
+    const rows = getDb().select().from(schema.users).all().filter((u) => u.email.toLowerCase() === email.toLowerCase());
+    expect(rows.map((u) => [u.email, u.role])).toEqual([["upper.admin@example.com", "admin"]]);
+    expect((await signIn(email, ADMIN_PASSWORD)).res.status).toBe(200);
+  });
+
   it("keeps the session cookie valid afterwards", async () => {
     const res = await call("/get-session", { method: "GET", cookie: adminCookie });
     expect(res.status).toBe(200);

@@ -8,7 +8,7 @@ const schema = z.object({
   DATABASE_PATH: z.string().default("data/app.db"),
   BETTER_AUTH_SECRET: z.string().min(16).optional(),
   BETTER_AUTH_URL: z.string().url().optional(),
-  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_EMAIL: z.string().trim().email().optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
   ADMIN_PATH_SLUG: z.string().regex(/^[a-z0-9-]+$/).default("admin"),
   /** USD cap for an invited user when the admin leaves the field blank (ADR-0004). */

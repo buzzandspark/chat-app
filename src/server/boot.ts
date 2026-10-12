@@ -5,6 +5,7 @@ import { closeDatabase, getDb, schema } from "@db/client";
 import { runMigrations } from "@db/migrate";
 import { seedDevUser } from "@db/seed";
 import { seedAdmin } from "@auth/admin-seed";
+import { DEV_AUTH_SECRET } from "@auth/server";
 import { settleOrphan } from "@relay/orphans";
 import { redactInviteTokens } from "@shared/redact";
 import { startGuestPurge } from "./guests";
@@ -26,6 +27,11 @@ export async function boot(): Promise<void> {
     // E2E skips the login redirect, runs every cookieless request as DEV_USER_ID (seeded below, no
     // cost cap) and turns off the sign-in rate limit. Only the test harness may combine it with production.
     console.error("[boot] E2E is set in production; refusing to start. Unset E2E, or set E2E_ALLOW_PRODUCTION=1 if this is the e2e harness.");
+    process.exit(1);
+  }
+  const misconfigured = env.isProd && !env.e2e ? deployProblem() : null;
+  if (misconfigured) {
+    console.error(`[boot] ${misconfigured}; refusing to start.`);
     process.exit(1);
   }
   runMigrations(env.DATABASE_PATH);
@@ -53,6 +59,20 @@ export async function boot(): Promise<void> {
   console.log(
     `[boot] chat ready (${env.replayMode ? "replay mode" : "live models"}, db=${env.DATABASE_PATH})`,
   );
+}
+
+// The .env.example placeholder and the development fallback sign sessions anyone could forge.
+const PUBLIC_SECRETS = new Set(["change-me-to-a-long-random-string", DEV_AUTH_SECRET]);
+
+function deployProblem(): string | null {
+  if (!env.BETTER_AUTH_URL) return "BETTER_AUTH_URL is not set. Set it to the URL users reach the app at";
+  if (env.BETTER_AUTH_SECRET && PUBLIC_SECRETS.has(env.BETTER_AUTH_SECRET)) {
+    return "BETTER_AUTH_SECRET is a published placeholder. Generate one with openssl rand -base64 32";
+  }
+  if (env.ADMIN_PASSWORD !== undefined && (env.ADMIN_PASSWORD === "change-me" || env.ADMIN_PASSWORD.length < 10)) {
+    return "ADMIN_PASSWORD is the placeholder or shorter than 10 characters";
+  }
+  return null;
 }
 
 // Backstop: a row still `running` at boot died un-drained; mark it interrupted and settle an estimated

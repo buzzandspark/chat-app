@@ -7,11 +7,13 @@ import { admin, anonymous } from "better-auth/plugins";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
 
+export const DEV_AUTH_SECRET = "dev-secret-not-for-production-0123456789";
+
 /** Production never falls through to better-auth's own fallbacks, which include a public default secret. */
 function authSecret(): string {
   if (env.BETTER_AUTH_SECRET) return env.BETTER_AUTH_SECRET;
   if (env.isProd) throw new Error("BETTER_AUTH_SECRET is not set");
-  return "dev-secret-not-for-production-0123456789";
+  return DEV_AUTH_SECRET;
 }
 
 /** Moves a guest's chats, replies and spend to the account it signed in to, before the guest is deleted. */
