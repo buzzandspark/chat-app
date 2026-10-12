@@ -1,5 +1,6 @@
 import type { ClientBlock, StoredContentBlock } from "@shared/blocks";
 import { toClientBlocks } from "@shared/blocks";
+import type { ForkOption } from "@shared/forks";
 import { DEFAULT_MODEL, isModelId, type ModelId } from "@shared/models";
 import type {
   InterruptedReason,
@@ -45,6 +46,18 @@ export interface MessageState {
   retryAttempt: number;
   /** The scripted scenario this reply comes from, so Continue and retries keep it. */
   scenario: string | null;
+  /** Row position on the server; null until the server has listed the message. */
+  position: number | null;
+  /** Fork prompts for a reply: null = not run or unknown, [] = none. */
+  options: ForkOption[] | null;
+  /** While the options stream: the count once known, the options complete so far, and whether the stream failed. */
+  optionsStream: OptionsStream | null;
+}
+
+export interface OptionsStream {
+  count: number | null;
+  partial: ForkOption[];
+  failed: boolean;
 }
 
 /** Per-chat composer settings (ADR-0005): kept here so a remount or an Activity eviction never resets them. */
@@ -70,6 +83,9 @@ export interface ChatState {
   older: number;
   /** Messages typed while a reply was streaming; the first goes out when that reply ends. */
   queue: QueuedMessage[];
+  /** Set on a fork: the chat its rows were copied from, and the position of its first own message. */
+  forkedFrom: string | null;
+  forkPosition: number | null;
 }
 
 /** A message row as the page and `GET /api/chats/:id` deliver it. */
@@ -88,6 +104,9 @@ export interface SeedRow {
   generationId: string | null;
   lastSeq?: number | null;
   scenario?: string | null;
+  position?: number;
+  thinking?: ThinkingOptions | null;
+  options?: ForkOption[] | null;
   createdAt: number;
 }
 
@@ -104,11 +123,11 @@ export interface QueuedMessage {
   scenario: string | null;
 }
 
-export const EMPTY_CHAT: ChatState = { id: "", messageIds: [], title: null, seeded: false, settings: DEFAULT_SETTINGS, settingsTouched: false, older: 0, queue: [] };
-
 function emptyChat(id: string, settings: ChatSettings = DEFAULT_SETTINGS): ChatState {
-  return { id, messageIds: [], title: null, seeded: false, settings, settingsTouched: false, older: 0, queue: [] };
+  return { id, messageIds: [], title: null, seeded: false, settings, settingsTouched: false, older: 0, queue: [], forkedFrom: null, forkPosition: null };
 }
+
+export const EMPTY_CHAT: ChatState = emptyChat("");
 
 const TERMINAL: ReadonlySet<MessageStatus> = new Set(["done", "stopped", "interrupted", "error", "refused"]);
 
@@ -135,6 +154,9 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
     local: false,
     retryAttempt: 0,
     scenario: null,
+    position: null,
+    options: null,
+    optionsStream: null,
     ...partial,
   };
 }
@@ -174,9 +196,18 @@ export function canRetryReply(chat: Pick<ChatState, "messageIds">, message: Pick
 export class ChatStore {
   /** Model and effort for chats that have no reply to inherit from (#22): the user's last choice, set by the shell. */
   private defaults: ChatSettings = DEFAULT_SETTINGS;
+  /** Whether the shell has read that choice yet; until then an empty chat's model is not known. */
+  private defaultsLoaded = false;
+
+  /** A chat's model and effort are known: from its last reply, or for an empty chat from the user's last choice. */
+  settingsKnown(chatId: string): boolean {
+    const chat = this.getChat(chatId);
+    return chat.seeded && (chat.messageIds.length > 0 || this.defaultsLoaded);
+  }
 
   setDefaultSettings(patch: Partial<Pick<ChatSettings, "model" | "thinking">>): void {
     this.defaults = { ...this.defaults, ...patch };
+    this.defaultsLoaded = true;
     // Empty chats the user has not touched follow the new default.
     for (const [id, chat] of this.chats) {
       if (chat.settingsTouched || chat.messageIds.length > 0) continue;
@@ -197,6 +228,7 @@ export class ChatStore {
   private chatListeners = new Map<string, Set<Listener>>();
   private queue: RelayEvent[] = [];
   private flushHandle: number | null = null;
+  private replyEndListeners = new Set<(message: MessageState) => void>();
   private schedule: (cb: () => void) => number;
   private cancel: (handle: number) => void;
   private now: () => number;
@@ -287,7 +319,12 @@ export class ChatStore {
    * not listed yet stay, after the server's rows. deferNotify: the caller seeds during its own
    * render, so subscribers are notified in a microtask.
    */
-  seedChat(chatId: string, title: string | null, rows: readonly SeedRow[], options: { deferNotify?: boolean; older?: number } = {}): void {
+  seedChat(
+    chatId: string,
+    title: string | null,
+    rows: readonly SeedRow[],
+    options: { deferNotify?: boolean; older?: number; fork?: { from: string | null; position: number | null } } = {},
+  ): void {
     const previous = this.chats.get(chatId);
     const ids: string[] = [];
     const touched: string[] = [];
@@ -313,27 +350,36 @@ export class ChatStore {
       }
     }
     const nextTitle = title ?? previous?.title ?? null;
-    // An existing chat opens on the model its last reply was asked of, unless the user already chose one here.
+    // An existing chat opens on the model and effort its last reply was asked with, unless the user already chose here.
     let settings = previous?.settings ?? this.defaults;
     if (!previous?.settingsTouched) {
       for (let i = rows.length - 1; i >= 0; i--) {
         const row = rows[i]!;
         if (row.role === "assistant" && isModelId(row.requestedModel)) {
-          if (settings.model !== row.requestedModel) settings = { ...settings, model: row.requestedModel };
+          const thinking = row.thinking ?? settings.thinking;
+          if (settings.model !== row.requestedModel || thinking.harder !== settings.thinking.harder) {
+            settings = { ...settings, model: row.requestedModel, thinking };
+          }
           break;
         }
       }
     }
     const older = options.older ?? 0;
+    const forkedFrom = options.fork ? options.fork.from : (previous?.forkedFrom ?? null);
+    const forkPosition = options.fork ? options.fork.position : (previous?.forkPosition ?? null);
     const same =
       previous !== undefined &&
       previous.seeded &&
       previous.title === nextTitle &&
       previous.settings === settings &&
       previous.older === older &&
+      previous.forkedFrom === forkedFrom &&
+      previous.forkPosition === forkPosition &&
       previous.messageIds.length === ids.length &&
       previous.messageIds.every((id, i) => id === ids[i]);
-    if (!same) this.chats.set(chatId, { ...(previous ?? this.emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true, settings, older });
+    if (!same) {
+      this.chats.set(chatId, { ...(previous ?? this.emptyChat(chatId)), messageIds: ids, title: nextTitle, seeded: true, settings, older, forkedFrom, forkPosition });
+    }
     const notify = () => {
       for (const id of touched) this.notifyMessage(id);
       if (!same) this.notifyChat(chatId);
@@ -374,12 +420,19 @@ export class ChatStore {
     this.notifyChat(m.chatId);
   }
 
-  /** Drops the rows of the given chats (#72: opened long ago); a view that still shows one re-seeds from its own rows. */
-  evictChats(ids: Iterable<string>): void {
+  /**
+   * Drops the rows of the given chats (#72: opened long ago); a view that still shows one re-seeds from its own rows.
+   * Returns the chats it skipped because a reply is still streaming.
+   */
+  evictChats(ids: Iterable<string>): string[] {
+    const streaming: string[] = [];
     for (const id of ids) {
       const chat = this.chats.get(id);
       if (!chat || !chat.seeded || chat.messageIds.length === 0) continue;
-      if (chat.messageIds.some((mid) => this.messages.get(mid)?.status === "streaming")) continue;
+      if (chat.messageIds.some((mid) => this.messages.get(mid)?.status === "streaming")) {
+        streaming.push(id);
+        continue;
+      }
       for (const mid of chat.messageIds) {
         const m = this.messages.get(mid);
         this.messages.delete(mid);
@@ -389,6 +442,7 @@ export class ChatStore {
       this.chats.set(id, { ...chat, messageIds: [], seeded: false });
       this.notifyChat(id);
     }
+    return streaming;
   }
 
   /** The chat was deleted: drop its messages and leave a seeded, empty chat so the view shows the empty state. */
@@ -406,7 +460,7 @@ export class ChatStore {
     this.notifyChat(chatId);
   }
 
-  /** A message typed while a reply streams waits here; the view sends the first one when that reply ends. */
+  /** A message typed while a reply streams waits here; the generation client sends the first one when that reply ends. */
   enqueueMessage(chatId: string, item: QueuedMessage): void {
     const chat = this.chats.get(chatId) ?? this.emptyChat(chatId);
     this.chats.set(chatId, { ...chat, queue: [...chat.queue, item] });
@@ -429,6 +483,14 @@ export class ChatStore {
     this.chats.set(chatId, { ...chat, queue: chat.queue.filter((q) => q.id !== id) });
     this.notifyChat(chatId);
     return item;
+  }
+
+  /** A fork promoted to main, or a main turned fork: the divider follows. */
+  setFork(chatId: string, fork: { from: string | null; position: number | null }): void {
+    const chat = this.chats.get(chatId);
+    if (!chat || (chat.forkedFrom === fork.from && chat.forkPosition === fork.position)) return;
+    this.chats.set(chatId, { ...chat, forkedFrom: fork.from, forkPosition: fork.position });
+    this.notifyChat(chatId);
   }
 
   setChatTitle(chatId: string, title: string | null): void {
@@ -464,6 +526,28 @@ export class ChatStore {
     this.updateMessage(id, { timings: { ...(m.timings ?? {}), client } });
   }
 
+  /** Called after an applied event has taken a reply out of `streaming` (a terminal event or a final snapshot). */
+  onReplyEnd(listener: (message: MessageState) => void): () => void {
+    this.replyEndListeners.add(listener);
+    return () => {
+      this.replyEndListeners.delete(listener);
+    };
+  }
+
+  /** Commits applied drafts, notifies their subscribers, then reports the replies that stopped streaming. */
+  private commit(ids: Iterable<string>, drafts: Map<string, MessageState>): void {
+    const ended: MessageState[] = [];
+    for (const id of ids) {
+      const draft = drafts.get(id);
+      if (draft) {
+        if (this.messages.get(id)?.status === "streaming" && draft.status !== "streaming") ended.push(draft);
+        this.messages.set(id, draft);
+      }
+      this.notifyMessage(id);
+    }
+    for (const message of ended) for (const listener of this.replyEndListeners) listener(message);
+  }
+
   /** Queue a producer event for the next frame; control events apply immediately. */
   enqueue(event: RelayEvent): void {
     if (isControl(event)) {
@@ -489,20 +573,13 @@ export class ChatStore {
       const id = this.applyToDraft(event, drafts);
       if (id) touched.add(id);
     }
-    for (const id of touched) {
-      const draft = drafts.get(id);
-      if (draft) this.messages.set(id, draft);
-      this.notifyMessage(id);
-    }
+    this.commit(touched, drafts);
   }
 
   apply(event: RelayEvent): void {
     const drafts = new Map<string, MessageState>();
     const id = this.applyToDraft(event, drafts);
-    if (!id) return;
-    const draft = drafts.get(id);
-    if (draft) this.messages.set(id, draft);
-    this.notifyMessage(id);
+    if (id) this.commit([id], drafts);
   }
 
   private draftFor(id: string, drafts: Map<string, MessageState>): MessageState | undefined {
@@ -653,6 +730,7 @@ export class ChatStore {
 function sameRow(existing: MessageState, row: SeedRow): boolean {
   if (existing.local || existing.status !== row.status || existing.stopReason !== row.stopReason) return false;
   if (existing.lastSeq !== (row.lastSeq ?? -1)) return false;
+  if (JSON.stringify(existing.options) !== JSON.stringify(row.options ?? null)) return false;
   const blocks = toClientBlocks(row.content);
   if (blocks.length !== existing.blocks.length) return false;
   return textOf(blocks) === textOf(existing.blocks);
@@ -677,6 +755,8 @@ export function messageStateFromRow(row: SeedRow): MessageState {
     discardedText: row.status === "refused" && textOf(blocks).length > 0,
     lastSeq: row.lastSeq ?? -1,
     scenario: row.scenario ?? null,
+    position: row.position ?? null,
+    options: row.options ?? null,
     createdAt: row.createdAt,
   });
 }

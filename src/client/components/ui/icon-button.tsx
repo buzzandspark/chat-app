@@ -11,6 +11,8 @@ type IconButtonProps = ComponentProps<typeof Button> & {
   tipSide?: "top" | "bottom";
   /** Forces an alignment; by default the tooltip is centred and shifts to start or end only when centred it would leave its container. */
   tipAlign?: TipAlign;
+  /** A keyboard shortcut, shown after the label in the tooltip, e.g. "⌘K". */
+  shortcut?: string;
 };
 
 const MARGIN = 4;
@@ -36,7 +38,7 @@ function alignTip(el: HTMLElement): void {
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, tipSide = "bottom", tipAlign, className, size = "icon", variant = "ghost", onPointerEnter, onFocus, ...props },
+  { label, shortcut, tipSide = "bottom", tipAlign, className, size = "icon", variant = "ghost", onPointerEnter, onFocus, ...props },
   ref,
 ) {
   const auto = tipAlign === undefined;
@@ -60,7 +62,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       size={size}
       variant={variant}
       aria-label={label}
-      data-tip={label}
+      data-tip={shortcut ? `${label}  ${shortcut}` : label}
       data-tip-side={tipSide}
       data-tip-align={tipAlign ?? "center"}
       className={cn("tip touch-target", className)}

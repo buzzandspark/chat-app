@@ -1,10 +1,14 @@
 "use client";
-import { Check, Copy, MoreHorizontal, RefreshCw } from "lucide-react";
+import { Check, Copy, CopyPlus, MoreHorizontal, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IconButton } from "../ui/icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { MessageState } from "@client/store/chat-store";
-import { LatencyPopover } from "./latency-popover";
+import { duplicateChat } from "@client/store/fork-chat";
+import { useChat, useChatStore } from "@client/store/hooks";
+import { useSidebarChats } from "@client/store/sidebar-store";
+import { MAX_FORKS } from "@shared/forks";
 import { ServedBy } from "./status-footer";
 
 interface AssistantActionsProps {
@@ -13,13 +17,25 @@ interface AssistantActionsProps {
   canRegenerate: boolean;
   onRegenerate: () => void;
   /** Which stand-in the user pressed before this chunk had loaded. */
-  defaultOpen?: "menu" | "latency" | null;
+  defaultOpen?: "menu" | null;
 }
 
-/** Loaded after first paint (D21): the menu and popover pull in Radix, which the first frame does not need. */
+/** Loaded after first paint (D21): the menu pulls in Radix, which the first frame does not need. */
 export function AssistantActions({ message, text, canRegenerate, onRegenerate, defaultOpen = null }: AssistantActionsProps) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(defaultOpen === "menu");
+  const [error, setError] = useState<string | null>(null);
+  const store = useChatStore();
+  const router = useRouter();
+  // Duplicate makes another fork of the main chat, so it's offered while the main chat has room for one.
+  const parentId = useChat(message.chatId).forkedFrom ?? message.chatId;
+  const roomForFork = useSidebarChats().filter((c) => c.forkedFrom === parentId).length < MAX_FORKS;
+  const onDuplicate = () => {
+    setError(null);
+    void duplicateChat(store, router, message.chatId, message.id).then((out) => {
+      if (out.error) setError(out.error);
+    });
+  };
   // Copy keeps the menu open long enough to show "Copied", then closes it (#68).
   const onCopy = async (e: Event) => {
     e.preventDefault();
@@ -37,12 +53,11 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
   return (
     <div className="flex items-center gap-1">
       <ServedBy message={message} />
-      <LatencyPopover timings={message.timings} usage={message.usage} defaultOpen={defaultOpen === "latency"} />
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <IconButton
             label="Message actions"
-            className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
+            className="first:-ml-3.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100"
           >
             <MoreHorizontal />
           </IconButton>
@@ -58,8 +73,19 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
               Regenerate
             </DropdownMenuItem>
           ) : null}
+          {roomForFork ? (
+            <DropdownMenuItem onSelect={onDuplicate} className="min-h-11">
+              <CopyPlus />
+              Duplicate
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      {error ? (
+        <span role="alert" className="text-caption text-destructive">
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }

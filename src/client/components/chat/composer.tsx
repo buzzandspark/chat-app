@@ -1,23 +1,25 @@
 "use client";
 import { ArrowUp, FlaskConical, Square, X } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { clearDraft, draftKey, readDraft, useDraft } from "@client/hooks/use-draft";
+import { clearDraft, draftKey, setDraft, useDraft } from "@client/hooks/use-draft";
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
 import { textOf } from "@client/store/chat-store";
-import { useChat, useChatStore, useMessage } from "@client/store/hooks";
-import { useChatContext, type ChatSettings } from "./chat-context";
+import { useChat, useChatSettingsKnown, useChatStore, useMessage } from "@client/store/hooks";
+import { useChatActions, useChatContext, type ChatSettings } from "./chat-context";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
-import { DEFAULT_MODEL, MODELS, type ModelId } from "@shared/models";
-import dynamic from "next/dynamic";
+import { MODELS, type ModelId } from "@shared/models";
 import { MAX_MESSAGE_CHARS, type ThinkingOptions } from "@shared/types";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChunkBoundary } from "../ui/chunk-boundary";
-import { lazyChunk } from "../ui/lazy-chunk";
+import { chunk } from "../ui/lazy-chunk";
+import { useModals } from "../ui/modal-manager";
 import { IconButton } from "../ui/icon-button";
+import { ExploreOptionsIsland, UNDER_INPUT_WITH_TABS } from "./explore-options";
 
-// D21: the panel's chunk (a Radix dialog) loads on intent; the stand-in is the same button.
+// D21: the panel's chunk (a Radix dialog) loads on intent.
 function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" | "children">) {
   return (
     <IconButton label="Scenarios" tipSide="top" className="text-muted-foreground" {...props}>
@@ -25,30 +27,51 @@ function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" |
     </IconButton>
   );
 }
-const ScenarioPanel = lazyChunk(() =>
-  dynamic(() => import("./scenario-panel").then((m) => m.ScenarioPanel), {
-    ssr: false,
-    loading: () => <ScenarioButton disabled />,
-  }),
-);
+const loadScenarioPanel = chunk(() => import("./scenario-panel"));
 
-const warmScenarioPanel = () => import("./scenario-panel");
-
+// The button opens the panel itself, once the chunk is in; a chunk that fails is thrown to the boundary around it.
 function ScenarioPanelOnIntent() {
-  const intent = useIntent(warmScenarioPanel);
-  if (intent.armed) return <ScenarioPanel autoOpen={intent.wanted === "panel"} />;
-  return <ScenarioButton data-testid="scenario-panel-trigger" {...intentProps(intent)} onClick={() => intent.press("panel")} />;
+  const { send } = useChatActions();
+  const { show } = useModals();
+  const router = useRouter();
+  const [failed, setFailed] = useState<{ error: unknown } | null>(null);
+  // A second press while the chunk is still on its way doesn't stack a second panel.
+  const opening = useRef(false);
+  if (failed) throw failed.error;
+  const warm = () => {
+    loadScenarioPanel().catch(() => {});
+  };
+  return (
+    <ScenarioButton
+      data-testid="scenario-panel-trigger"
+      onPointerEnter={warm}
+      onTouchStart={warm}
+      onFocus={warm}
+      onClick={() => {
+        if (opening.current) return;
+        opening.current = true;
+        loadScenarioPanel()
+          .then((m) => m.openScenarioPanel(show, send, router.push), (error: unknown) => setFailed({ error }))
+          .finally(() => {
+            opening.current = false;
+          });
+      }}
+    />
+  );
 }
 
 /** The picker's trigger as the stand-in: the chunk (Radix menu, sheet, switch) loads on intent. */
 function PickerStandIn({
   model,
   thinking,
+  known = true,
   intent,
   onPress,
 }: {
   model: ModelId;
   thinking: ThinkingOptions;
+  /** False until the chat's model is known: the label keeps its room but shows nothing, rather than the default. */
+  known?: boolean;
   intent?: { warmUp: () => void };
   onPress?: () => void;
 }) {
@@ -62,28 +85,24 @@ function PickerStandIn({
       className="touch-target max-w-[55vw] gap-1 text-muted-foreground"
       aria-label="Choose model"
       aria-haspopup={desktop ? "menu" : "dialog"}
-      disabled={!onPress}
+      aria-disabled={!onPress || undefined}
       {...(intent ? intentProps(intent) : {})}
       onClick={onPress}
     >
-      <span className="truncate">{info.short}</span>
-      {thinking.harder ? <span className="rounded-md bg-accent px-1.5 text-caption text-accent-foreground">harder</span> : null}
+      <span className={cn("truncate", !known && "invisible")}>{info.short}</span>
+      {thinking.harder && known ? <span className="rounded-md bg-accent px-1.5 text-caption text-accent-foreground">harder</span> : null}
       <ChevronDown data-icon="inline-end" className="size-3.5" />
     </Button>
   );
 }
-const ModelPicker = lazyChunk(() =>
-  dynamic(() => import("./model-picker").then((m) => m.ModelPicker), {
-    ssr: false,
-    loading: () => <PickerStandIn model={DEFAULT_MODEL} thinking={{ harder: false }} />,
-  }),
-);
+const loadModelPicker = chunk(() => import("./model-picker").then((m) => m.ModelPicker));
 
-const warmModelPicker = () => import("./model-picker");
-
-function ModelPickerOnIntent(props: { model: ModelId; thinking: ThinkingOptions; onChange: (patch: Partial<ChatSettings>) => void }) {
-  const intent = useIntent(warmModelPicker);
-  if (intent.armed) return <ModelPicker {...props} defaultOpen={intent.wanted === "picker"} />;
+function ModelPickerOnIntent({ known, ...props }: { model: ModelId; thinking: ThinkingOptions; known: boolean; onChange: (patch: Partial<ChatSettings>) => void }) {
+  const intent = useIntent(loadModelPicker);
+  if (intent.failed) throw intent.failed.error;
+  if (!known) return <PickerStandIn model={props.model} thinking={props.thinking} known={false} />;
+  const ModelPicker = intent.loaded;
+  if (intent.armed && ModelPicker) return <ModelPicker {...props} defaultOpen={intent.wanted === "picker"} />;
   return <PickerStandIn model={props.model} thinking={props.thinking} intent={intent} onPress={() => intent.press("picker")} />;
 }
 
@@ -93,61 +112,43 @@ export interface ComposerHandle {
   setValue: (text: string) => void;
 }
 
-const MAX_ROWS_PX = 180;
-
 /** D19/D18: sticky above the keyboard, 16 px text so iOS never zooms; Enter sends only with hover + md. */
 export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function Composer({ chatId }, ref) {
   const { send, settings, setSettings, client, userId, editing, cancelEdit, editMessage, scenarioPanel } = useChatContext();
   const store = useChatStore();
   const chat = useChat(chatId);
+  const settingsKnown = useChatSettingsKnown(chatId);
   const key = draftKey(userId, chatId);
-  // Empty on both server and client: a draft read during render would enable Send in React while the
-  // server-rendered button stays disabled in the DOM (hydration never patches attributes). It is
-  // adopted after mount instead.
-  const [value, setValue] = useState("");
+  // The draft is empty in the server render and hydration (useDraft): read during hydration it would enable
+  // Send in React while the server-rendered button stays disabled in the DOM (hydration never patches
+  // attributes). D10/D18: an edit has text of its own, so the unsent draft is left as it is meanwhile.
+  const draft = useDraft(key);
+  const [editText, setEditText] = useState(editing?.text ?? "");
+  const [editFor, setEditFor] = useState(editing);
+  if (editing !== editFor) {
+    setEditFor(editing);
+    setEditText(editing?.text ?? "");
+  }
+  const value = editing ? editText : draft;
+  const setValue = (text: string) => (editing ? setEditText(text) : setDraft(key, text));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const desktop = useIsDesktop();
   const hasHover = useHasHover();
   const enterSends = desktop && hasHover;
-  // D10/D18: editing a message must not overwrite the unsent draft; it is stashed and restored.
-  const [stash, setStash] = useState("");
-  const [adopted, setAdopted] = useState(false);
-  useDraft(key, editing ? stash : value, adopted);
 
-  useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus(), setValue: (text: string) => setValue(text) }), []);
+  useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus(), setValue: (text: string) => setDraft(key, text) }), [key]);
 
-  // Adopt text typed before hydration, else the stored draft; data-hydrated tells tests the composer is live.
-  const rootRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = textareaRef.current;
-    const root = rootRef.current;
-    // The state starts empty, so anything in the element was typed before hydration.
-    const typedEarly = el && el.value !== "" ? el.value : null;
-    const draft = readDraft(key);
-    const frame = requestAnimationFrame(() => {
-      if (typedEarly !== null) setValue((v) => (v === "" ? typedEarly : v));
-      else if (draft) setValue((v) => (v === "" ? draft : v));
-      setAdopted(true);
-      if (root) root.dataset.hydrated = "true";
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [key]);
-
-  // Entering edit mode loads the message text (derived state adjusted during render); leaving it,
-  // by cancel or by sending the edit, brings the stashed draft back.
-  const [lastEdit, setLastEdit] = useState(editing);
-  if (editing !== lastEdit) {
-    setLastEdit(editing);
-    if (editing && !lastEdit) {
-      setStash(value);
-      setValue(editing.text);
-    } else if (editing) {
-      setValue(editing.text);
-    } else if (lastEdit) {
-      setValue(stash);
-      setStash("");
-    }
-  }
+  // Hydrated: anything typed before hydration (the server rendered the field empty) becomes the draft, and
+  // data-hydrated tells tests the composer is live. Once: the root keeps the flag when Activity re-attaches it.
+  const attachRoot = useCallback(
+    (root: HTMLDivElement | null) => {
+      if (!root || root.dataset.hydrated) return;
+      const typedEarly = root.querySelector("textarea")?.value;
+      if (typedEarly) setDraft(key, typedEarly);
+      root.dataset.hydrated = "true";
+    },
+    [key],
+  );
 
   // The id list does not change when a reply ends; the last message's status decides Stop/Send and ↑.
   const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
@@ -172,15 +173,6 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     return null;
   })();
 
-  const resize = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = `${Math.min(MAX_ROWS_PX, el.scrollHeight)}px`;
-  }, []);
-
-  useEffect(() => resize(), [value, resize]);
-
   // The route refuses messages over the limit; count down near it and block the send over it.
   const overLimit = value.length > MAX_MESSAGE_CHARS;
   const nearLimit = value.length > MAX_MESSAGE_CHARS * 0.9;
@@ -189,10 +181,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     if (!value.trim() || overLimit || (streamingId && editing)) return;
     const wasEditing = editing !== null;
     send(value, settings.scenario?.name, editing);
-    if (!wasEditing) {
-      setValue("");
-      clearDraft(key);
-    }
+    if (!wasEditing) clearDraft(key);
     if (settings.scenario) setSettings({ scenario: null });
   };
 
@@ -221,15 +210,15 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
 
   return (
     <div
-      ref={rootRef}
+      ref={attachRoot}
       data-tip-boundary
-      className="shrink-0 border-t border-border bg-background safe-x pt-2"
+      className="relative order-2 shrink-0 border-t border-border bg-background safe-x pt-2 group-has-[[data-testid=fork-tabs]]/chat:border-t-0 group-has-[[data-testid=fork-tabs]]/chat:pt-0 dock:order-none dock:group-has-[[data-testid=fork-tabs]]/chat:border-t dock:group-has-[[data-testid=fork-tabs]]/chat:pt-2"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
       data-testid="composer"
     >
-      <div className="mx-auto w-full max-w-thread">
+      <div className="mx-auto flex w-full max-w-thread flex-col">
         {editing ? (
-          <div className="mb-2 flex items-center gap-2 text-caption text-muted-foreground">
+          <div className={cn("mb-2 flex items-center gap-2 text-caption text-muted-foreground", UNDER_INPUT_WITH_TABS)}>
             <span className="min-w-0 truncate rounded-md bg-accent px-2 py-1 text-accent-foreground">Editing: {editingText.slice(0, 60)}</span>
             <IconButton label="Cancel edit" size="icon-sm" onClick={cancelEdit}>
               <X />
@@ -237,25 +226,32 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
           </div>
         ) : null}
         {scenario ? (
-          <div className="mb-2 flex items-center gap-2 text-caption text-muted-foreground">
+          <div className={cn("mb-2 flex items-center gap-2 text-caption text-muted-foreground", UNDER_INPUT_WITH_TABS)}>
             <span className="rounded-md bg-accent px-2 py-1 text-accent-foreground">Scenario: {scenario.title}</span>
             <IconButton label="Clear scenario" size="icon-sm" onClick={() => setSettings({ scenario: null })}>
               <X />
             </IconButton>
           </div>
         ) : null}
+        <ExploreOptionsIsland chatId={chatId} message={lastMessage} isFork={chat.forkedFrom !== null} editing={editing !== null} />
         <div className="flex flex-col rounded-xl border border-input bg-card shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={onKeyDown}
-            rows={1}
-            placeholder={editing ? "Edit your message" : "Message Cadence"}
-            aria-label="Message"
-            enterKeyHint={enterSends ? "send" : "enter"}
-            className="max-h-[180px] min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-body outline-none placeholder:text-muted-foreground"
-          />
+          {/* Grows with its text in CSS: an invisible copy of the text in the same grid cell sets the height (up to 180 px, then it scrolls). */}
+          <div
+            data-value={value}
+            className="grid after:invisible after:max-h-[180px] after:min-h-11 after:overflow-hidden after:px-3 after:py-2.5 after:text-body after:break-words after:whitespace-pre-wrap after:content-[attr(data-value)_'_'] after:[grid-area:1/1]"
+          >
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={onKeyDown}
+              rows={1}
+              placeholder={editing ? "Edit your message" : "Message Cadence"}
+              aria-label="Message"
+              enterKeyHint={enterSends ? "send" : "enter"}
+              className="max-h-[180px] min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-body outline-none [grid-area:1/1] placeholder:text-muted-foreground"
+            />
+          </div>
           <div className="flex items-center justify-between gap-1 px-1.5 pb-1.5">
             <div className="flex min-w-0 items-center gap-0.5">
               {nearLimit ? (
@@ -264,7 +260,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
                 </span>
               ) : null}
               <ChunkBoundary label="model picker">
-                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} onChange={(patch) => setSettings(patch)} />
+                <ModelPickerOnIntent model={settings.model} thinking={settings.thinking} known={settingsKnown} onChange={(patch) => setSettings(patch)} />
               </ChunkBoundary>
               {scenarioPanel ? (
                 <ChunkBoundary label="scenario panel">
@@ -302,10 +298,6 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
             </div>
           </div>
         </div>
-        {/* Shown by CSS where a hardware keyboard is likely (md + hover), so the server, the skeleton and the client agree on the height. */}
-        <p className="mt-1 hidden text-caption text-muted-foreground md:[@media(hover:hover)]:block">
-          Enter to send · Shift+Enter for a new line · ↑ edits your last message · Esc stops · ⌘K search · ⌘⇧O new chat
-        </p>
       </div>
     </div>
   );

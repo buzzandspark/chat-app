@@ -82,12 +82,6 @@ function CodeBlockImpl({ code, lang, closed, className }: CodeBlockProps) {
     return () => handle.cancel();
   }, [lines, committed, groups]);
 
-  useEffect(() => {
-    return () => {
-      if (copyTimer.current) clearTimeout(copyTimer.current);
-    };
-  }, []);
-
   const onCopy = () => {
     const clipboard = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
     if (!clipboard) return;

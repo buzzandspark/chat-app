@@ -353,6 +353,18 @@ describe("ChatStore", () => {
     expect(store.getChat("saved").settings.model).toBe("claude-sonnet-5-5");
   });
 
+  it("knows a chat's model once it has replies, or for an empty chat once the user's last choice is read", () => {
+    const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
+    // Before its rows arrive the model would be the default, which is why the picker shows nothing then.
+    expect(store.settingsKnown("saved")).toBe(false);
+    store.seedChat("saved", "Saved", [row({ id: "u1", role: "user", content: [text("q")] }), row({ id: "a1", role: "assistant", status: "done" })]);
+    expect(store.settingsKnown("saved")).toBe(true);
+    store.createChat("fresh");
+    expect(store.settingsKnown("fresh")).toBe(false);
+    store.setDefaultSettings({});
+    expect(store.settingsKnown("fresh")).toBe(true);
+  });
+
   it("never fabricates client timings for a reply this client did not send (#46)", () => {
     const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
     store.seedChat("c", "C", [
@@ -377,6 +389,16 @@ describe("ChatStore", () => {
     expect(store.removeQueued("q", "zzz")).toBeUndefined();
   });
 
+  it("evicts chats' rows but skips, and returns, one whose reply is still streaming (#72)", () => {
+    const { store } = makeStore();
+    store.seedChat("c1", null, [row({ id: "u1", role: "user", content: [text("q")] })]);
+    store.seedChat("c2", null, [row({ id: "u2", chatId: "c2", role: "user" }), row({ id: "a2", chatId: "c2", role: "assistant", status: "streaming", generationId: "g2" })]);
+    expect(store.evictChats(["c1", "c2", "unknown"])).toEqual(["c2"]);
+    expect(store.getChat("c1")).toMatchObject({ seeded: false, messageIds: [] });
+    expect(store.getMessage("u1")).toBeUndefined();
+    expect(store.getChat("c2").messageIds).toEqual(["u2", "a2"]);
+  });
+
   it("offers a retry of a failed reply only while it is the chat's last message", () => {
     const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
     const rateLimited = { kind: "rate_limited", message: "Rate limited", retryable: true, retryAfterMs: 1000 } as const;
@@ -395,5 +417,52 @@ describe("ChatStore", () => {
     // A reply that did not fail keeps Retry and Regenerate wherever it sits.
     store.updateMessage("a1", { status: "stopped", error: null });
     expect(retryable("a1")).toBe(true);
+  });
+});
+
+
+describe("forks in the store", () => {
+  const row = (id: string, role: "user" | "assistant", extra: Partial<SeedRow> = {}): SeedRow => ({
+    id,
+    chatId: "c1",
+    role,
+    content: [text(id)],
+    status: "done",
+    requestedModel: role === "assistant" ? "claude-opus-5-5" : null,
+    servingModel: null,
+    stopReason: null,
+    refusal: null,
+    error: null,
+    timings: null,
+    generationId: null,
+    createdAt: 1,
+    ...extra,
+  });
+
+  it("a seed carries the fork fields, the row positions and the reply's options", () => {
+    const { store } = makeStore();
+    const rows = [row("u1", "user", { position: 0 }), row("a1", "assistant", { position: 1, options: [{ title: "A", prompt: "Explore A" }] }), row("u2", "user", { position: 2 })];
+    store.seedChat("c1", "Forked", rows, { fork: { from: "parent", position: 2 } });
+    const chat = store.getChat("c1");
+    expect(chat.forkedFrom).toBe("parent");
+    expect(chat.forkPosition).toBe(2);
+    expect(store.getMessage("u2")!.position).toBe(2);
+    expect(store.getMessage("a1")!.options).toEqual([{ title: "A", prompt: "Explore A" }]);
+    expect(store.getMessage("u1")!.options).toBeNull();
+    // A re-seed of the same rows keeps the chat object; new options on the reply replace the row.
+    const before = store.getChat("c1");
+    store.seedChat("c1", "Forked", rows, { fork: { from: "parent", position: 2 } });
+    expect(store.getChat("c1")).toBe(before);
+    store.seedChat("c1", "Forked", [rows[0]!, { ...rows[1]!, options: [] }, rows[2]!], { fork: { from: "parent", position: 2 } });
+    expect(store.getMessage("a1")!.options).toEqual([]);
+  });
+
+  it("a seeded chat inherits the effort of its last reply along with the model", () => {
+    const { store } = makeStore();
+    store.seedChat("c1", null, [row("u1", "user"), row("a1", "assistant", { thinking: { harder: true } })]);
+    expect(store.getChat("c1").settings).toMatchObject({ model: "claude-opus-5-5", thinking: { harder: true } });
+    store.setSettings("c1", { thinking: { harder: false } });
+    store.seedChat("c1", null, [row("u1", "user"), row("a1", "assistant", { thinking: { harder: true } })]);
+    expect(store.getChat("c1").settings.thinking.harder).toBe(false);
   });
 });

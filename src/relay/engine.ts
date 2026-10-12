@@ -25,8 +25,8 @@ import {
 } from "./anthropic/parse-stream";
 import { priceIterations, summarize, type UsageRow } from "./anthropic/pricing";
 import type { MessageSnapshot, RelayEvent, RelayEventBody, ServerTimings } from "./events";
-import { ProviderStatusError } from "./providers/replay";
-import { isBillableProvider, type Provider } from "./providers/types";
+import { ProviderStatusError, sleep } from "./providers/replay";
+import { isBillableProvider, type Provider, type ProviderRequest } from "./providers/types";
 import { QuotaManager } from "./quota";
 import type { EventStore } from "./store";
 import { TpsStats } from "./tps";
@@ -58,6 +58,22 @@ export interface EngineFaults {
   interruptAfterEvents?: number;
 }
 
+/** A reply that ended as `done`, for side effects that must never touch the reply itself. */
+export interface ReplyDoneInfo {
+  chatId: string;
+  messageId: string;
+  generationId: string;
+  userId: string;
+  scenario: string | null;
+  billable: boolean;
+  text: string;
+}
+
+export interface RetryPolicy {
+  attempts: number;
+  baseMs: number;
+}
+
 export interface EngineOptions {
   db: Db;
   store: EventStore;
@@ -70,6 +86,7 @@ export interface EngineOptions {
   /** D16: a generation whose upstream sends nothing for this long ends as `interrupted { reason: "upstream" }`. 0 disables. */
   upstreamIdleMs?: number;
   isDraining?: () => boolean;
+  afterDone?: (info: ReplyDoneInfo) => void;
 }
 
 export interface StartInput {
@@ -87,6 +104,12 @@ export interface StartInput {
   thinking: ThinkingOptions;
   scenario?: string;
   faults?: EngineFaults;
+  /** Awaited before the upstream request; rows, buffer and `started` exist meanwhile, so a client can attach. */
+  gate?: Promise<void>;
+  /** Also cache the final assistant message, so forks that share it as a prefix read one entry (D13). */
+  cacheTail?: boolean;
+  /** Re-send a request that fails before the API begins a message, with exponential backoff. */
+  retry?: RetryPolicy;
 }
 
 export type StartOutcome = { created: true } | { created: false; reason: "exists" };
@@ -118,6 +141,7 @@ interface Active {
   userId: string;
   messageId: string;
   requestedModel: ModelId;
+  scenario: string | null;
   controller: AbortController;
   abortReason: AbortReason | null;
   acc: StreamAccumulator;
@@ -143,6 +167,7 @@ export class Engine {
   private partialPersistMs: number;
   private upstreamIdleMs: number;
   private isDraining: () => boolean;
+  private afterDone: ((info: ReplyDoneInfo) => void) | null;
   private active = new Map<string, Active>();
 
   constructor(options: EngineOptions) {
@@ -155,6 +180,7 @@ export class Engine {
     this.partialPersistMs = options.partialPersistMs ?? 2000;
     this.upstreamIdleMs = options.upstreamIdleMs ?? 60_000;
     this.isDraining = options.isDraining ?? (() => false);
+    this.afterDone = options.afterDone ?? null;
   }
 
   /** Idempotent on `generationId` (D2): a duplicate returns `created: false`. */
@@ -282,6 +308,7 @@ export class Engine {
             content: [],
             status: "streaming",
             requestedModel: input.model,
+            thinking: input.thinking,
             generationId: input.generationId,
             timings: { server: { received: this.now() } },
             createdAt: now,
@@ -315,6 +342,7 @@ export class Engine {
       userId: input.userId,
       messageId: input.assistantMessageId,
       requestedModel: input.model,
+      scenario: input.scenario ?? null,
       controller: new AbortController(),
       abortReason: null,
       acc: createAccumulator(),
@@ -340,13 +368,6 @@ export class Engine {
       console.error(`[engine] generation ${active.id} crashed`, err);
     });
     return { created: true };
-  }
-
-  /** Generations running here for one user (the per-user concurrency cap, #62). */
-  runningFor(userId: string): number {
-    let n = 0;
-    for (const a of this.active.values()) if (a.userId === userId && !a.abortReason) n++;
-    return n;
   }
 
   /** Stops and settles every running generation of a user (admin delete or ban, #69). */
@@ -447,10 +468,14 @@ export class Engine {
 
   private async run(active: Active, input: StartInput): Promise<void> {
     const timings: ServerTimings = { received: active.startedAt };
-    let provider: Provider | null = null;
     try {
+      if (input.gate) await input.gate.catch(() => {});
+      if (active.controller.signal.aborted) {
+        this.finishAborted(active, active.abortReason ?? "stop", timings);
+        return;
+      }
       const history = this.loadHistory(active.chatId, active.messageId);
-      provider = this.providers({
+      const provider = this.providers({
         userId: input.userId,
         userRole: input.userRole,
         model: input.model,
@@ -458,48 +483,30 @@ export class Engine {
       });
       active.partialTimer = setInterval(() => this.persistPartial(active), this.partialPersistMs);
       active.partialTimer.unref?.();
+      const request: ProviderRequest = {
+        model: input.model,
+        thinking: input.thinking,
+        messages: history,
+        userId: input.userId,
+        scenario: input.scenario,
+        cacheTail: input.cacheTail,
+      };
 
-      const stream = provider.stream(
-        { model: input.model, thinking: input.thinking, messages: history, userId: input.userId, scenario: input.scenario },
-        { signal: active.controller.signal },
-      );
-      const iterator = stream[Symbol.asyncIterator]();
-      for (;;) {
-        const step = await this.nextOrIdle(iterator);
-        if (step === "idle") {
-          active.abortReason = "idle";
-          active.controller.abort(new DOMException("idle", "AbortError"));
-          void iterator.return?.().catch(() => {});
-          break;
+      for (let attempt = 0; ; attempt++) {
+        const error = await this.attempt(active, provider, request, timings);
+        if (!error) break;
+        // Before the API has begun a message nothing is lost, so a retryable failure is sent again.
+        const retry = input.retry;
+        if (retry && attempt < retry.attempts && error.retryable && !active.acc.apiMessageId) {
+          await sleep(Math.max(retry.baseMs * 2 ** attempt, error.retryAfterMs ?? 0), active.controller.signal);
+          continue;
         }
-        if (step.done) break;
-        const raw = step.value;
-        if (active.controller.signal.aborted) break;
-        const bodies = normalizeEvent(raw, active.acc);
-        for (const body of bodies) {
-          if ((body.type === "text_delta" || body.type === "thinking_delta") && active.firstTokenAt === null) {
-            active.firstTokenAt = this.now();
-            timings.upstreamFirstToken = active.firstTokenAt;
-          }
-          if (body.type === "error") {
-            this.finishError(active, body.error, timings);
-            return;
-          }
-          this.append(active, body);
-          if ((body.type === "text_delta" || body.type === "thinking_delta") && active.firstRelayedAt === null) {
-            active.firstRelayedAt = this.now();
-            timings.firstRelayed = active.firstRelayedAt;
-          }
-          if (
-            active.faults.interruptAfterEvents !== undefined &&
-            active.relayed >= active.faults.interruptAfterEvents &&
-            !active.abortReason
-          ) {
-            active.abortReason = "scenario";
-            active.controller.abort(new DOMException("scenario", "AbortError"));
-          }
+        if (error.kind === "network" && active.acc.apiMessageId) {
+          this.finishInterrupted(active, "upstream", timings, error.message);
+          return;
         }
-        if (active.controller.signal.aborted) break;
+        this.finishError(active, error, timings);
+        return;
       }
 
       if (active.controller.signal.aborted) {
@@ -517,12 +524,52 @@ export class Engine {
         this.finishAborted(active, active.abortReason ?? "stop", timings);
         return;
       }
-      const error = err instanceof ProviderStatusError ? statusErrorToRelay(err) : toRelayError(err);
-      if (error.kind === "network" && active.acc.apiMessageId) {
-        this.finishInterrupted(active, "upstream", timings, error.message);
-        return;
+      this.finishError(active, toRelayError(err), timings);
+    }
+  }
+
+  /** One upstream request relayed to its end: a failure comes back classified, an abort propagates. */
+  private async attempt(active: Active, provider: Provider, request: ProviderRequest, timings: ServerTimings): Promise<RelayError | null> {
+    try {
+      const stream = provider.stream(request, { signal: active.controller.signal });
+      const iterator = stream[Symbol.asyncIterator]();
+      for (;;) {
+        const step = await this.nextOrIdle(iterator);
+        if (step === "idle") {
+          active.abortReason = "idle";
+          active.controller.abort(new DOMException("idle", "AbortError"));
+          void iterator.return?.().catch(() => {});
+          return null;
+        }
+        if (step.done) return null;
+        const raw = step.value;
+        if (active.controller.signal.aborted) return null;
+        const bodies = normalizeEvent(raw, active.acc);
+        for (const body of bodies) {
+          if ((body.type === "text_delta" || body.type === "thinking_delta") && active.firstTokenAt === null) {
+            active.firstTokenAt = this.now();
+            timings.upstreamFirstToken = active.firstTokenAt;
+          }
+          if (body.type === "error") return body.error;
+          this.append(active, body);
+          if ((body.type === "text_delta" || body.type === "thinking_delta") && active.firstRelayedAt === null) {
+            active.firstRelayedAt = this.now();
+            timings.firstRelayed = active.firstRelayedAt;
+          }
+          if (
+            active.faults.interruptAfterEvents !== undefined &&
+            active.relayed >= active.faults.interruptAfterEvents &&
+            !active.abortReason
+          ) {
+            active.abortReason = "scenario";
+            active.controller.abort(new DOMException("scenario", "AbortError"));
+          }
+        }
+        if (active.controller.signal.aborted) return null;
       }
-      this.finishError(active, error, timings);
+    } catch (err) {
+      if (active.controller.signal.aborted || isAbortError(err)) throw err;
+      return err instanceof ProviderStatusError ? statusErrorToRelay(err) : toRelayError(err);
     }
   }
 
@@ -596,6 +643,21 @@ export class Engine {
       { content, status, generationStatus: "done", servingModel, stopReason: acc.stopReason, timings, rows },
       { type: "done", stopReason: acc.stopReason, servingModel, usage, timings },
     );
+    if (status === "done" && this.afterDone) {
+      try {
+        this.afterDone({
+          chatId: active.chatId,
+          messageId: active.messageId,
+          generationId: active.id,
+          userId: active.userId,
+          scenario: active.scenario,
+          billable: active.billable,
+          text: content.filter((b) => b.type === "text").map((b) => b.text).join(""),
+        });
+      } catch (err) {
+        console.error(`[engine] afterDone failed for ${active.id}`, err);
+      }
+    }
   }
 
   private finishAborted(active: Active, reason: AbortReason, timings: ServerTimings): void {

@@ -63,6 +63,25 @@ describe("history", () => {
     expect(last[0]!.cache_control).toEqual({ type: "ephemeral" });
   });
 
+  it("with cacheTail also marks the final assistant message's last text, so forks share one entry", () => {
+    const history = buildHistory(
+      [
+        { role: "user", content: [text("a")], status: "done" },
+        { role: "assistant", content: [thinking("t"), text("b")], status: "done" },
+        { role: "user", content: [text("c")], status: "done" },
+      ],
+      { cacheTail: true },
+    );
+    const first = history[0]!.content as Anthropic.Beta.BetaTextBlockParam[];
+    const assistant = history[1]!.content as Anthropic.Beta.BetaTextBlockParam[];
+    const last = history[2]!.content as Anthropic.Beta.BetaTextBlockParam[];
+    expect(first[0]!.cache_control).toBeUndefined();
+    expect(assistant[1]!.cache_control).toEqual({ type: "ephemeral" });
+    expect(last[0]!.cache_control).toEqual({ type: "ephemeral" });
+    const request = buildRequest({ model: "claude-sonnet-5-5", thinking: { harder: false }, messages: [], cacheTail: true });
+    expect(request.messages).toEqual([]);
+  });
+
   it("builds the full request with per-model betas, fallbacks, and binding", () => {
     const messages: HistoryMessage[] = [{ role: "user", content: [text("hi")], status: "done" }];
     const sonnet = buildRequest({ model: "claude-sonnet-5-5", thinking: { harder: false }, messages });

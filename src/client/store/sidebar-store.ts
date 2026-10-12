@@ -6,6 +6,9 @@ export interface ChatSummary {
   title: string;
   updatedAt: number;
   pinned?: boolean;
+  forkedFrom?: string | null;
+  forkOrder?: number | null;
+  tabHidden?: boolean;
 }
 
 type Listener = () => void;
@@ -74,7 +77,7 @@ export class SidebarStore {
 }
 
 /** PATCHes a chat; a refusal and a network failure both come back as false, never as a rejection. */
-async function patchChat(id: string, body: Record<string, unknown>): Promise<boolean> {
+export async function patchChat(id: string, body: Record<string, unknown>): Promise<boolean> {
   try {
     const res = await fetch(`/api/chats/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     return res.ok;
@@ -95,6 +98,14 @@ export async function patchChatOptimistic(store: SidebarStore, id: string, field
   store.patch(id, fields);
   const ok = await patchChat(id, fields);
   if (!ok && read() === fields.pinned) store.patch(id, { pinned: before });
+  return ok;
+}
+
+/** A tab closed or reopened: the strip changes at once; a refused request puts it back. */
+export async function setTabHidden(store: SidebarStore, id: string, hidden: boolean): Promise<boolean> {
+  store.patch(id, { tabHidden: hidden });
+  const ok = await patchChat(id, { tabHidden: hidden });
+  if (!ok) store.patch(id, { tabHidden: !hidden });
   return ok;
 }
 

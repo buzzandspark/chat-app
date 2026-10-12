@@ -1,20 +1,14 @@
 "use client";
-import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 interface RouteErrorProps {
   error: Error & { digest?: string };
   reset: () => void;
-  /** What could not be shown; the chat route keeps its shell around this. */
-  what: string;
   main?: boolean;
 }
 
 /** One error view for the root and the chat route: what failed, a reference, try again or reload. */
-export function RouteError({ error, reset, what, main }: RouteErrorProps) {
-  useEffect(() => {
-    console.error(`[${what}] route error`, error);
-  }, [error, what]);
+export function RouteError({ error, reset, main }: RouteErrorProps) {
   const Tag = main ? "main" : "div";
   return (
     <Tag className="flex flex-1 flex-col items-center justify-center gap-3 px-gutter py-12 text-center" role="alert">

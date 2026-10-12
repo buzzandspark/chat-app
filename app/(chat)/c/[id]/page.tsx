@@ -27,5 +27,15 @@ async function ChatSeed({ params }: { params: PageProps<"/c/[id]">["params"] }) 
   const user = await getCurrentUser();
   if (!user) return null;
   const data = getChatWithMessages(id, user.id);
-  return <SeedChat chatId={id} title={data?.chat.title ?? null} updatedAt={data?.chat.updatedAt ?? null} rows={data?.messages ?? []} older={data?.older ?? 0} />;
+  return (
+    <SeedChat
+      chatId={id}
+      title={data?.chat.title ?? null}
+      updatedAt={data?.chat.updatedAt ?? null}
+      rows={data?.messages ?? []}
+      older={data?.older ?? 0}
+      forkedFrom={data?.chat.forkedFrom ?? null}
+      forkPosition={data?.chat.forkPosition ?? null}
+    />
+  );
 }

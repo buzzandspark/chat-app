@@ -34,4 +34,14 @@ export function useChatSeeded(chatId: string): boolean {
   );
 }
 
+/** Whether the composer can name the chat's model; false on the server and in hydration, like useChatSeeded. */
+export function useChatSettingsKnown(chatId: string): boolean {
+  const store = useChatStore();
+  return useSyncExternalStore(
+    (cb) => store.subscribeChat(chatId, cb),
+    () => store.settingsKnown(chatId),
+    () => false,
+  );
+}
+
 export { useChatStore } from "./context";

@@ -1,10 +1,12 @@
 "use client";
 import { ArrowDown } from "lucide-react";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { Fragment, forwardRef, useCallback, useImperativeHandle, useRef, useState, type KeyboardEvent, type TouchEvent, type WheelEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useChat, useChatStore } from "@client/store/hooks";
 import type { QueuedMessage } from "@client/store/chat-store";
 import { loadEarlierMessages } from "@client/store/prefetch";
+import { setPendingChat } from "@client/store/sidebar-store";
 import { useChatActions } from "./chat-context";
 import { MessageRow } from "./message-row";
 
@@ -29,6 +31,26 @@ function QueuedRow({ item }: { item: QueuedMessage }) {
   );
 }
 
+/** Where a fork's own turns begin; the rows above are the parent's. */
+function ForkDivider({ parentId }: { parentId: string | null }) {
+  return (
+    <div role="separator" className="flex items-center gap-3 text-caption text-muted-foreground" data-testid="fork-divider">
+      <span className="h-px flex-1 bg-border" />
+      <span>
+        Forked from{" "}
+        {parentId ? (
+          <Link href={`/c/${parentId}`} prefetch={false} onNavigate={() => setPendingChat(parentId)} className="underline underline-offset-2 hover:text-foreground">
+            main chat
+          </Link>
+        ) : (
+          "main chat"
+        )}
+      </span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
 export interface MessageListHandle {
   engage: () => void;
   /** Stop following without scrolling (a user opened something they want to read). */
@@ -49,7 +71,6 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
     const store = useChatStore();
     const [loadingEarlier, setLoadingEarlier] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
-    const endRef = useRef<HTMLDivElement>(null);
     const [engaged, setEngagedState] = useState(true);
     const engagedRef = useRef(true);
     const lastTopRef = useRef(0);
@@ -79,60 +100,51 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
     useImperativeHandle(ref, () => ({ engage, disengage }), [engage, disengage]);
 
     // Intent, not position: an upward wheel, an upward touch drag or a scroll key means "I am reading".
-    useEffect(() => {
-      const el = scrollRef.current;
-      if (!el) return;
-      let touchY = 0;
-      const onWheel = (e: WheelEvent) => {
-        if (e.deltaY < 0) setEngaged(false);
-      };
-      const onTouchStart = (e: TouchEvent) => {
-        touchY = e.touches[0]?.clientY ?? 0;
-      };
-      const onTouchMove = (e: TouchEvent) => {
-        const y = e.touches[0]?.clientY ?? touchY;
-        if (y - touchY > 4) setEngaged(false);
-        touchY = y;
-      };
-      const onKey = (e: KeyboardEvent) => {
-        if (e.key === "ArrowUp" || e.key === "PageUp" || e.key === "Home") setEngaged(false);
-      };
-      el.addEventListener("wheel", onWheel, { passive: true });
-      el.addEventListener("touchstart", onTouchStart, { passive: true });
-      el.addEventListener("touchmove", onTouchMove, { passive: true });
-      el.addEventListener("keydown", onKey);
-      return () => {
-        el.removeEventListener("wheel", onWheel);
-        el.removeEventListener("touchstart", onTouchStart);
-        el.removeEventListener("touchmove", onTouchMove);
-        el.removeEventListener("keydown", onKey);
-      };
-    }, [setEngaged]);
+    // Only in the thread itself: React events also bubble here from portals (a row's open ⋯ menu).
+    const touchY = useRef(0);
+    const inThread = (e: { currentTarget: HTMLElement; target: EventTarget }) => e.target instanceof Node && e.currentTarget.contains(e.target);
+    const onWheel = (e: WheelEvent<HTMLDivElement>) => {
+      if (inThread(e) && e.deltaY < 0) setEngaged(false);
+    };
+    const onTouchStart = (e: TouchEvent<HTMLDivElement>) => {
+      touchY.current = e.touches[0]?.clientY ?? 0;
+    };
+    const onTouchMove = (e: TouchEvent<HTMLDivElement>) => {
+      const y = e.touches[0]?.clientY ?? touchY.current;
+      if (inThread(e) && y - touchY.current > 4) setEngaged(false);
+      touchY.current = y;
+    };
+    const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+      if (inThread(e) && (e.key === "ArrowUp" || e.key === "PageUp" || e.key === "Home")) setEngaged(false);
+    };
 
-    // With per-frame store flushes the ResizeObserver fires at most once per frame. The scroller
-    // itself is observed too: when the Android keyboard opens the viewport shrinks and the thread
-    // must stay pinned to its end.
-    useEffect(() => {
-      const el = scrollRef.current;
-      const inner = endRef.current?.parentElement;
-      if (!el || !inner) return;
-      const ro = new ResizeObserver(() => {
-        if (engagedRef.current) el.scrollTop = el.scrollHeight;
-      });
-      ro.observe(inner);
-      ro.observe(el);
-      return () => ro.disconnect();
-    }, [chatId]);
-
-    // Before paint, so a long chat appears already at its end instead of oldest-first and then jumping.
-    // Once per chat: when Activity re-reveals this list the effect runs again, and the reading position must stay.
+    // The scroller's ref: before paint, a long chat starts at its end instead of oldest-first and then jumping
+    // (once per chat: Activity re-attaches it on reveal, and the reading position must stay). Its observer then
+    // keeps a following thread pinned to the end as content grows, and as the viewport shrinks (the Android
+    // keyboard); with per-frame store flushes it fires at most once per frame.
     const scrolledForRef = useRef<string | null>(null);
-    useLayoutEffect(() => {
-      if (scrolledForRef.current === chatId) return;
-      scrolledForRef.current = chatId;
-      scrollToBottom();
-      lastTopRef.current = scrollRef.current?.scrollTop ?? 0;
-    }, [chatId, scrollToBottom]);
+    const attachScroller = useCallback(
+      (el: HTMLDivElement | null) => {
+        scrollRef.current = el;
+        const inner = el?.firstElementChild;
+        if (!el || !inner) return;
+        if (scrolledForRef.current !== chatId) {
+          scrolledForRef.current = chatId;
+          el.scrollTop = el.scrollHeight;
+          lastTopRef.current = el.scrollTop;
+        }
+        const ro = new ResizeObserver(() => {
+          if (engagedRef.current) el.scrollTop = el.scrollHeight;
+        });
+        ro.observe(inner);
+        ro.observe(el);
+        return () => {
+          ro.disconnect();
+          scrollRef.current = null;
+        };
+      },
+      [chatId],
+    );
 
     const onScroll = useCallback(() => {
       const el = scrollRef.current;
@@ -149,8 +161,12 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
     return (
       <div className="relative min-h-0 flex-1">
         <div
-          ref={scrollRef}
+          ref={attachScroller}
           onScroll={onScroll}
+          onWheel={onWheel}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onKeyDown={onKeyDown}
           className="h-full overflow-y-auto overscroll-contain scroll-pb-4 [scrollbar-gutter:stable]"
           data-testid="message-list"
         >
@@ -176,20 +192,27 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
                 Ask anything. Replies keep streaming even if you switch apps.
               </div>
             ) : (
-              chat.messageIds.map((id) => <MessageRow key={id} id={id} />)
+              chat.messageIds.map((id) => (
+                <Fragment key={id}>
+                  {chat.forkPosition !== null && store.getMessage(id)?.position === chat.forkPosition ? <ForkDivider parentId={chat.forkedFrom} /> : null}
+                  <MessageRow id={id} />
+                </Fragment>
+              ))
             )}
             {chat.queue.map((item) => (
               <QueuedRow key={item.id} item={item} />
             ))}
-            <div ref={endRef} className="h-px" />
+            {/* Taller while Explore options floats over the thread's end, so the last reply's actions stay clear. */}
+            <div className="h-px group-has-[[data-explore=shown]]/chat:h-8" />
           </div>
         </div>
         {!engaged ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+          // Stacked above Explore options while that button is up in the same spot.
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center transition-[bottom] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-has-[[data-explore=shown]]/chat:bottom-16 motion-reduce:transition-none">
             <Button
               size="sm"
               variant="outline"
-              className="pointer-events-auto touch-target rounded-full shadow-md"
+              className="pointer-events-auto touch-target rounded-full bg-sidebar-accent shadow-md hover:bg-sidebar-accent hover:brightness-95 dark:bg-sidebar-accent dark:hover:bg-sidebar-accent"
               onClick={engage}
               aria-label="Jump to latest"
             >

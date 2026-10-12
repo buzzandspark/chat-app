@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent } from "react";
 
 const KEY = "cadenceSheet";
 const NAVIGATION_WINDOW_MS = 1000;
@@ -41,21 +41,18 @@ function listen(): void {
  * On phones a sheet covers the page, so the system back gesture should close it rather than leave the
  * chat: an entry is pushed while it is open and a popstate closes it. Next's router keeps its own
  * state on the entry (its patched pushState copies it), so going back lands on the same route.
+ * `open` is true only while the sheet covers the page: each caller decides that from its own layout.
  */
 export function useBackGesture(open: boolean, onClose: () => void): void {
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
+  const close = useEffectEvent(onClose);
   useEffect(() => {
     if (!open || typeof window === "undefined") return;
-    if (window.matchMedia("(min-width: 768px)").matches) return;
     listen();
     let popped = false;
     const entry = {
       close: () => {
         popped = true;
-        onCloseRef.current();
+        close();
       },
     };
     window.history.pushState({ ...(window.history.state ?? {}), [KEY]: true }, "", window.location.href);

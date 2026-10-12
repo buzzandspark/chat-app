@@ -21,8 +21,8 @@ const MODEL_BLURBS: Record<ModelId, string> = {
 
 const THINKING_LABEL = "Think harder";
 
-// Menu items are divs, so cursor-default/select-none keep the look of the buttons the sheet uses.
-const ROW = "flex min-h-12 w-full cursor-default items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50";
+// Menu items are divs, so cursor-pointer/select-none give them the feel of the buttons the sheet uses.
+const ROW = "flex min-h-12 w-full cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50";
 const rowTone = (selected: boolean) => (selected ? "bg-accent text-accent-foreground" : "hover:bg-muted active:bg-muted");
 
 function RowText({ title, blurb }: { title: string; blurb: string }) {

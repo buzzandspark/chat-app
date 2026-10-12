@@ -34,7 +34,7 @@
   --shiki-token-changed: #ffab70;
 }
 /* D15: a committed line group lays out on its own and is skipped off screen, only where scroll
-   anchoring works (see use-scroll-anchoring); its intrinsic size is the block's longest line by the
+   anchoring works (see theme-script.tsx); its intrinsic size is the block's longest line by the
    group's line count, so skipping changes neither the vertical nor the horizontal scroll range. */
 html[data-scroll-anchoring="yes"] .markdown-code .code-group {
   content-visibility: auto;

@@ -13,6 +13,51 @@ test.describe("chat route", () => {
     await expect(page.getByTestId("thread-skeleton")).toHaveCount(0);
   });
 
+  test("the model picker never shows a model the chat isn't on, through a reload and the picker's chunk loading", async ({ page }) => {
+    // Every label the picker paints, from the first frame on; a blank (hidden) label is allowed.
+    await page.addInitScript(() => {
+      const seen: string[] = [];
+      (window as unknown as { pickerSeen: string[] }).pickerSeen = seen;
+      const tick = () => {
+        const span = document.querySelector('[aria-label="Choose model"] span.truncate');
+        if (span && getComputedStyle(span).visibility !== "hidden" && !seen.includes(span.textContent ?? "")) seen.push(span.textContent ?? "");
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await openNewChat(page);
+    await sendText(page, "on sonnet");
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await page.getByRole("button", { name: "Choose model" }).click();
+    const opus = { name: /Claude Opus 5.5/ };
+    await page.getByRole("menuitemradio", opus).or(page.getByRole("radio", opus)).click();
+    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Opus 5.5");
+    await sendText(page, "on opus");
+    await expect(page.locator('[data-role="assistant"]:visible')).toHaveCount(2, { timeout: 30_000 });
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Opus 5.5", { timeout: 15_000 });
+    await page.getByRole("button", { name: "Choose model" }).hover();
+    await page.waitForTimeout(1000);
+    expect(await page.evaluate(() => (window as unknown as { pickerSeen: string[] }).pickerSeen)).toEqual(["Opus 5.5"]);
+  });
+
+  test("the sidebar toggle stays in the same spot whether the sidebar is open or closed", async ({ page, isMobile }) => {
+    await openNewChat(page);
+    const aside = sidebar(page);
+    const closedName = "Show sidebar";
+    const openName = isMobile ? "Close sidebar" : "Hide sidebar";
+    if ((await aside.getAttribute("data-open")) !== "true") await page.getByRole("button", { name: closedName }).click();
+    await expect(aside).toHaveAttribute("data-open", "true");
+    // The phone sidebar slides in; measure once it has settled.
+    await page.waitForTimeout(400);
+    const open = await page.getByRole("button", { name: openName }).boundingBox();
+    await page.getByRole("button", { name: openName }).click();
+    await expect(aside).toHaveAttribute("data-open", "false");
+    const closed = await page.getByRole("button", { name: closedName }).boundingBox();
+    expect(open).toEqual(closed);
+  });
+
   test("per-chat settings survive switching chats and coming back", async ({ page }, info) => {
     const title = `settings ${info.project.name}`;
     await openNewChat(page);

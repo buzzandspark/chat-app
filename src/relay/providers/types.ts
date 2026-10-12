@@ -9,6 +9,8 @@ export interface ProviderRequest {
   userId?: string;
   /** D24 scenario name; providers that do not know it ignore it. */
   scenario?: string;
+  /** D13: a fork's first request also caches the parent's final reply. */
+  cacheTail?: boolean;
 }
 
 export interface ProviderStreamOptions {

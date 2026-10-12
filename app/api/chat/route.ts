@@ -2,14 +2,12 @@ import type { NextRequest } from "next/server";
 import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@db/client";
-import { admissionRefusal, startAdmitted } from "@relay/admission";
 import { DrainingError, ForbiddenError } from "@relay/engine";
 import { QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { MODEL_IDS } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
-import { tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
 import { singleEventResponse, streamGeneration } from "@server/sse-response";
@@ -34,15 +32,12 @@ export async function POST(request: NextRequest): Promise<Response> {
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request", issues: parsed.error.issues });
     const body = parsed.data;
-    const { engine, store, rateLimiter } = getRelay();
+    const { engine, store } = getRelay();
     // A duplicate POST for an id that already exists goes straight to start's `exists` and the attach
-    // below (D2): the drain and the limits gate new work only, so an owner reconnecting while the reply
-    // is still live is never refused it, and its regenerate never stops the very generation it names.
+    // below (D2): the drain gates new work only, so an owner reconnecting while the reply is still
+    // live is never refused it, and its regenerate never stops the very generation it names.
     const existing = engine.owner(body.generationId) !== null;
     if (!existing && isDraining()) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
-    // Fails fast before anything is stopped; startAdmitted decides again, after the await.
-    const refusal = existing ? null : admissionRefusal(engine, rateLimiter, user.id);
-    if (refusal) return tooMany(refusal.retryAfterMs);
     const scenario = body.scenario ? SCENARIOS[body.scenario] : undefined;
     if (!existing && body.replaceFromMessageId) {
       // Settle the replaced turns' generations first: deleting a running one's rows would strand its buffer.
@@ -64,8 +59,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
     let created = false;
     try {
-      // No await from here to the start: the admission decision, the start and the charge are one step.
-      const outcome = startAdmitted(engine, rateLimiter, {
+      const outcome = engine.start({
         generationId: body.generationId,
         chatId: body.chatId,
         userId: user.id,
@@ -79,7 +73,6 @@ export async function POST(request: NextRequest): Promise<Response> {
         replaceFromMessageId: body.replaceFromMessageId,
         faults: scenario?.interruptAfterEvents ? { interruptAfterEvents: scenario.interruptAfterEvents } : undefined,
       });
-      if (!outcome.created && outcome.reason === "rate_limited") return tooMany(outcome.retryAfterMs);
       created = outcome.created;
     } catch (err) {
       if (err instanceof QuotaExceededError) {

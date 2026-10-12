@@ -73,6 +73,17 @@ function seed(): void {
     .run("g1", "c1", "u1", "m2", "m1", "test-model", t);
 }
 
+/** The real migrations up to and including `tag`, as a database that last booted then has them. */
+function migrationsThrough(tag: string): string {
+  const folder = path.join(dir, `through-${tag}`);
+  fs.cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
+  const journalPath = path.join(folder, "meta/_journal.json");
+  const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
+  journal.entries = journal.entries.slice(0, journal.entries.findIndex((e) => e.tag === tag) + 1);
+  fs.writeFileSync(journalPath, JSON.stringify(journal));
+  return folder;
+}
+
 const count = (table: string) => sqlite.prepare(`SELECT count(*) FROM ${table}`).pluck().get() as number;
 const journalRows = () => count("__drizzle_migrations");
 
@@ -128,124 +139,48 @@ describe("applyMigrations", () => {
   });
 });
 
-// Chat groups came in with 0008 and left with 0010. 0008 as first committed (d1f1728) had `group_id` with a
-// bare REFERENCES; it was later edited in place to add ON DELETE SET NULL, which 0009 converged on by
-// rebuilding `chats`. 0010 drops the table and the column; every path through those migrations must
-// arrive at the same schema with every chat, message and generation kept.
-const ORIGINAL_0008 = `CREATE TABLE \`chat_groups\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`user_id\` text NOT NULL,
-	\`name\` text NOT NULL,
-	\`position\` integer DEFAULT 0 NOT NULL,
-	\`collapsed\` integer DEFAULT false NOT NULL,
-	\`created_at\` integer NOT NULL,
-	FOREIGN KEY (\`user_id\`) REFERENCES \`users\`(\`id\`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX \`chat_groups_user_idx\` ON \`chat_groups\` (\`user_id\`,\`position\`);--> statement-breakpoint
-ALTER TABLE \`chats\` ADD \`group_id\` text REFERENCES chat_groups(id);`;
-
-/** The real migrations up to and including `last`, optionally with 0008 as it was first committed. */
-function migrationsThrough(last: number, original0008 = false): string {
-  const folder = path.join(dir, `migrations-${last}${original0008 ? "-original" : ""}`);
-  fs.cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
-  const journalPath = path.join(folder, "meta/_journal.json");
-  const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as { entries: { idx: number; tag: string }[] };
-  journal.entries = journal.entries.filter((e) => e.idx <= last);
-  expect(journal.entries[8]!.tag).toBe("0008_brave_mister_fear");
-  fs.writeFileSync(journalPath, JSON.stringify(journal));
-  if (original0008) fs.writeFileSync(path.join(folder, "0008_brave_mister_fear.sql"), ORIGINAL_0008);
-  return folder;
-}
-
-/** Every schema object except drizzle's own journal, for comparing two databases. */
-const schemaObjects = (db: Database.Database) =>
-  db
-    .prepare(`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name <> '__drizzle_migrations' ORDER BY type, name`)
-    .all();
-
-const hasTable = (name: string) =>
-  sqlite.prepare("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?").pluck().get(name) === 1;
-const chatColumns = () => (sqlite.pragma("table_info(chats)") as { name: string }[]).map((c) => c.name);
-
-function seedGrouped(): void {
-  const t = Date.now();
-  sqlite
-    .prepare("INSERT INTO users (id, name, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
-    .run("u1", "u1", "u1@example.com", t, t);
-  sqlite
-    .prepare("INSERT INTO chat_groups (id, user_id, name, position, created_at) VALUES (?, ?, ?, ?, ?)")
-    .run("grp1", "u1", "Work", 0, t);
-  const chat = sqlite.prepare(
-    "INSERT INTO chats (id, user_id, title, pinned, group_id, created_at, updated_at, last_message_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-  );
-  chat.run("c1", "u1", "Grouped", 0, "grp1", t, t + 1, t + 2);
-  chat.run("c2", "u1", "Pinned", 1, null, t, t + 3, null);
-  const message = sqlite.prepare(
-    "INSERT INTO messages (id, chat_id, role, position, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-  );
-  message.run("m1", "c1", "user", 0, JSON.stringify([{ type: "text", text: "quokka sightings" }]), t, t);
-  message.run("m2", "c2", "user", 0, JSON.stringify([{ type: "text", text: "hello" }]), t, t);
-  sqlite
-    .prepare(
-      "INSERT INTO generations (id, chat_id, user_id, message_id, user_message_id, requested_model, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .run("g1", "c1", "u1", "m3", "m1", "test-model", t);
-}
-
-const CHAT_FIELDS = "id, user_id, title, pinned, created_at, updated_at, last_message_at";
-
-/** After 0010: no groups anywhere, every row kept, search and FKs working, the schema of a fresh database. */
-function expectGroupsGoneRowsKept(chatsBefore: unknown[]): void {
-  expect(journalRows()).toBe(11);
-  expect(hasTable("chat_groups")).toBe(false);
-  expect(chatColumns()).not.toContain("group_id");
-  expect(sqlite.prepare(`SELECT ${CHAT_FIELDS} FROM chats ORDER BY id`).all()).toEqual(chatsBefore);
-  expect(count("messages")).toBe(2);
-  expect(count("generations")).toBe(1);
-  expect(
-    sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'chats' ORDER BY name").pluck().all(),
-  ).toEqual(["chats_user_updated_idx", "sqlite_autoindex_chats_1"]);
-  // Search (FTS5 over messages, kept by triggers) is untouched by the rebuilds.
-  expect(sqlite.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'quokka'").all()).toHaveLength(1);
-  expect(sqlite.pragma("foreign_keys", { simple: true })).toBe(1);
-  // Deleting a chat still cascades into its messages: the rebuilt table kept its FKs.
-  sqlite.prepare("DELETE FROM chats WHERE id = 'c1'").run();
-  expect(count("messages")).toBe(1);
-
-  const fresh = new Database(path.join(dir, "fresh.db"));
-  try {
-    applyMigrations(fresh);
-    expect(schemaObjects(sqlite)).toEqual(schemaObjects(fresh));
-  } finally {
-    fresh.close();
-  }
-}
-
-describe("migrations 0009 and 0010 (chat groups repaired, then removed)", () => {
-  it("a database that ran the original 0008 loses its groups and keeps every row", () => {
-    applyMigrations(sqlite, migrationsThrough(8, true));
-    seedGrouped();
-    const chatsBefore = sqlite.prepare(`SELECT ${CHAT_FIELDS} FROM chats ORDER BY id`).all();
-
-    applyMigrations(sqlite);
-    expectGroupsGoneRowsKept(chatsBefore);
+// One initial migration (the history was collapsed on 2026-10-09 before anything shipped): the schema,
+// plus the search index and its triggers, which drizzle-kit cannot express.
+describe("the initial migration", () => {
+  it("builds the whole schema with the search index and its triggers in one step", () => {
+    applyMigrations(sqlite, migrationsThrough("0000_init"));
+    expect(journalRows()).toBe(1);
+    const chatColumns = (sqlite.pragma("table_info(chats)") as { name: string }[]).map((c) => c.name);
+    expect(chatColumns).toEqual(expect.arrayContaining(["forked_from", "fork_position", "fork_order", "tab_hidden", "pinned"]));
+    const messageColumns = (sqlite.pragma("table_info(messages)") as { name: string }[]).map((c) => c.name);
+    expect(messageColumns).toEqual(expect.arrayContaining(["thinking", "fork_options", "search_text", "last_seq"]));
+    seed();
+    sqlite.prepare("UPDATE messages SET content = ? WHERE id = 'm1'").run(JSON.stringify([{ type: "text", text: "quokka sightings" }]));
+    expect(sqlite.prepare("SELECT search_text FROM messages WHERE id = 'm1'").pluck().get()).toBe("quokka sightings");
+    expect(sqlite.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'quokka'").all()).toHaveLength(1);
+    sqlite.prepare("DELETE FROM chats WHERE id = 'c1'").run();
+    expect(count("messages")).toBe(0);
+    expect(sqlite.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH 'quokka'").all()).toHaveLength(0);
+    // Applying again is a no-op.
+    applyMigrations(sqlite, migrationsThrough("0000_init"));
+    expect(journalRows()).toBe(1);
   });
+});
 
-  it("a database at 0009 loses its groups and keeps every row", () => {
-    applyMigrations(sqlite, migrationsThrough(9));
-    seedGrouped();
-    const chatsBefore = sqlite.prepare(`SELECT ${CHAT_FIELDS} FROM chats ORDER BY id`).all();
-
-    applyMigrations(sqlite);
-    expectGroupsGoneRowsKept(chatsBefore);
+describe("0001_explore_options", () => {
+  it("turns Explore options on for the users a database already has", () => {
+    applyMigrations(sqlite, migrationsThrough("0000_init"));
+    seed();
+    applyMigrations(sqlite, migrationsThrough("0001_explore_options"));
+    expect(journalRows()).toBe(2);
+    expect(sqlite.prepare("SELECT explore_options FROM users WHERE id = 'u1'").pluck().get()).toBe(1);
   });
+});
 
-  it("a fresh database ends without groups", () => {
+describe("0002_drop_feedback", () => {
+  it("drops the feedback table, its rows with it, and leaves every other row alone", () => {
+    applyMigrations(sqlite, migrationsThrough("0001_explore_options"));
+    seed();
+    sqlite.prepare("INSERT INTO feedback (id, user_id, chat_id, body, created_at) VALUES (?, ?, ?, ?, ?)").run("f1", "u1", "c1", "slow", Date.now());
     applyMigrations(sqlite);
-
-    expect(journalRows()).toBe(11);
-    expect(hasTable("chat_groups")).toBe(false);
-    expect(chatColumns()).not.toContain("group_id");
+    expect(journalRows()).toBe(3);
+    expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'feedback'").get()).toBeUndefined();
+    expect(sqlite.prepare("SELECT count(*) FROM chats").pluck().get()).toBe(1);
+    expect(sqlite.prepare("SELECT count(*) FROM messages").pluck().get()).toBe(1);
   });
 });

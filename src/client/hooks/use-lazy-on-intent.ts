@@ -4,30 +4,33 @@ import { useCallback, useRef, useState } from "react";
 /**
  * D21: a Radix-backed control's chunk loads on the first sign of intent, not at mount. Hover, touch
  * and focus only warm the chunk: swapping the element on any event that precedes a click (mousedown
- * focuses the button) would lose the click. A press arms the real control and asks it to open; a
- * keyboard press is a click too, and Radix returns focus to the real trigger when it closes (a
- * control that goes back to its stand-in carries that focus over, see `closed`). The chunks stay
- * behind `next/dynamic`, which keeps them out of the route's client-reference manifest (a raw
- * `import()` target is listed there and counted by the size gate).
+ * focuses the button) would lose the click. A press loads the chunk, then arms the real control (the
+ * loaded component, `loaded`) and asks it to open; until then the stand-in stays, so nothing blinks. A
+ * keyboard press is a click too, and Radix returns focus to the real trigger when it closes (a control
+ * that goes back to its stand-in carries that focus over, see `closed`). A chunk that fails to load comes
+ * back as `failed`, for the control to throw inside its ChunkBoundary, which shows a Retry in its place.
  */
-export function useIntent(warm: () => Promise<unknown>) {
+export function useIntent<T>(load: () => Promise<T>) {
+  const [loaded, setLoaded] = useState<{ value: T } | null>(null);
   const [armed, setArmed] = useState(false);
   const [wanted, setWanted] = useState<string | null>(null);
-  const warmed = useRef(false);
+  const [failed, setFailed] = useState<{ error: unknown } | null>(null);
   const warmUp = useCallback(() => {
-    if (warmed.current) return;
-    warmed.current = true;
-    warm().catch(() => {
-      warmed.current = false;
-    });
-  }, [warm]);
+    load().catch(() => {});
+  }, [load]);
   const press = useCallback(
     (what: string) => {
-      warmUp();
-      setArmed(true);
-      setWanted(what);
+      setFailed(null);
+      load().then(
+        (value) => {
+          setLoaded({ value });
+          setArmed(true);
+          setWanted(what);
+        },
+        (error: unknown) => setFailed({ error }),
+      );
     },
-    [warmUp],
+    [load],
   );
   // Back to the stand-in once the control has closed, so an armed row stops carrying its Radix tree (#44).
   // Not on `onOpenChange(false)`: that unmounted the real trigger in the same commit, so Radix's close
@@ -53,7 +56,9 @@ export function useIntent(warm: () => Promise<unknown>) {
     refocus.current = false;
     el.focus();
   }, []);
-  return { armed, wanted, warmUp, press, trigger, closed, standIn };
+  // For a ChunkBoundary's Retry when the hook lives outside the boundary (a sidebar row), so the remounted control doesn't rethrow.
+  const reset = useCallback(() => setFailed(null), []);
+  return { armed: armed && loaded !== null, loaded: loaded?.value ?? null, failed, reset, wanted, warmUp, press, trigger, closed, standIn };
 }
 
 /** Event props for a stand-in button: warm the chunk on hover, touch and focus; never swap before a click. */

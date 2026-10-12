@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,61 +19,50 @@ function safeNext(next: string | null): string | null {
   }
 }
 
+/** A text field of a submitted form ("" when absent). */
+export function formText(form: FormData, name: string): string {
+  const value = form.get(name);
+  return typeof value === "string" ? value : "";
+}
+
 /**
  * Server-rendered (no `useSearchParams`, so no Suspense gap and no heading jump, #52); `next` is read
  * from the URL at submit. One plain POST to better-auth's sign-in endpoint instead of its React client
- * (13 kB gzipped for one call, #81).
+ * (13 kB gzipped for one call, #81). A form action with uncontrolled fields: what was typed before
+ * hydration is simply in the fields, and a failed attempt keeps the email (the form resets to its default).
  */
 export function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const emailRef = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
-  // Adopt values typed before hydration so the controlled inputs do not drop them.
-  useEffect(() => {
-    const early = { email: emailRef.current?.value ?? "", password: passwordRef.current?.value ?? "" };
-    const frame = requestAnimationFrame(() => {
-      if (early.email) setEmail((v) => (v === "" ? early.email : v));
-      if (early.password) setPassword((v) => (v === "" ? early.password : v));
-    });
-    return () => cancelAnimationFrame(frame);
-  }, []);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    const result = await signIn(email, password);
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
-    }
-    const next = safeNext(new URLSearchParams(window.location.search).get("next"));
-    router.push(next ?? newChatHref());
-    router.refresh();
-  };
+  const [state, formAction, pending] = useActionState(
+    async (_previous: { error: string | null; email: string }, form: FormData) => {
+      const email = formText(form, "email");
+      const result = await signIn(email, formText(form, "password"));
+      if (!result.ok) return { error: result.message, email };
+      const next = safeNext(new URLSearchParams(window.location.search).get("next"));
+      router.push(next ?? newChatHref());
+      router.refresh();
+      return { error: null, email };
+    },
+    { error: null, email: "" },
+  );
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="space-y-4" aria-label="Sign in">
+    <form action={formAction} className="space-y-4" aria-label="Sign in">
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input ref={emailRef} id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 text-body" />
+        <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.email} className="h-11 text-body" />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password">Password</Label>
-        <Input ref={passwordRef} id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className="h-11 text-body" />
+        <Input id="password" name="password" type="password" autoComplete="current-password" required className="h-11 text-body" />
       </div>
-      {error ? (
+      {state.error && !pending ? (
         <p role="alert" className="text-small text-destructive">
-          {error}
+          {state.error}
         </p>
       ) : null}
-      <Button type="submit" className="touch-target w-full" disabled={busy}>
-        {busy ? "Signing in…" : "Sign in"}
+      <Button type="submit" className="touch-target w-full" disabled={pending}>
+        {pending ? "Signing in…" : "Sign in"}
       </Button>
       <p className="text-center text-small text-muted-foreground">
         <Link href="/" className="underline">

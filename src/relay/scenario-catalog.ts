@@ -18,6 +18,7 @@ export const SCENARIO_NAMES = [
   "max_tokens",
   "context_full",
   "thinking_long",
+  "options_reply",
 ] as const;
 export type ScenarioName = (typeof SCENARIO_NAMES)[number];
 
@@ -83,4 +84,5 @@ export const SCENARIOS: Record<ScenarioName, ScenarioInfo> = {
   max_tokens: { name: "max_tokens", title: "Cut off (max_tokens)", blurb: "The reply hits the output limit." },
   context_full: { name: "context_full", title: "Context full", blurb: "The request is rejected as too long." },
   thinking_long: { name: "thinking_long", title: "Long thinking", blurb: "Several seconds of thinking before text." },
+  options_reply: { name: "options_reply", title: "Reply with options", blurb: "Three approaches to choose between; Explore options appears." },
 };

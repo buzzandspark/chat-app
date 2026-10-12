@@ -1,1 +1,0 @@
-CREATE INDEX `generations_message_idx` ON `generations` (`message_id`);

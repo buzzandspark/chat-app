@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useSyncExternalStore } from "react";
 
 const PREFIX = "cadence:draft:";
 
@@ -7,61 +7,77 @@ export function draftKey(userId: string, chatId: string): string {
   return `${PREFIX}${userId}:${chatId}`;
 }
 
-export function readDraft(key: string): string {
-  try {
-    return localStorage.getItem(key) ?? "";
-  } catch {
-    return "";
-  }
-}
+// D18: drafts per (user, chat) live here, outside React, and are saved to localStorage 300 ms after the
+// last change and at once when the page hides. Read lazily, so nothing is written until the user types.
+const drafts = new Map<string, string>();
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
+const listeners = new Set<() => void>();
+let saveOnHide = false;
 
-export function clearDraft(key: string): void {
+function save(key: string): void {
+  timers.delete(key);
   try {
-    localStorage.removeItem(key);
+    const value = drafts.get(key) ?? "";
+    if (value.trim()) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
   } catch {
     // storage unavailable
   }
 }
 
-/**
- * D18: drafts per (user, chat) in localStorage, debounced 300 ms, flushed when the page hides.
- * `enabled` is false until the composer has adopted the stored draft: a background tab never runs
- * the adoption frame, and writing the initial empty value would erase the draft.
- */
-export function useDraft(key: string, value: string, enabled = true): void {
-  const latest = useRef(value);
-  useEffect(() => {
-    latest.current = value;
-    if (!enabled) return;
-    const write = () => {
-      try {
-        if (value.trim()) localStorage.setItem(key, value);
-        else localStorage.removeItem(key);
-      } catch {
-        // storage unavailable
-      }
-    };
-    const timer = setTimeout(write, 300);
-    return () => clearTimeout(timer);
-  }, [key, value, enabled]);
-  useEffect(() => {
-    if (!enabled) return;
-    const flush = () => {
-      try {
-        if (latest.current.trim()) localStorage.setItem(key, latest.current);
-        else localStorage.removeItem(key);
-      } catch {
-        // storage unavailable
-      }
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") flush();
-    };
-    window.addEventListener("pagehide", flush);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("pagehide", flush);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [key, enabled]);
+function saveAll(): void {
+  for (const [key, timer] of [...timers]) {
+    clearTimeout(timer);
+    save(key);
+  }
+}
+
+function getDraft(key: string): string {
+  let value = drafts.get(key);
+  if (value === undefined) {
+    try {
+      value = localStorage.getItem(key) ?? "";
+    } catch {
+      value = "";
+    }
+    drafts.set(key, value);
+  }
+  return value;
+}
+
+export function setDraft(key: string, value: string): void {
+  if (getDraft(key) === value) return;
+  drafts.set(key, value);
+  for (const listener of listeners) listener();
+  clearTimeout(timers.get(key));
+  timers.set(key, setTimeout(() => save(key), 300));
+  if (saveOnHide) return;
+  saveOnHide = true;
+  window.addEventListener("pagehide", saveAll);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveAll();
+  });
+}
+
+/** A sent message's draft is gone at once, from memory and storage. */
+export function clearDraft(key: string): void {
+  setDraft(key, "");
+  clearTimeout(timers.get(key));
+  save(key);
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** The chat's draft; empty on the server and in hydration, which render the field empty. */
+export function useDraft(key: string): string {
+  return useSyncExternalStore(
+    subscribe,
+    () => getDraft(key),
+    () => "",
+  );
 }

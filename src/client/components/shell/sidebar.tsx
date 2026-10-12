@@ -1,7 +1,7 @@
 "use client";
-import { Plus, Search, X } from "lucide-react";
+import { PanelLeft, Plus, Search, Settings, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useMemo, type ReactNode, type RefObject } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { IconButton } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
@@ -28,20 +28,16 @@ interface SidebarProps {
   onSearch: () => void;
   /** The signed-in user's label, streamed in with the list. */
   userLabel: ReactNode;
+  /** The header's toggle, which the shell focuses when the main header's toggle opens the dock. */
+  toggleRef: RefObject<HTMLButtonElement | null>;
+  /** The aside, which the shell focuses when it opens the phone modal. */
+  asideRef: RefObject<HTMLElement | null>;
 }
 
 /** D0: overlay on phones, docked at md. Hover reveal of ⋯ keys off (hover: hover), not width. */
-export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel }: SidebarProps) {
+export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, onNavigate, onSearch, userLabel, toggleRef, asideRef }: SidebarProps) {
   const newChat = useNewChat();
-  const listContext = useMemo(() => ({ open, onNavigate }), [open, onNavigate]);
-  const asideRef = useRef<HTMLElement>(null);
-  const modal = desktop === false && phoneOpen;
-  // Opening the phone modal makes the column behind it inert, which would drop focus on <body>: it moves
-  // onto the dialog instead (announced by its name, no tooltip popping on the first button), and the
-  // next Tab reaches Search. The shell puts it back on the menu button when the modal is dismissed.
-  useEffect(() => {
-    if (modal) asideRef.current?.focus({ preventScroll: true });
-  }, [modal]);
+  const listContext = useMemo(() => ({ onNavigate }), [onNavigate]);
 
   return (
     <>
@@ -72,10 +68,17 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
           desktopOpen ? "dock:flex" : "dock:hidden",
         )}
       >
-        <div className="flex h-14 items-center justify-between gap-1 px-2">
-          <span className="px-1 text-small font-semibold tracking-tight">Cadence</span>
+        {/* The toggle sits where the main header's sits (same inset, and a clear border so the same height), so opening and closing never moves it. */}
+        <div className="flex h-14 items-center justify-between gap-1 border-b border-transparent pr-2 pl-2 md:pl-3">
+          <div className="flex min-w-0 items-center gap-1">
+            <IconButton ref={toggleRef} label={desktop ? "Hide sidebar" : "Close sidebar"} aria-expanded={open} onClick={onClose}>
+              <X className="dock:hidden" />
+              <PanelLeft className="hidden dock:block" />
+            </IconButton>
+            <span className="truncate px-1 text-small font-semibold tracking-tight">Cadence</span>
+          </div>
           <div className="flex items-center">
-            <IconButton label="Search chats" onClick={onSearch}>
+            <IconButton label="Search chats" shortcut="⌘K" aria-keyshortcuts="Meta+K Control+K" onClick={onSearch}>
               <Search />
             </IconButton>
             {/* href keeps open-in-new-tab working through the /c/new alias; a plain click goes straight to a fresh id. */}
@@ -83,7 +86,8 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               href="/c/new"
               prefetch={false}
               aria-label="New chat"
-              data-tip="New chat"
+              data-tip="New chat  ⌘⇧O"
+              aria-keyshortcuts="Meta+Shift+O Control+Shift+O"
               data-tip-side="bottom"
               className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "tip touch-target")}
               onClick={onNavigate}
@@ -94,9 +98,6 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
             >
               <Plus />
             </Link>
-            <IconButton label="Close sidebar" className="dock:hidden" onClick={onClose}>
-              <X />
-            </IconButton>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-2 pb-2">
@@ -105,6 +106,17 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
         <div className="flex items-center justify-between gap-2 border-t border-sidebar-border px-3 py-2">
           <span className="min-h-4 truncate text-caption text-muted-foreground">{userLabel}</span>
           <div className="flex items-center">
+            <Link
+              href="/settings"
+              prefetch={false}
+              aria-label="Settings"
+              data-tip="Settings"
+              data-tip-side="top"
+              className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "tip touch-target")}
+              onClick={onNavigate}
+            >
+              <Settings />
+            </Link>
             <ThemeToggle />
             <SignOutButton />
           </div>

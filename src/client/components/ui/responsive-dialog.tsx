@@ -3,6 +3,7 @@ import { useCallback, type ReactNode, type RefObject } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useBackGesture } from "@client/hooks/use-back-gesture";
+import { useMediaQuery } from "@client/hooks/use-media-query";
 
 interface ResponsiveDialogProps {
   open: boolean;
@@ -13,16 +14,21 @@ interface ResponsiveDialogProps {
   className?: string;
   /** Where focus goes on close when it doesn't go to the composer; Radix has no trigger to return to here. */
   returnFocus?: RefObject<HTMLElement | null>;
+  /** Radix's open focus, for a dialog that wants something other than its first field focused as is. */
+  onOpenAutoFocus?: (e: Event) => void;
 }
 
 /** D19: a bottom sheet on phones (slides from the bottom, follows the keyboard), a centred modal at `md`. */
-export function ResponsiveDialog({ open, onOpenChange, title, description, children, className, returnFocus }: ResponsiveDialogProps) {
+export function ResponsiveDialog({ open, onOpenChange, title, description, children, className, returnFocus, onOpenAutoFocus }: ResponsiveDialogProps) {
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
-  useBackGesture(open, close);
+  // A sheet below `md` (as drawn), a centred modal at it: only the sheet takes the back gesture.
+  const centred = useMediaQuery("(min-width: 768px)");
+  useBackGesture(open && !centred, close);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
+        onOpenAutoFocus={onOpenAutoFocus}
         onCloseAutoFocus={(e) => {
           // Back to the composer only where a keyboard is physical; on a phone that would cover the reply (#32).
           const composer = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');

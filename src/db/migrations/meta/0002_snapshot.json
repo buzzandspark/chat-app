@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3d9e7d3e-2a8f-4267-a0b5-91fbd38a8292",
-  "prevId": "6dd1d687-350d-4b18-ad22-65f28c5f13b1",
+  "id": "ce231b03-e437-47cc-9f4b-9ec2908f337c",
+  "prevId": "e88de0c1-fe78-42f0-ac75-8ec3bad5f54d",
   "tables": {
     "accounts": {
       "name": "accounts",
@@ -152,6 +152,43 @@
           "autoincrement": false,
           "default": "'New chat'"
         },
+        "pinned": {
+          "name": "pinned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "forked_from": {
+          "name": "forked_from",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fork_position": {
+          "name": "fork_position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fork_order": {
+          "name": "fork_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tab_hidden": {
+          "name": "tab_hidden",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -182,6 +219,13 @@
             "updated_at"
           ],
           "isUnique": false
+        },
+        "chats_forked_from_idx": {
+          "name": "chats_forked_from_idx",
+          "columns": [
+            "forked_from"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -197,95 +241,13 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "feedback": {
-      "name": "feedback",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
         },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "chat_id": {
-          "name": "chat_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "message_id": {
-          "name": "message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "timings": {
-          "name": "timings",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "user_agent": {
-          "name": "user_agent",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "feedback_created_idx": {
-          "name": "feedback_created_idx",
-          "columns": [
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "feedback_user_idx": {
-          "name": "feedback_user_idx",
-          "columns": [
-            "user_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "feedback_user_id_users_id_fk": {
-          "name": "feedback_user_id_users_id_fk",
-          "tableFrom": "feedback",
-          "tableTo": "users",
+        "chats_forked_from_chats_id_fk": {
+          "name": "chats_forked_from_chats_id_fk",
+          "tableFrom": "chats",
+          "tableTo": "chats",
           "columnsFrom": [
-            "user_id"
+            "forked_from"
           ],
           "columnsTo": [
             "id"
@@ -435,6 +397,13 @@
           "name": "generations_user_idx",
           "columns": [
             "user_id"
+          ],
+          "isUnique": false
+        },
+        "generations_message_idx": {
+          "name": "generations_message_idx",
+          "columns": [
+            "message_id"
           ],
           "isUnique": false
         }
@@ -654,9 +623,30 @@
           "notNull": false,
           "autoincrement": false
         },
+        "thinking": {
+          "name": "thinking",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fork_options": {
+          "name": "fork_options",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "last_seq": {
           "name": "last_seq",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "search_text": {
+          "name": "search_text",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -821,7 +811,7 @@
           "name": "generation_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "user_id": {
@@ -929,7 +919,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "usage_events_user_id_users_id_fk": {
@@ -1033,14 +1023,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "is_anonymous": {
-          "name": "is_anonymous",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
         "cost_cap_usd": {
           "name": "cost_cap_usd",
           "type": "real",
@@ -1062,6 +1044,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "explore_options": {
+          "name": "explore_options",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
         }
       },
       "indexes": {

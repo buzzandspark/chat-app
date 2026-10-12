@@ -2,7 +2,7 @@
 import { Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type KeyboardEvent, type RefObject } from "react";
+import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
@@ -34,9 +34,27 @@ export function SearchDialog({
   const [cursor, setCursor] = useState(0);
 
   const active = open && query.trim().length >= 2;
-  useEffect(() => {
-    if (!active) return;
-    const q = query.trim();
+  // Debounced from the input: each keystroke drops the search before it (its timer, or its request) and
+  // schedules its own 200 ms later.
+  const pending = useRef<{ timer: ReturnType<typeof setTimeout>; controller: AbortController } | null>(null);
+  const cancel = () => {
+    if (!pending.current) return;
+    clearTimeout(pending.current.timer);
+    pending.current.controller.abort();
+    pending.current = null;
+  };
+  // Closing drops a search still waiting on its timer or its request.
+  const changeOpen = (next: boolean) => {
+    if (!next) cancel();
+    onOpenChange(next);
+  };
+  const search = (text: string) => {
+    cancel();
+    const q = text.trim();
+    if (q.length < 2) {
+      setSearching(false);
+      return;
+    }
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setSearching(true);
@@ -46,19 +64,16 @@ export function SearchDialog({
       } catch {
         // aborted or offline
       } finally {
-        setSearching(false);
+        if (pending.current?.controller === controller) setSearching(false);
       }
     }, 200);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query, active]);
+    pending.current = { timer, controller };
+  };
   const visibleHits = active ? hits : [];
   const activeIndex = visibleHits.length === 0 ? -1 : Math.min(cursor, visibleHits.length - 1);
   const pick = (hit: Hit) => {
     markNavigationClose();
-    onOpenChange(false);
+    changeOpen(false);
     router.push(`/c/${hit.chatId}`);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -75,7 +90,7 @@ export function SearchDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Search chats" className="md:max-w-lg" returnFocus={returnFocus}>
+    <ResponsiveDialog open={open} onOpenChange={changeOpen} title="Search chats" className="md:max-w-lg" returnFocus={returnFocus}>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -84,6 +99,7 @@ export function SearchDialog({
           onChange={(e) => {
             setQuery(e.target.value);
             setCursor(0);
+            search(e.target.value);
           }}
           onKeyDown={onKeyDown}
           placeholder="Titles and messages"
@@ -108,7 +124,7 @@ export function SearchDialog({
               href={`/c/${h.chatId}`}
               onClick={() => {
                 markNavigationClose();
-                onOpenChange(false);
+                changeOpen(false);
               }}
               className={`flex min-h-11 flex-col justify-center rounded-lg px-3 py-2 hover:bg-muted active:bg-muted${i === activeIndex ? " bg-muted" : ""}`}
             >

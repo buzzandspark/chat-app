@@ -1,6 +1,5 @@
 "use client";
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { retryChunks } from "./lazy-chunk";
 
 interface Props {
   children: ReactNode;
@@ -9,12 +8,14 @@ interface Props {
   label?: string;
   /** Called once when the subtree fails, so an owner (a modal entry) can remove itself. */
   onError?: () => void;
+  /** Called on Retry, before the subtree mounts again: an owner holding the failure clears it here. */
+  onRetry?: () => void;
 }
 
 /**
  * A failed lazy chunk or a throwing widget must not take the thread down with it. The boundary offers
- * a retry (which recreates the lazy wrappers, see lazy-chunk.tsx) and retries by itself when the
- * browser comes back online, the usual reason a chunk failed to load.
+ * a retry (its children mount afresh and load the chunk again, see lazy-chunk.ts) and retries by itself
+ * when the browser comes back online, the usual reason a chunk failed to load.
  */
 export class ChunkBoundary extends Component<Props, { failed: boolean }> {
   override state = { failed: false };
@@ -41,7 +42,7 @@ export class ChunkBoundary extends Component<Props, { failed: boolean }> {
   };
 
   private retry = () => {
-    retryChunks();
+    this.props.onRetry?.();
     this.setState({ failed: false });
   };
 

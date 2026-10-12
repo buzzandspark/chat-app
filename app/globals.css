@@ -183,6 +183,15 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Tailwind's reset gives buttons the arrow; anything clickable shows the hand (a utility still overrides). */
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="option"],
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
   html {
     @apply font-sans;
     color-scheme: light;
@@ -254,6 +263,41 @@
   background: currentColor;
   animation: caret-pulse 1s steps(2, start) infinite;
 }
+@keyframes explore-march {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.explore-border {
+  animation: explore-march 1.2s linear infinite;
+}
+@keyframes explore-sweep {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+  10%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+/* After the 300 ms pop-up, once round. */
+.explore-sweep {
+  animation: explore-sweep 1.2s ease-in-out 0.3s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .explore-border {
+    animation: none;
+  }
+  .explore-sweep {
+    display: none;
+  }
+}
+
 @keyframes caret-pulse {
   to {
     visibility: hidden;
@@ -272,7 +316,8 @@
     top: calc(100% + 6px);
     transform: translateX(-50%);
     z-index: 60;
-    white-space: nowrap;
+    /* pre: keeps the gap before a shortcut ("Search chats  ⌘K"); tips are one line either way. */
+    white-space: pre;
     padding: 0.25rem 0.5rem;
     border-radius: 0.375rem;
     background: var(--foreground);
@@ -282,7 +327,14 @@
     font-weight: 400;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 120ms ease 450ms;
+    transition:
+      opacity 120ms ease 450ms,
+      scale 0s linear 570ms;
+  }
+  /* Hidden at zero size: it keeps its width for alignTip, but adds no scrollable overflow (the sidebar list
+     scrolled sideways). A rule of its own, so the minifier can't fold it into the transform above. */
+  .tip:not(:hover, :focus-visible)::after {
+    scale: 0;
   }
   .tip[data-tip-side="top"]::after {
     top: auto;
@@ -300,6 +352,9 @@
   .tip:hover::after,
   .tip:focus-visible::after {
     opacity: 1;
+    transition:
+      opacity 120ms ease 450ms,
+      scale 0s;
   }
   .tip[aria-expanded="true"]::after,
   .tip:disabled::after {

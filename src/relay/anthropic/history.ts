@@ -55,9 +55,14 @@ export function userParams(content: readonly StoredContentBlock[]): Param[] {
   return out;
 }
 
+export interface HistoryOptions {
+  /** Also mark the final assistant message, so requests that share it as a prefix (forks) read one entry. */
+  cacheTail?: boolean;
+}
+
 // Refused and errored assistant messages are excluded (D9); trailing whitespace is trimmed so no
 // turn reads as a prefill; the newest user message carries the moving cache breakpoint (D13).
-export function buildHistory(messages: readonly HistoryMessage[]): Anthropic.Beta.BetaMessageParam[] {
+export function buildHistory(messages: readonly HistoryMessage[], options: HistoryOptions = {}): Anthropic.Beta.BetaMessageParam[] {
   const out: Anthropic.Beta.BetaMessageParam[] = [];
   for (const m of messages) {
     if (m.role === "assistant") {
@@ -75,15 +80,18 @@ export function buildHistory(messages: readonly HistoryMessage[]): Anthropic.Bet
       out.push({ role: "user", content });
     }
   }
+  if (options.cacheTail) markLast(out, "assistant");
   // Moving breakpoint on the newest user message (the 20-position lookback finds the previous one).
+  markLast(out, "user");
+  return out;
+}
+
+function markLast(out: Anthropic.Beta.BetaMessageParam[], role: "user" | "assistant"): void {
   for (let i = out.length - 1; i >= 0; i--) {
     const m = out[i]!;
-    if (m.role !== "user" || typeof m.content === "string") continue;
+    if (m.role !== role || typeof m.content === "string") continue;
     const lastBlock = m.content[m.content.length - 1];
-    if (lastBlock && lastBlock.type === "text") {
-      lastBlock.cache_control = { type: "ephemeral" };
-    }
+    if (lastBlock && lastBlock.type === "text") lastBlock.cache_control = { type: "ephemeral" };
     break;
   }
-  return out;
 }

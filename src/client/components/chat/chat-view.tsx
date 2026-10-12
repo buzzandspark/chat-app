@@ -9,11 +9,14 @@ import { ensureMarkdown, useMarkdownReady } from "@client/markdown/ready";
 import { useChat, useChatSeeded, useChatStore, useMessage } from "@client/store/hooks";
 import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
+import { watchOptions } from "@client/store/forks";
+import { MAX_FORKS } from "@shared/forks";
 import { isUuid, uuidv7 } from "@shared/id";
 import { isModelId } from "@shared/models";
 import { ChatActionsContext, ChatLiveStateContext, type EditingState } from "./chat-context";
 import { Composer, type ComposerHandle } from "./composer";
 import { LiveRegion } from "./live-region";
+import { ForkTabs } from "./fork-tabs";
 import { MessageList, type MessageListHandle } from "./message-list";
 import { useShellUser } from "../shell/shell-user";
 import { ThreadSkeleton } from "./thread-skeleton";
@@ -26,16 +29,11 @@ export function ChatView({ children }: { children: ReactNode }) {
   const params = useParams<{ id: string }>();
   // One instance per URL; a hidden instance must not follow the active chat's params.
   const [chatId] = useState(params.id);
-  const { userId, scenarioPanel } = useShellUser();
+  const { userId, scenarioPanel, exploreOptions } = useShellUser();
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
   const chat = useChat(chatId);
   const settings = chat.settings;
-  // The callbacks read the current settings through a ref, so they stay stable while the user changes them (#43).
-  const settingsRef = useRef(settings);
-  useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
   const setSettings = useCallback(
     (patch: Partial<ChatSettings>) => {
       store.setSettings(chatId, patch);
@@ -77,7 +75,8 @@ export function ChatView({ children }: { children: ReactNode }) {
     (text: string, scenario?: string, edit: EditingState | null = null) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      const current = settingsRef.current;
+      // Read from the store when called, so the callbacks stay stable while the user changes settings (#43).
+      const current = store.getChat(chatId).settings;
       const opts = { chatId, model: current.model, thinking: current.thinking, scenario: scenario ?? current.scenario?.name };
       const hooks = { onAccepted: announceChat(trimmed) };
       // The reply will need the Markdown renderer's chunk; fetch it while the request is in flight.
@@ -108,7 +107,7 @@ export function ChatView({ children }: { children: ReactNode }) {
       const last = lastId ? store.getMessage(lastId) : undefined;
       if (last?.role === "assistant" && last.status === "streaming") {
         if (edit) return;
-        store.enqueueMessage(chatId, { id: uuidv7(), text: trimmed, scenario: scenario ?? settingsRef.current.scenario?.name ?? null });
+        store.enqueueMessage(chatId, { id: uuidv7(), text: trimmed, scenario: scenario ?? store.getChat(chatId).settings.scenario?.name ?? null });
         listRef.current?.engage();
         return;
       }
@@ -117,21 +116,26 @@ export function ChatView({ children }: { children: ReactNode }) {
     [chatId, store, dispatch],
   );
 
-  // The queue drains one message per finished reply; a failed reply keeps the queue and leaves the
-  // decision (Try again, or send anyway) to the user.
   const lastMessage = useMessage(chat.messageIds[chat.messageIds.length - 1] ?? "");
   const lastStatus = lastMessage?.role === "assistant" ? lastMessage.status : null;
+
+  // The fork options are a side effect of the reply: followed once when a reply ends here, never for a chat opened already done.
+  const lastId = lastMessage?.id ?? null;
+  const previousStatus = useRef<string | null>(null);
   useEffect(() => {
-    if (lastStatus === null || lastStatus === "streaming" || lastStatus === "error") return;
-    const next = store.takeQueued(chatId);
-    // After the commit, not inside it: the send updates state (the edit flag, the sidebar) of its own.
-    if (next) queueMicrotask(() => dispatch(next.text, next.scenario ?? undefined));
-  }, [lastStatus, lastMessage?.id, chatId, store, dispatch]);
+    const was = previousStatus.current;
+    previousStatus.current = lastStatus;
+    if (was !== "streaming" || lastStatus !== "done" || !lastId || chat.forkedFrom || !exploreOptions) return;
+    // A chat with all its forks can't take another, so there are no options to wait for.
+    if (getSidebarStore().get().filter((c) => c.forkedFrom === chatId).length >= MAX_FORKS) return;
+    void watchOptions(store, lastId);
+  }, [lastStatus, lastId, chat.forkedFrom, store, chatId, exploreOptions]);
 
   const editQueued = useCallback(
     (id: string) => {
       const item = store.removeQueued(chatId, id);
       if (!item) return;
+      setEditing(null);
       composerRef.current?.setValue(item.text);
       composerRef.current?.focus();
     },
@@ -148,7 +152,7 @@ export function ChatView({ children }: { children: ReactNode }) {
       // The text travels with the retry: after a refused first POST the server has no user row to retry from.
       const text = textOf(store.getMessage(userMessageId)?.blocks ?? []) || undefined;
       // The replaced reply's own model and scenario, not whatever the picker shows now.
-      const current = settingsRef.current;
+      const current = store.getChat(chatId).settings;
       const model = isModelId(replaced.requestedModel) ? replaced.requestedModel : current.model;
       const scenario = replaced.scenario ?? current.scenario?.name;
       // A retry of a rate-limited reply continues its streak, so the next wait doubles; anything else starts at 0.
@@ -202,8 +206,9 @@ export function ChatView({ children }: { children: ReactNode }) {
   return (
     <ChatActionsContext.Provider value={actions}>
       <ChatLiveStateContext.Provider value={live}>
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="group/chat flex min-h-0 flex-1 flex-col">
           {children}
+          <ForkTabs chatId={chatId} />
           <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />
           <LiveRegion chatId={chatId} />
           <Composer ref={composerRef} chatId={chatId} />

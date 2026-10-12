@@ -8,6 +8,7 @@ import { ShellUserProvider } from "@client/components/shell/shell-user";
 import { SidebarList, SidebarListSkeleton } from "@client/components/shell/sidebar-list";
 import { listChats } from "@server/chats";
 import { getCurrentUser } from "@server/current-user";
+import { getUserSettings } from "@server/settings";
 
 /**
  * #20: the shell's chrome (sidebar frame, header, composer geometry) is in the static shell; only the
@@ -58,7 +59,7 @@ async function UserLabel() {
 async function WithUser({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   return (
-    <ShellUserProvider userId={user.id} scenarioPanel>
+    <ShellUserProvider userId={user.id} scenarioPanel exploreOptions={getUserSettings(user.id).exploreOptions}>
       <SettingsDefaults />
       {children}
     </ShellUserProvider>

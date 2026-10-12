@@ -9,6 +9,7 @@ export interface RequestInput {
   thinking: ThinkingOptions;
   messages: readonly HistoryMessage[];
   userId?: string;
+  cacheTail?: boolean;
 }
 
 export type StreamParams = Parameters<Anthropic["beta"]["messages"]["stream"]>[0];
@@ -20,7 +21,7 @@ export function buildRequest(input: RequestInput): StreamParams {
     model: input.model,
     max_tokens: MAX_TOKENS,
     system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-    messages: buildHistory(input.messages),
+    messages: buildHistory(input.messages, { cacheTail: input.cacheTail }),
     betas: params.betas,
   };
   if (params.thinking) request.thinking = params.thinking;

@@ -3,10 +3,12 @@ import { getGenerationClient } from "../transport/generation-client";
 import type { ChatStore, SeedRow } from "./chat-store";
 
 interface ChatJson {
-  chat: { id: string; title: string; updatedAt: number };
+  chat: { id: string; title: string; updatedAt: number; forkedFrom?: string | null; forkPosition?: number | null };
   messages: SeedRow[];
   older?: number;
 }
+
+const forkOf = (chat: ChatJson["chat"]) => ({ from: chat.forkedFrom ?? null, position: chat.forkPosition ?? null });
 
 /** #47: the rest of a long chat, on request; the store's id list becomes the full one. */
 export async function loadEarlierMessages(store: ChatStore, chatId: string): Promise<boolean> {
@@ -14,7 +16,7 @@ export async function loadEarlierMessages(store: ChatStore, chatId: string): Pro
     const res = await fetch(`/api/chats/${chatId}?all=1`);
     if (!res.ok) return false;
     const data = (await res.json()) as ChatJson;
-    store.seedChat(chatId, data.chat.title, data.messages, { older: 0 });
+    store.seedChat(chatId, data.chat.title, data.messages, { older: 0, fork: forkOf(data.chat) });
     return true;
   } catch {
     return false;
@@ -40,7 +42,7 @@ export function prefetchChat(store: ChatStore, chatId: string): Promise<void> {
       }
       if (!res.ok) return;
       const data = (await res.json()) as ChatJson;
-      store.seedChat(chatId, data.chat.title, data.messages, { older: data.older ?? 0 });
+      store.seedChat(chatId, data.chat.title, data.messages, { older: data.older ?? 0, fork: forkOf(data.chat) });
       // A reply still streaming on the server reattaches now, so the chat is current when opened.
       const client = getGenerationClient(store);
       for (const row of data.messages) {
