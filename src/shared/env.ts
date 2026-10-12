@@ -43,4 +43,3 @@ export const env = {
   /** The e2e harness runs the standalone (production) server with E2E set; nothing else should. */
   e2eAllowProduction: flag(parsed.E2E_ALLOW_PRODUCTION),
 };
-export type Env = typeof env;

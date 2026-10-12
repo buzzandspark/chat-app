@@ -49,7 +49,7 @@ export function assistantParams(content: readonly StoredContentBlock[]): Param[]
   return out;
 }
 
-export function userParams(content: readonly StoredContentBlock[]): Param[] {
+function userParams(content: readonly StoredContentBlock[]): Param[] {
   const out: Param[] = [];
   for (const block of content) if (block.type === "text") out.push({ type: "text", text: block.text });
   return out;

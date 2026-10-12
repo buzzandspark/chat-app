@@ -3,8 +3,8 @@ import type { ModelId, ThinkingOptions } from "@shared/types";
 
 export const MAX_TOKENS = 16_000;
 
-export const FALLBACK_BETA = "server-side-fallback-2026-07-01";
-export const BINDING_BETA = "thinking-binding-controls-2026-08-01";
+const FALLBACK_BETA = "server-side-fallback-2026-07-01";
+const BINDING_BETA = "thinking-binding-controls-2026-08-01";
 
 export interface ModelParams {
   thinking?: Anthropic.Beta.BetaThinkingConfigParam;

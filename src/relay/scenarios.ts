@@ -3,7 +3,7 @@ import type { Script } from "./providers/scripted";
 import type { ProviderRequest } from "./providers/types";
 import { type ScenarioName } from "./scenario-catalog";
 
-export { SCENARIO_NAMES, SCENARIOS, isScenarioName, type ScenarioInfo, type ScenarioName } from "./scenario-catalog";
+export { SCENARIO_NAMES, SCENARIOS, isScenarioName, type ScenarioName } from "./scenario-catalog";
 
 // Server-only scenario scripts (D24); the client-safe catalogue is scenario-catalog.ts.
 const LOREM = [

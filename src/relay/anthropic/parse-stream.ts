@@ -4,10 +4,10 @@ import type { RefusalInfo, StopReason } from "@shared/types";
 import type { InputTransformation, RelayEventBody } from "../events";
 import { errorEventToRelayError } from "./errors";
 
-export type RawStreamEvent = Anthropic.Beta.BetaRawMessageStreamEvent;
+type RawStreamEvent = Anthropic.Beta.BetaRawMessageStreamEvent;
 
 /** A mid-stream `error` carried as data (replay fixtures, raw SSE). */
-export interface RawErrorEvent {
+interface RawErrorEvent {
   type: "error";
   error: { type?: string; message?: string };
   status?: number;

@@ -53,7 +53,7 @@ export interface ProviderContext {
 }
 export type ProviderResolver = (ctx: ProviderContext) => Provider;
 
-export interface EngineFaults {
+interface EngineFaults {
   /** D24 producer restart: abort this generation after N relayed events and emit `interrupted`. */
   interruptAfterEvents?: number;
 }
@@ -117,7 +117,7 @@ export interface StartInput {
  * stop has not settled it, or another request started one meanwhile); nothing changed, try again.
  * `replace_gone`: `replaceFromMessageId` is no longer in the chat, so another request replaced it first.
  */
-export type ReplaceConflict = "replace_running" | "replace_gone";
+type ReplaceConflict = "replace_running" | "replace_gone";
 export type StartOutcome = { created: true } | { created: false; reason: "exists" | ReplaceConflict };
 
 export type ResumeOutcome =

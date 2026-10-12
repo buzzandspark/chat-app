@@ -6,7 +6,7 @@ import { modelDisplayName } from "@shared/models";
 const { usageEvents, users } = schema;
 
 /** Haiku's side calls for Explore options; every other usage row is a chat reply (`message`, `fallback_message`). */
-export const EXPLORE_ITERATIONS = ["options", "options_rewrite"];
+const EXPLORE_ITERATIONS = ["options", "options_rewrite"];
 
 export interface UsageTotals {
   costUsd: number;
@@ -15,7 +15,7 @@ export interface UsageTotals {
   outputTokens: number;
 }
 
-export interface UsagePeriod {
+interface UsagePeriod {
   chats: UsageTotals;
   explore: UsageTotals;
 }

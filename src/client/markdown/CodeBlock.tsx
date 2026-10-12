@@ -11,7 +11,6 @@ import "./code.css";
  * groups of lines across idle callbacks, so no single frame inserts thousands of nodes. Plain and
  * highlighted text share one <pre> and identical metrics, so highlighting changes paint only.
  */
-export { highlight, resolveLanguage } from "./highlight";
 
 const GROUP_LINES = 16;
 

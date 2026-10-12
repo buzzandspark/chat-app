@@ -633,7 +633,7 @@ async function safeJson(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
-export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(), ms);
     signal?.addEventListener(

@@ -145,7 +145,7 @@ export function completeOptions(text: string): { title: string; prompt: string }
 }
 
 /** Trimmed, clamped, without empty items, at most MAX_FORKS. */
-export function cleanOptions(raw: readonly { title: string; prompt: string }[]): ForkOption[] {
+function cleanOptions(raw: readonly { title: string; prompt: string }[]): ForkOption[] {
   const out: ForkOption[] = [];
   for (const o of raw) {
     const title = o.title.trim().slice(0, MAX_OPTION_TITLE);

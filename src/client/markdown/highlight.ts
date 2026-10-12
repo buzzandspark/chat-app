@@ -1,7 +1,7 @@
 import { hashString } from "./blocks";
 import type { HighlightLine } from "./highlight-core";
 
-export type { HighlightLine, HighlightToken } from "./highlight-core";
+export type { HighlightLine } from "./highlight-core";
 export { resolveLanguage } from "./languages";
 
 /**
@@ -24,10 +24,6 @@ export function highlightSource(): string {
 
 function keyFor(code: string, lang: string): string {
   return `${lang}:${code.length}:${hashString(code)}`;
-}
-
-export function cachedLines(code: string, lang: string): HighlightLine[] | null {
-  return cache.get(keyFor(code, lang)) ?? null;
 }
 
 export function highlight(code: string, lang: string): Promise<HighlightLine[]> {

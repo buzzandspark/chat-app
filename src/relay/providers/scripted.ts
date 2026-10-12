@@ -3,7 +3,7 @@ import type { NormalizableEvent } from "../anthropic/parse-stream";
 import type { FixtureLine, FixtureThrow, Provider, ProviderRequest, ProviderStreamOptions } from "./types";
 import { replayLines } from "./replay";
 
-export type ScriptPart =
+type ScriptPart =
   | { kind: "thinking"; text: string; chunk?: number; intervalMs?: number; signature?: string }
   | {
       kind: "text";
@@ -38,7 +38,7 @@ export interface Script {
 export type ScriptFactory = (request: ProviderRequest) => Script;
 
 /** Deterministic PRNG so fixtures are reproducible for a given seed. */
-export function mulberry32(seed: number): () => number {
+function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;

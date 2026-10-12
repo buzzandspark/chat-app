@@ -120,7 +120,7 @@ export function summarize(rows: UsageRow[], estimated = false): UsageSummary {
 }
 
 // Seed tokens/s per model for estimating billed output of stopped or interrupted generations (D22).
-export const SEED_OUTPUT_TPS: Record<string, number> = {
+const SEED_OUTPUT_TPS: Record<string, number> = {
   "claude-sonnet-5-5": 80,
   "claude-opus-5-5": 50,
   "claude-haiku-5-5": 150,

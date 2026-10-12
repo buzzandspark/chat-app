@@ -32,7 +32,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-export async function* readFixtureFile(file: string, signal?: AbortSignal): AsyncIterable<FixtureLine> {
+async function* readFixtureFile(file: string, signal?: AbortSignal): AsyncIterable<FixtureLine> {
   const rl = readline.createInterface({ input: fs.createReadStream(file, "utf8"), crlfDelay: Infinity });
   try {
     for await (const line of rl) {

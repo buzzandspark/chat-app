@@ -1,6 +1,6 @@
 /** D9: top-level blocks, fence- and table-aware with lists kept whole, so finished blocks memoise by hash. */
 
-export type BlockKind = "fence" | "table" | "other";
+type BlockKind = "fence" | "table" | "other";
 
 export interface MarkdownBlock {
   /** React key: stable while streaming. */

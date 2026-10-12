@@ -5,9 +5,9 @@ import { hashPassword } from "better-auth/crypto";
 import { getDb, schema } from "@db/client";
 import { uuidv7 } from "@shared/id";
 
-export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-export function hashToken(token: string): string {
+function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 

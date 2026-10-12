@@ -42,9 +42,3 @@ export function toClientBlocks(content: readonly StoredContentBlock[]): ClientBl
   }
   return out;
 }
-
-export function plainText(content: readonly StoredContentBlock[]): string {
-  let s = "";
-  for (const block of content) if (block.type === "text") s += block.text;
-  return s;
-}

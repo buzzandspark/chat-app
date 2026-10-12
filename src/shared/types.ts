@@ -67,30 +67,28 @@ export interface ThinkingOptions {
   harder: boolean;
 }
 
-export const ERROR_KINDS = [
-  "rate_limited",
-  "overloaded",
-  "api_error",
-  "auth",
-  "session",
-  "forbidden",
-  "quota_exceeded",
-  "context_full",
-  "bad_request",
-  "network",
-  "offline",
+type ErrorKind =
+  | "rate_limited"
+  | "overloaded"
+  | "api_error"
+  | "auth"
+  | "session"
+  | "forbidden"
+  | "quota_exceeded"
+  | "context_full"
+  | "bad_request"
+  | "network"
+  | "offline"
   /** Our own 503: the server is draining for a restart; the reply can be retried in a moment. */
-  "unavailable",
+  | "unavailable"
   /** The server knew this generation and no longer does: its chat was deleted. */
-  "gone",
+  | "gone"
   /** An Edit or Regenerate whose turns the server could not replace now (#21); nothing was added. */
-  "conflict",
-  "unknown",
-] as const;
+  | "conflict"
+  | "unknown";
 
 /** Longest user message the route accepts; the composer counts against it. */
 export const MAX_MESSAGE_CHARS = 32_000;
-export type ErrorKind = (typeof ERROR_KINDS)[number];
 
 export interface RelayError {
   kind: ErrorKind;

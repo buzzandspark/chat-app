@@ -19,7 +19,7 @@ export const UNDER_INPUT_WITH_TABS =
   "group-has-[[data-testid=fork-tabs]]/chat:order-1 group-has-[[data-testid=fork-tabs]]/chat:mt-2 group-has-[[data-testid=fork-tabs]]/chat:mb-0 dock:group-has-[[data-testid=fork-tabs]]/chat:order-none dock:group-has-[[data-testid=fork-tabs]]/chat:mt-0 dock:group-has-[[data-testid=fork-tabs]]/chat:mb-2";
 
 /** ready: clickable; awaiting: clicked before the options finished; busy: forking. */
-export type ExploreState = "ready" | "awaiting" | "busy";
+type ExploreState = "ready" | "awaiting" | "busy";
 
 export interface ExploreOptionsProps {
   shown: boolean;

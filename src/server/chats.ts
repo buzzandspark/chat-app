@@ -60,7 +60,7 @@ export function listChats(userId: string, limit = 200): ChatSummary[] {
 }
 
 /** The newest messages the page ships; the rest load on request (#47). */
-export const SEED_WINDOW = 100;
+const SEED_WINDOW = 100;
 
 /** Thinking signatures and redacted payloads never leave the server: the client has no use for them (#47). */
 function stripForClient(content: StoredContentBlock[]): StoredContentBlock[] {

@@ -6,7 +6,7 @@ import type { HighlighterCore } from "shiki/core";
  */
 
 /** `c` is the text; `l` its colour, a `var(--shiki-token-…)` reference the stylesheet resolves per theme (#12). */
-export type HighlightToken = { c: string; l?: string };
+type HighlightToken = { c: string; l?: string };
 export type HighlightLine = HighlightToken[];
 
 // Static import map so the bundler can split one chunk per language.

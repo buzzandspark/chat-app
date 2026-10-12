@@ -104,5 +104,4 @@ export function getAuth(): ReturnType<typeof createAuth> {
   return g.__chatAuth;
 }
 
-export type Auth = ReturnType<typeof createAuth>;
 export const SESSION_COOKIE = "better-auth.session_token";

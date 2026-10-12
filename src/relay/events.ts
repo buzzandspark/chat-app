@@ -11,7 +11,7 @@ import type { StoredContentBlock } from "@shared/blocks";
 
 // Producer events carry seq, their index in the buffer; control events (snapshot, GET-path terminals)
 // carry seq null and bypass dedupe. t is ms since generation start on the server clock (D2, D3).
-export interface RelayEventBase {
+interface RelayEventBase {
   seq: number | null;
   generationId: string;
   t: number;
@@ -89,9 +89,8 @@ export type RelayEventBody =
 
 export type RelayEvent = RelayEventBase & RelayEventBody;
 export type RelayEventType = RelayEvent["type"];
-export type RelayEventOf<T extends RelayEventType> = Extract<RelayEvent, { type: T }>;
 
-export const TERMINAL_EVENT_TYPES: ReadonlySet<RelayEventType> = new Set([
+const TERMINAL_EVENT_TYPES: ReadonlySet<RelayEventType> = new Set([
   "done",
   "stopped",
   "interrupted",

@@ -7,7 +7,7 @@ import { ThreadSkeleton } from "./thread-skeleton";
  * Mirrors `Composer`'s boxes and paddings class for class, so the composer measures the same
  * (115 px on a phone) whether the real one or this placeholder is on screen.
  */
-export function ComposerSkeleton() {
+function ComposerSkeleton() {
   return (
     <div
       className="shrink-0 border-t border-border bg-background safe-x pt-2"

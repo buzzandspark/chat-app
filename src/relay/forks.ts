@@ -51,9 +51,9 @@ export class ForkStartError extends Error {
   }
 }
 
-export const FORK_RETRY: RetryPolicy = { attempts: 3, baseMs: 1000 };
+const FORK_RETRY: RetryPolicy = { attempts: 3, baseMs: 1000 };
 /** Forks after the first wait this long at most for its cache entry to be written. */
-export const FORK_GATE_MS = 10_000;
+const FORK_GATE_MS = 10_000;
 
 export interface ForkDeps {
   db: Db;

@@ -54,7 +54,7 @@ export interface MessageState {
   optionsStream: OptionsStream | null;
 }
 
-export interface OptionsStream {
+interface OptionsStream {
   count: number | null;
   partial: ForkOption[];
   failed: boolean;
@@ -68,7 +68,7 @@ export interface ChatSettings {
   scenario: { name: string; title: string } | null;
 }
 
-export const DEFAULT_SETTINGS: ChatSettings = { model: DEFAULT_MODEL, thinking: { harder: false }, scenario: null };
+const DEFAULT_SETTINGS: ChatSettings = { model: DEFAULT_MODEL, thinking: { harder: false }, scenario: null };
 
 export interface ChatState {
   id: string;
@@ -127,7 +127,7 @@ function emptyChat(id: string, settings: ChatSettings = DEFAULT_SETTINGS): ChatS
   return { id, messageIds: [], title: null, seeded: false, settings, settingsTouched: false, older: 0, queue: [], forkedFrom: null, forkPosition: null };
 }
 
-export const EMPTY_CHAT: ChatState = emptyChat("");
+const EMPTY_CHAT: ChatState = emptyChat("");
 
 const TERMINAL: ReadonlySet<MessageStatus> = new Set(["done", "stopped", "interrupted", "error", "refused"]);
 
@@ -166,7 +166,7 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
  * blocks in stream order and only omits empty ones, which are trailing in practice (a block that
  * has started but not received a delta), so position and index agree for every saved block.
  */
-export function blockIndexFromContent(content: readonly StoredContentBlock[]): Map<number, number> {
+function blockIndexFromContent(content: readonly StoredContentBlock[]): Map<number, number> {
   const map = new Map<number, number>();
   let pos = 0;
   content.forEach((b, i) => {
@@ -757,7 +757,7 @@ function sameRow(existing: MessageState, row: SeedRow): boolean {
 }
 
 /** Server-rendered message rows to client state. */
-export function messageStateFromRow(row: SeedRow): MessageState {
+function messageStateFromRow(row: SeedRow): MessageState {
   const blocks = toClientBlocks(row.content);
   return createMessageState({
     id: row.id,

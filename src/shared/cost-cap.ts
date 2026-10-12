@@ -16,7 +16,7 @@ export const NO_CAP = "none";
 /** What the admin API accepts for a cap: dollars, or the explicit no-cap word. */
 export type CapField = number | typeof NO_CAP;
 
-export function isCapUsd(n: number): boolean {
+function isCapUsd(n: number): boolean {
   return Number.isFinite(n) && n >= 0 && n <= MAX_COST_CAP_USD;
 }
 

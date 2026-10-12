@@ -5,7 +5,7 @@ import { textOf, type ChatStore, type MessageState } from "./chat-store";
 const SENTENCE_END = /[.!?](\s|$)/g;
 
 /** Markdown to something a screen reader can say: code and tables become a short description (#55). */
-export function speakable(markdown: string): string {
+function speakable(markdown: string): string {
   return markdown
     .replace(/```[^\n]*\n([\s\S]*?)(```|$)/g, (_m, body: string) => ` Code block, ${body.split("\n").filter((l) => l.trim()).length} lines. `)
     .replace(/^\s*\|.*\|\s*$\n?(^\s*\|?[\s:|-]+\|?\s*$\n?)?((^\s*\|.*\|\s*$\n?)*)/gm, (_m, _d, rows: string) => ` Table with ${rows.split("\n").filter((l) => l.trim()).length} rows. `)
