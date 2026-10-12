@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { UsageSummary, UsageTotals } from "@server/settings";
+import type { ModelUsage, UsageSummary, UsageTotals } from "@server/settings";
 
 // Rendered by the server page only: no client JS.
 
@@ -21,6 +21,17 @@ function Cell({ totals }: { totals: UsageTotals }) {
   );
 }
 
+function ModelRows({ models }: { models: ModelUsage[] }) {
+  return models.map((m) => (
+    <tr key={m.model} data-testid="usage-model">
+      <th scope="row" className="py-1.5 pl-3 text-left align-top text-small font-normal text-muted-foreground">
+        {m.label}
+      </th>
+      <Cell totals={m.month} />
+      <Cell totals={m.all} />
+    </tr>
+  ));
+}
 
 export function UsageSkeleton() {
   return (
@@ -31,7 +42,7 @@ export function UsageSkeleton() {
   );
 }
 
-/** Spend on chat replies (in total and by model) and on Explore options, this month and all time, and the cap when there is one. */
+/** Spend on chat replies and on Explore options, each in total and by model, this month and all time, and the cap when there is one. */
 export function UsageSection({ usage }: { usage: UsageSummary }) {
   const { capUsd, spentUsd } = usage;
   const share = capUsd === null ? 0 : capUsd > 0 ? Math.min(1, spentUsd / capUsd) : 1;
@@ -60,23 +71,15 @@ export function UsageSection({ usage }: { usage: UsageSummary }) {
             <Cell totals={usage.month.chats} />
             <Cell totals={usage.all.chats} />
           </tr>
-          {usage.chatModels.map((m) => (
-            <tr key={m.model} data-testid="usage-model">
-              <th scope="row" className="py-1.5 pl-3 text-left align-top text-small font-normal text-muted-foreground">
-                {m.label}
-              </th>
-              <Cell totals={m.month} />
-              <Cell totals={m.all} />
-            </tr>
-          ))}
+          <ModelRows models={usage.chatModels} />
           <tr className="border-t border-border" data-testid="usage-explore">
-            <th scope="row" className="py-2.5 text-left align-top font-normal">
-              <div className="text-small font-medium">Explore</div>
-              <div className="text-caption text-muted-foreground">Haiku</div>
+            <th scope="row" className="py-2.5 text-left align-top text-small font-medium">
+              Explore
             </th>
             <Cell totals={usage.month.explore} />
             <Cell totals={usage.all.explore} />
           </tr>
+          <ModelRows models={usage.exploreModels} />
         </tbody>
       </table>
       {capUsd !== null ? (

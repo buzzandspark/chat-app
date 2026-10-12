@@ -46,7 +46,7 @@ beforeEach(() => {
 describe("usageSummary", () => {
   it("is all zeros with no usage, and no cap unless one is set", () => {
     const zero = { costUsd: 0, inputTokens: 0, outputTokens: 0 };
-    expect(usageSummary(USER, NOW, db)).toEqual({ month: { chats: zero, explore: zero }, all: { chats: zero, explore: zero }, chatModels: [], spentUsd: 0, capUsd: null });
+    expect(usageSummary(USER, NOW, db)).toEqual({ month: { chats: zero, explore: zero }, all: { chats: zero, explore: zero }, chatModels: [], exploreModels: [], spentUsd: 0, capUsd: null });
   });
 
   it("splits chat replies from Explore's Haiku calls, this month and all time", () => {
@@ -67,7 +67,7 @@ describe("usageSummary", () => {
     expect(s.all.explore).toMatchObject({ inputTokens: 330, outputTokens: 22 });
   });
 
-  it("breaks the chats total down by model, most spent first; Explore's Haiku calls stay out of it", () => {
+  it("breaks the chats and Explore totals down by model, most spent first, each on its own", () => {
     usage("message", NOW, 0.5, { input: 100, output: 10 });
     usage("message", LAST_MONTH, 3, { input: 50, output: 5 }, USER, "claude-opus-5-5");
     usage("fallback_message", NOW, 0.2, { input: 20, output: 2 }, USER, "claude-haiku-5-5");
@@ -76,6 +76,9 @@ describe("usageSummary", () => {
       { model: "claude-opus-5-5", label: "Opus 5.5", month: { costUsd: 0, inputTokens: 0, outputTokens: 0 }, all: { costUsd: 3, inputTokens: 50, outputTokens: 5 } },
       { model: "claude-sonnet-5-5", label: "Sonnet 5.5", month: { costUsd: 0.5, inputTokens: 100, outputTokens: 10 }, all: { costUsd: 0.5, inputTokens: 100, outputTokens: 10 } },
       { model: "claude-haiku-5-5", label: "Haiku 5.5", month: { costUsd: 0.2, inputTokens: 20, outputTokens: 2 }, all: { costUsd: 0.2, inputTokens: 20, outputTokens: 2 } },
+    ]);
+    expect(usageSummary(USER, NOW, db).exploreModels).toEqual([
+      { model: "claude-haiku-5-5", label: "Haiku 5.5", month: { costUsd: 0.01, inputTokens: 300, outputTokens: 20 }, all: { costUsd: 0.01, inputTokens: 300, outputTokens: 20 } },
     ]);
   });
 

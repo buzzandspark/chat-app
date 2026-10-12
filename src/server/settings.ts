@@ -20,7 +20,7 @@ export interface UsagePeriod {
   explore: UsageTotals;
 }
 
-/** One model's chat replies (a fallback's serving model counts as its own). */
+/** One model's spend (for chats, a fallback's serving model counts as its own). */
 export interface ModelUsage {
   model: string;
   label: string;
@@ -33,6 +33,8 @@ export interface UsageSummary {
   all: UsagePeriod;
   /** The chats total broken down by model, most spent first. */
   chatModels: ModelUsage[];
+  /** The Explore total broken down by model, the same way. */
+  exploreModels: ModelUsage[];
   /** The cap's own counter, which is what the cap is enforced against. */
   spentUsd: number;
   capUsd: number | null;
@@ -66,8 +68,8 @@ export function usageSummary(userId: string, now: Date, db: Db = getDb()): Usage
     .where(eq(usageEvents.userId, userId))
     .groupBy(explore, recent, usageEvents.model)
     .all();
-  const summary: UsageSummary = { month: { chats: zero(), explore: zero() }, all: { chats: zero(), explore: zero() }, chatModels: [], spentUsd: 0, capUsd: null };
-  const byModel = new Map<string, ModelUsage>();
+  const summary: UsageSummary = { month: { chats: zero(), explore: zero() }, all: { chats: zero(), explore: zero() }, chatModels: [], exploreModels: [], spentUsd: 0, capUsd: null };
+  const byModel = { chats: new Map<string, ModelUsage>(), explore: new Map<string, ModelUsage>() };
   const add = (into: UsageTotals, row: UsageTotals) => {
     into.costUsd += row.costUsd;
     into.inputTokens += row.inputTokens;
@@ -77,16 +79,17 @@ export function usageSummary(userId: string, now: Date, db: Db = getDb()): Usage
     const kind = row.explore ? "explore" : "chats";
     add(summary.all[kind], row);
     if (row.recent) add(summary.month[kind], row);
-    if (kind === "explore") continue;
-    let entry = byModel.get(row.model);
+    let entry = byModel[kind].get(row.model);
     if (!entry) {
       entry = { model: row.model, label: modelDisplayName(row.model).replace(/^Claude /, ""), month: zero(), all: zero() };
-      byModel.set(row.model, entry);
+      byModel[kind].set(row.model, entry);
     }
     add(entry.all, row);
     if (row.recent) add(entry.month, row);
   }
-  summary.chatModels = [...byModel.values()].sort((a, b) => b.all.costUsd - a.all.costUsd || a.label.localeCompare(b.label));
+  const ranked = (models: Map<string, ModelUsage>) => [...models.values()].sort((a, b) => b.all.costUsd - a.all.costUsd || a.label.localeCompare(b.label));
+  summary.chatModels = ranked(byModel.chats);
+  summary.exploreModels = ranked(byModel.explore);
   const cap = db.select({ cap: users.costCapUsd, spent: users.costSpentUsd }).from(users).where(eq(users.id, userId)).get();
   summary.spentUsd = cap?.spent ?? 0;
   summary.capUsd = cap?.cap ?? null;
