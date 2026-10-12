@@ -368,7 +368,7 @@ test.describe("desktop cold load", () => {
       return { cls: Number((w.__cls ?? 0).toFixed(4)), shifts: w.__shifts ?? 0, sources: w.__shiftSources ?? [] };
     });
     const html = await (await page.request.get(page.url())).text();
-    const dockedInHtml = /<aside[^>]*aria-label="Chats"[^>]*class="[^"]*dock:flex/.test(html);
+    const dockedInHtml = /<aside[^>]*aria-label="Chats"[^>]*class="[^"]*dock:w-72/.test(html);
     fs.mkdirSync(path.resolve("docs/perf"), { recursive: true });
     const file = path.join(path.resolve("docs/perf"), `${new Date().toISOString().slice(0, 10)}.json`);
     const existing = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>) : {};

@@ -65,10 +65,17 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
           // Full width on a phone, so both insets apply in landscape (#30); docked, only the left one.
           "safe-top pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] dock:pr-0",
           phoneOpen ? "translate-x-0" : "-translate-x-full",
-          "dock:static dock:z-0 dock:w-72 dock:translate-x-0 dock:transition-[width,transform]",
-          desktopOpen ? "dock:flex" : "dock:hidden",
+          // Docked it slides: the width closes to 0 while the contents move left in step.
+          "dock:static dock:z-0 dock:translate-x-0 dock:overflow-hidden dock:transition-[width] motion-reduce:transition-none",
+          desktopOpen ? "dock:w-72" : "dock:w-0 dock:border-r-0",
         )}
       >
+        <div
+          className={cn(
+            "flex min-h-0 w-full flex-1 flex-col dock:w-72 dock:shrink-0 dock:transition-transform dock:duration-200 dock:ease-out motion-reduce:transition-none",
+            !desktopOpen && "dock:-translate-x-full",
+          )}
+        >
         {/* The toggle sits where the main header's sits (same inset, and a clear border so the same height), so opening and closing never moves it. */}
         <div className="flex h-14 items-center justify-between gap-1 border-b border-transparent pr-2 pl-2 md:pl-3">
           <div className="flex min-w-0 items-center gap-1">
@@ -122,6 +129,7 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
             <ThemeToggle />
             {account}
           </div>
+        </div>
         </div>
       </aside>
 

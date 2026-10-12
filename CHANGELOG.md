@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- The docked sidebar slides in and out (its width closes while its contents move left) instead of appearing and disappearing; the phone overlay already slid.
 - Guests: the long-chat scenario seeds its replies on Haiku, the server runs a guest's request on Haiku whatever model it names (it answered 403, which the page showed as "This chat belongs to another account"), and a guest's picker always reads Haiku.
 - The sidebar header no longer shows a name; the admin console's Revoke button is an outline button like the ones beside it.
 - The out-of-budget message no longer links to the source repository.
