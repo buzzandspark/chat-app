@@ -280,20 +280,15 @@
 .composer-scanning {
   animation: composer-scan 1.6s ease-in-out infinite;
 }
-@keyframes explore-lap {
-  to {
-    stroke-dashoffset: calc(-1 * var(--lap, 0px));
-  }
-}
-/* After the 300 ms pop-up, the dashes run clockwise once round; they stay where they stop. */
-.explore-lap {
-  animation: explore-lap 1.5s ease-in-out 0.3s forwards;
+/* While the Explore button is up, its dashed border turns clockwise, a dash and a gap at a time. */
+.explore-rotate {
+  animation: explore-march 2.4s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .explore-border {
     animation: none;
   }
-  .explore-lap {
+  .explore-rotate {
     animation: none;
   }
   .composer-scanning {
