@@ -24,7 +24,7 @@ function Cell({ totals }: { totals: UsageTotals }) {
 function ModelRows({ models }: { models: ModelUsage[] }) {
   return models.map((m) => (
     <tr key={m.model} data-testid="usage-model">
-      <th scope="row" className="py-1.5 pl-3 text-left align-top text-small font-normal text-muted-foreground">
+      <th scope="row" className="py-1.5 pl-3 text-left align-middle text-small font-normal text-muted-foreground">
         {m.label}
       </th>
       <Cell totals={m.month} />
