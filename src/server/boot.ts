@@ -21,6 +21,12 @@ export async function boot(): Promise<void> {
     console.error("[boot] BETTER_AUTH_SECRET is not set; refusing to start. Set it to a long random string (openssl rand -base64 32).");
     process.exit(1);
   }
+  if (env.isProd && env.e2e && !env.e2eAllowProduction) {
+    // E2E skips the login redirect, runs every cookieless request as DEV_USER_ID (seeded below, no
+    // cost cap) and turns off the sign-in rate limit. Only the test harness may combine it with production.
+    console.error("[boot] E2E is set in production; refusing to start. Unset E2E, or set E2E_ALLOW_PRODUCTION=1 if this is the e2e harness.");
+    process.exit(1);
+  }
   runMigrations(env.DATABASE_PATH);
   if (!env.isProd || env.e2e) seedDevUser(env.DEV_USER_ID);
   await seedAdmin(env.ADMIN_EMAIL, env.ADMIN_PASSWORD);

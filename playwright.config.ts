@@ -46,6 +46,8 @@ export default defineConfig({
       ADMIN_PASSWORD: "admin-password-123",
       ADMIN_PATH_SLUG: "admin",
       E2E: "1",
+      // The standalone server runs with NODE_ENV=production, which boot() refuses with E2E unless allowed.
+      E2E_ALLOW_PRODUCTION: "1",
     },
   },
 });

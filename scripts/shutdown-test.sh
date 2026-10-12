@@ -32,7 +32,7 @@ mkdir -p "$OUT"
 rm -f "$DB" "$DB-wal" "$DB-shm"
 boot() {
   # standalone.sh execs node, so $! is the server itself.
-  PORT=$PORT HOSTNAME=127.0.0.1 REPLAY_MODE=1 E2E=1 DATABASE_PATH="$DB" sh scripts/standalone.sh > "$OUT/server-$1.log" 2>&1 &
+  PORT=$PORT HOSTNAME=127.0.0.1 REPLAY_MODE=1 E2E=1 E2E_ALLOW_PRODUCTION=1 DATABASE_PATH="$DB" sh scripts/standalone.sh > "$OUT/server-$1.log" 2>&1 &
   SERVER_PID=$!
   for i in $(seq 1 60); do
     kill -0 "$SERVER_PID" 2>/dev/null || break
