@@ -99,6 +99,15 @@ export class QuotaManager {
     if (user.cap !== null) this.meters.set(generationId, { userId, inputUsd, outputRate: rates.output, chars: 0 });
   }
 
+  /** Why the user may not spend now: its cap is reached or, for a guest, a budget is spent. Null when it may. */
+  spendBlock(userId: string): QuotaExceededError | BudgetExceededError | null {
+    const user = this.account(this.db, userId);
+    if (!user) return null;
+    if (user.cap !== null && user.spent >= user.cap) return new QuotaExceededError(user.spent, user.cap);
+    const waitMs = this.guests?.budgets.check(this.budgetKeys(user)) ?? null;
+    return waitMs === null ? null : new BudgetExceededError(waitMs);
+  }
+
   /** The prompt as message_start billed it, cache writes and the long-context tier included. */
   started(generationId: string, model: string, usage: Omit<TokenCounts, "outputTokens">): void {
     const m = this.meters.get(generationId);

@@ -4,10 +4,10 @@ import { chats, generations, messages, usageEvents, users } from "@db/schema";
 import { MAX_FORKS, type ForkOption, type OptionsTrace } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import { costOf, type TokenCounts } from "../anthropic/pricing";
-import type { ReplyDoneInfo } from "../engine";
+import { BusyError, type ReplyDoneInfo } from "../engine";
 import { isBillableProvider } from "../providers/types";
-import { QuotaExceededError, QuotaManager } from "../quota";
-import { LiveOptionsMessenger, OPTIONS_MODEL, ScriptedOptionsMessenger, type DetectProgress, type OptionsMessenger } from "./messenger";
+import { QuotaManager } from "../quota";
+import { LiveOptionsMessenger, OPTIONS_MODEL, OptionsCallError, ScriptedOptionsMessenger, type DetectProgress, type MessengerResult, type OptionsMessenger } from "./messenger";
 
 /** A reply's detection as it runs: the count once known, the options complete so far, then done or failed. */
 export interface OptionsProgress {
@@ -25,6 +25,8 @@ export interface OptionsServiceOptions {
   quota?: QuotaManager;
   live?: () => OptionsMessenger;
   now?: () => number;
+  /** Haiku calls running at once for one guest and for all guests together. */
+  guestRunning?: { perGuest: number; total: number };
 }
 
 /** The fork-options side effect: runs after a reply, spends under the cap, and never touches the reply. */
@@ -35,6 +37,8 @@ export class OptionsService {
   private makeLive: () => OptionsMessenger;
   private live: OptionsMessenger | null = null;
   private now: () => number;
+  private guestRunning: { perGuest: number; total: number };
+  private running = new Map<string, number>();
   private inflight = new Map<string, Promise<ForkOption[] | null>>();
   private traces = new Map<string, OptionsTrace>();
   private progress = new Map<string, Tracked>();
@@ -45,6 +49,7 @@ export class OptionsService {
     this.quota = options.quota ?? new QuotaManager(options.db);
     this.makeLive = options.live ?? (() => new LiveOptionsMessenger());
     this.now = options.now ?? Date.now;
+    this.guestRunning = options.guestRunning ?? { perGuest: 2, total: 50 };
   }
 
   private messenger(scenario: string | null, billable: boolean): OptionsMessenger {
@@ -95,10 +100,10 @@ export class OptionsService {
   private async detect(info: ReplyDoneInfo, onProgress: (progress: DetectProgress) => void): Promise<ForkOption[] | null> {
     const chat = this.db.select({ forkedFrom: chats.forkedFrom }).from(chats).where(eq(chats.id, info.chatId)).get();
     const startedAt = performance.now();
-    if (!chat || chat.forkedFrom || !info.text.trim() || !this.exploreOn(info.userId) || this.atCap(info.userId) || !this.canFork(info.chatId)) return null;
+    if (!chat || chat.forkedFrom || !info.text.trim() || !this.exploreOn(info.userId) || this.quota.spendBlock(info.userId) || !this.canFork(info.chatId)) return null;
     const messenger = this.messenger(info.scenario, info.billable);
-    const result = await messenger.detect(info.text, onProgress);
-    this.record(info.userId, info.generationId, "options", result.usage, messenger.name === "haiku");
+    const result = await this.charged(messenger, info.userId, info.generationId, "options", () => messenger.detect(info.text, onProgress));
+    if (!result) return null;
     // A fork made before detection finished spent the options ([]); they stay spent.
     this.db.update(messages).set({ forkOptions: result.options }).where(and(eq(messages.id, info.messageId), isNull(messages.forkOptions))).run();
     if (result.trace) this.keepTrace(info.messageId, { ...result.trace, totalMs: Math.round(performance.now() - startedAt) });
@@ -111,7 +116,7 @@ export class OptionsService {
     const row = this.db
       .select({ id: messages.id, content: messages.content, status: messages.status, options: messages.forkOptions, generationId: messages.generationId })
       .from(messages)
-      .where(eq(messages.chatId, chatId))
+      .where(and(eq(messages.chatId, chatId), eq(messages.role, "assistant")))
       .orderBy(desc(messages.position))
       .all()
       .find((m) => m.status === "done" || m.status === "refused");
@@ -159,11 +164,11 @@ export class OptionsService {
       .get();
     const messenger = this.messenger(gen?.scenario ?? null, gen ? isBillableProvider(gen.provider) : true);
     if (messenger.name === "haiku") {
-      const user = this.capRow(userId);
-      if (user && user.cap !== null && user.spent >= user.cap) throw new QuotaExceededError(user.spent, user.cap);
+      const block = this.quota.spendBlock(userId);
+      if (block) throw block;
     }
-    const result = await messenger.rewrite(options, instruction);
-    this.record(userId, gen?.id ?? null, "options_rewrite", result.usage, messenger.name === "haiku");
+    const result = await this.charged(messenger, userId, gen?.id ?? null, "options_rewrite", () => messenger.rewrite(options, instruction));
+    if (!result) throw new BusyError();
     return { options: result.options, trace: result.trace ?? null };
   }
 
@@ -179,10 +184,6 @@ export class OptionsService {
     if (this.traces.size > 50) this.traces.delete(this.traces.keys().next().value!);
   }
 
-  private capRow(userId: string): { cap: number | null; spent: number } | undefined {
-    return this.db.select({ cap: users.costCapUsd, spent: users.costSpentUsd }).from(users).where(eq(users.id, userId)).get();
-  }
-
   /** A chat with its full share of forks can't be forked again, so there is nothing to detect. */
   private canFork(chatId: string): boolean {
     return this.db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, chatId)).all().length < MAX_FORKS;
@@ -193,12 +194,44 @@ export class OptionsService {
     return this.db.select({ on: users.exploreOptions }).from(users).where(eq(users.id, userId)).get()?.on ?? true;
   }
 
-  private atCap(userId: string): boolean {
-    const user = this.capRow(userId);
-    return user !== undefined && user.cap !== null && user.spent >= user.cap;
+  /** Records what a call cost, an estimate when Haiku failed partway. Null, with no call, when a guest has as many running as it may. */
+  private async charged(messenger: OptionsMessenger, userId: string, generationId: string | null, iterationType: string, run: () => Promise<MessengerResult>): Promise<MessengerResult | null> {
+    const billable = messenger.name === "haiku";
+    const guest = billable && this.isGuest(userId);
+    if (guest && !this.holdSlot(userId)) return null;
+    try {
+      const result = await run();
+      this.record(userId, generationId, iterationType, result.usage, billable, false);
+      return result;
+    } catch (err) {
+      if (err instanceof OptionsCallError) this.record(userId, generationId, iterationType, err.usage, billable, true);
+      throw err;
+    } finally {
+      if (guest) this.freeSlot(userId);
+    }
   }
 
-  private record(userId: string, generationId: string | null, iterationType: string, usage: TokenCounts | null, billable: boolean): void {
+  /** Budgets are checked only before a call, so a guest's running calls are capped to bound the overshoot. */
+  private holdSlot(userId: string): boolean {
+    const mine = this.running.get(userId) ?? 0;
+    let total = 0;
+    for (const n of this.running.values()) total += n;
+    if (mine >= this.guestRunning.perGuest || total >= this.guestRunning.total) return false;
+    this.running.set(userId, mine + 1);
+    return true;
+  }
+
+  private freeSlot(userId: string): void {
+    const left = (this.running.get(userId) ?? 1) - 1;
+    if (left > 0) this.running.set(userId, left);
+    else this.running.delete(userId);
+  }
+
+  private isGuest(userId: string): boolean {
+    return this.db.select({ role: users.role }).from(users).where(eq(users.id, userId)).get()?.role === "guest";
+  }
+
+  private record(userId: string, generationId: string | null, iterationType: string, usage: TokenCounts | null, billable: boolean, estimated: boolean): void {
     if (!usage) return;
     const costUsd = billable ? costOf(OPTIONS_MODEL, usage) : 0;
     const now = new Date(this.now());
@@ -206,7 +239,7 @@ export class OptionsService {
     const linked = generationId && this.db.select({ id: generations.id }).from(generations).where(eq(generations.id, generationId)).get() ? generationId : null;
     this.db.transaction((tx) => {
       tx.insert(usageEvents)
-        .values({ id: uuidv7(), generationId: linked, userId, model: OPTIONS_MODEL, iterationType, ...usage, costUsd, estimated: false, createdAt: now })
+        .values({ id: uuidv7(), generationId: linked, userId, model: OPTIONS_MODEL, iterationType, ...usage, costUsd, estimated, createdAt: now })
         .run();
       this.quota.spend(tx, userId, costUsd);
     });

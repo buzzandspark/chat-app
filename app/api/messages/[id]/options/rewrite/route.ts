@@ -2,8 +2,9 @@ import type { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@db/client";
+import { BusyError } from "@relay/engine";
 import { ForkOptionsBody } from "@relay/options/schema";
-import { QuotaExceededError } from "@relay/quota";
+import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { refuseGuestRewrite, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/message
       return Response.json({ options, trace: env.isProd ? null : trace }, { headers: { "cache-control": "no-store" } });
     } catch (err) {
       if (err instanceof QuotaExceededError) return jsonError(402, { error: "quota_exceeded", spentUsd: err.spentUsd, capUsd: err.capUsd });
+      if (err instanceof BudgetExceededError || err instanceof BusyError) return tooMany(err.retryAfterMs);
       throw err;
     }
   } catch (err) {

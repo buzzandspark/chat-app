@@ -5,10 +5,10 @@ import { chats, generations, messages, spendBuckets, usageEvents, users } from "
 import { MAX_FORKS, type ForkOption } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import { Budgets } from "../budgets";
-import type { ReplyDoneInfo } from "../engine";
-import { QuotaManager } from "../quota";
+import { BusyError, type ReplyDoneInfo } from "../engine";
+import { BudgetExceededError, QuotaManager } from "../quota";
 import { createTestDb, seedUser } from "../test-utils";
-import { OPTIONS_MODEL, SCRIPTED_OPTIONS, type MessengerResult, type OptionsMessenger } from "./messenger";
+import { OPTIONS_MODEL, OptionsCallError, SCRIPTED_OPTIONS, type MessengerResult, type OptionsMessenger } from "./messenger";
 import { OptionsService } from "./service";
 
 const USER = "u1";
@@ -91,6 +91,50 @@ describe("OptionsService", () => {
     const cost = db.select().from(usageEvents).get()!.costUsd;
     expect(cost).toBeGreaterThan(0);
     expect(db.select().from(spendBuckets).all().map((b) => b.levelUsd)).toEqual([cost, cost]);
+  });
+
+  it("records and charges the estimated cost of a call that broke off partway, and the detection fails", async () => {
+    const broken: OptionsMessenger = { name: "haiku", detect: async () => Promise.reject(new OptionsCallError(USAGE, { cause: new Error("lost") })), rewrite: async () => ({ options: [], usage: null }) };
+    const service = new OptionsService({ db, replayMode: false, live: () => broken });
+    const info = seedReply(uuidv7());
+    service.onReplyDone(info);
+    expect(await service.awaitOptions(info.messageId, 1000)).toBeNull();
+    const row = db.select().from(usageEvents).get()!;
+    expect(row).toMatchObject({ iterationType: "options", inputTokens: 1000, outputTokens: 200, estimated: true });
+    expect(db.select().from(users).where(eq(users.id, USER)).get()!.costSpentUsd).toBe(row.costUsd);
+    expect(db.select().from(messages).where(eq(messages.id, info.messageId)).get()!.forkOptions).toBeNull();
+  });
+
+  it("asks Haiku nothing for a guest whose budget is spent, and refuses its rewrite with the wait", async () => {
+    db.update(users).set({ role: "guest", budgetKeys: ["ip:203.0.113.7"] }).where(eq(users.id, USER)).run();
+    db.insert(spendBuckets).values({ key: "ip:203.0.113.7", levelUsd: 1.5, updatedAt: new Date(0) }).run();
+    const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 1, ip48: 3, all: 10 }, () => 0) });
+    const live = fakeLive();
+    const service = new OptionsService({ db, replayMode: false, quota, live: () => live });
+    const info = seedReply(uuidv7());
+    service.onReplyDone(info);
+    expect(await service.awaitOptions(info.messageId, 100)).toBeNull();
+    const refused = await service.rewrite(USER, info.messageId, TWO, "shorter").catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(BudgetExceededError);
+    expect(refused).toMatchObject({ retryAfterMs: 43_200_000 });
+    expect(live.asked).toEqual([]);
+  });
+
+  it("caps a guest's running Haiku calls at two and all guests' at a total: past that a detection is skipped and a rewrite is busy", async () => {
+    db.update(users).set({ role: "guest" }).where(eq(users.id, USER)).run();
+    seedUser(db, "g2", { role: "guest" });
+    const live = fakeLive(20);
+    const service = new OptionsService({ db, replayMode: false, live: () => live, guestRunning: { perGuest: 2, total: 3 } });
+    const replies = [seedReply(uuidv7()), seedReply(uuidv7()), seedReply(uuidv7())];
+    for (const info of replies) service.onReplyDone(info);
+    const message = replies[0]!.messageId;
+    expect(await service.rewrite(USER, message, TWO, "shorter").catch((e: unknown) => e)).toBeInstanceOf(BusyError);
+    const last = service.rewrite("g2", message, TWO, "shorter");
+    expect(await service.rewrite("g2", message, TWO, "longer").catch((e: unknown) => e)).toBeInstanceOf(BusyError);
+    await last;
+    expect(await Promise.all(replies.map((r) => service.awaitOptions(r.messageId, 1000)))).toEqual([TWO, TWO, null]);
+    expect(live.asked).toEqual(["A or B", "A or B", "shorter"]);
+    expect((await service.rewrite(USER, message, TWO, "again")).options).toHaveLength(2);
   });
 
   it("leaves the options spent when the chat was forked before Haiku answered", async () => {
@@ -190,7 +234,21 @@ describe("OptionsService", () => {
     expect(await service.awaitOptions(info.messageId, 1000)).toEqual(TWO);
     expect(service.detectLastReply(info.chatId, USER)).toBe(info.messageId);
     expect(live.asked).toHaveLength(1);
+    expect(db.select().from(usageEvents).all()).toHaveLength(1);
     expect(service.detectLastReply(uuidv7(), USER)).toBeNull();
+  });
+
+  it("detectLastReply reads only replies, never the user's message before a stopped one", () => {
+    const live = fakeLive();
+    const service = new OptionsService({ db, replayMode: false, live: () => live });
+    const info = seedReply(uuidv7());
+    const t = new Date();
+    db.update(messages).set({ status: "stopped", position: 1 }).where(eq(messages.id, info.messageId)).run();
+    db.insert(messages)
+      .values({ id: uuidv7(), chatId: info.chatId, role: "user", position: 0, content: [{ type: "text", text: "A or B?", citations: null }], status: "done", createdAt: t, updatedAt: t })
+      .run();
+    expect(service.detectLastReply(info.chatId, USER)).toBeNull();
+    expect(live.asked).toEqual([]);
   });
 
   it("watch follows a detection: the count, the options so far, then done; a failure ends it as failed", async () => {
