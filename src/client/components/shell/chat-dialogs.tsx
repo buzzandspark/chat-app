@@ -83,6 +83,7 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
 
 export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const newChat = useNewChat();
+  const deleteRef = useRef<HTMLButtonElement>(null);
   const store = useChatStore();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +116,11 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       onOpenChange={onOpenChange}
       title="Delete chat?"
       description={`"${chat.title}" and its messages will be removed. This cannot be undone.`}
+      // Opens on Delete, so Enter confirms.
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        deleteRef.current?.focus();
+      }}
     >
       {error ? (
         <p role="alert" className="text-small text-destructive">
@@ -125,7 +131,7 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
         <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
-        <Button type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
+        <Button ref={deleteRef} type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
           Delete
         </Button>
       </div>
@@ -201,6 +207,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
 /** Every fork of the main chat is deleted; the main chat stays and is opened if a fork was being viewed. */
 export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const store = useChatStore();
+  const deleteRef = useRef<HTMLButtonElement>(null);
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,7 +241,17 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
     }
   };
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Delete all forks?" description={`Every fork of "${chat.title}" will be deleted; the main chat stays. This cannot be undone.`}>
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Delete all forks?"
+      description={`Every fork of "${chat.title}" will be deleted; the main chat stays. This cannot be undone.`}
+      // Opens on Delete, so Enter confirms.
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        deleteRef.current?.focus();
+      }}
+    >
       {error ? (
         <p role="alert" className="text-small text-destructive">
           {error}
@@ -244,7 +261,7 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
         <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
           Cancel
         </Button>
-        <Button type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
+        <Button ref={deleteRef} type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
           Delete forks
         </Button>
       </div>

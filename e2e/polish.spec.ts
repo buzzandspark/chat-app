@@ -113,7 +113,9 @@ test.describe("chat management", () => {
     await ensureSidebarOpen(page);
     await sidebar(page).getByRole("button", { name: /Actions for Renamed chat/ }).first().click();
     await page.getByRole("menuitem", { name: "Delete" }).click();
-    await page.getByRole("button", { name: "Delete" }).click();
+    // The dialog opens on Delete, so Enter confirms.
+    await expect(page.getByRole("dialog").getByRole("button", { name: "Delete" })).toBeFocused();
+    await page.keyboard.press("Enter");
     await expect(page).not.toHaveURL(firstUrl);
     await expect(page).toHaveURL(CHAT_URL);
   });
