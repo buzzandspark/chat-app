@@ -270,7 +270,7 @@ export async function declareWinner(db: Db, engine: Engine, userId: string, chat
 }
 
 
-/** Every fork of a main chat is deleted; the main chat stays, unless `withMain` (the sidebar's Delete all). */
+/** Every fork of a main chat is deleted; the main chat stays, unless `withMain` (the sidebar's Delete group). */
 export async function deleteForks(db: Db, engine: Engine, userId: string, parentId: string, withMain = false): Promise<{ deleted: string[] } | null> {
   const parent = db.select().from(chats).where(and(eq(chats.id, parentId), eq(chats.userId, userId))).get();
   if (!parent || parent.forkedFrom) return null;

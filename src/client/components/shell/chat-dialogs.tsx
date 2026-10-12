@@ -292,7 +292,7 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
   );
 }
 
-/** The sidebar's Delete all on a main chat with forks: the main chat and every fork go. */
+/** The sidebar's Delete group on a main chat with forks: the main chat and every fork go. */
 export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const store = useChatStore();
   const newChat = useNewChat();
@@ -329,7 +329,7 @@ export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: Dia
     <ResponsiveDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Delete all chats?"
+      title="Delete group?"
       description={`"${chat.title}" and every fork of it will be removed, with their messages. This cannot be undone.`}
       // Opens on Delete, so Enter confirms.
       onOpenAutoFocus={(e) => {
@@ -347,7 +347,7 @@ export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: Dia
           Cancel
         </Button>
         <Button ref={deleteRef} type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
-          Delete all
+          Delete group
         </Button>
       </div>
     </ResponsiveDialog>

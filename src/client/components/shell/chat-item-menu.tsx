@@ -56,7 +56,7 @@ export function ChatItemMenu({
         {onDeleteAll ? (
           <DropdownMenuItem className="min-h-11" variant="destructive" onSelect={onDeleteAll}>
             <ListX />
-            Delete all
+            Delete group
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
