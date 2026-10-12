@@ -4,6 +4,8 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- A reply's ⋯ offers Duplicate chat: a new fork tab of the main chat holding the chat up to and including that reply (a fork duplicates as its sibling; counts toward the ten-fork cap, and the item hides once the main chat has ten). `POST /api/chats/:id/duplicate`.
+- Every clickable control shows the pointer cursor: menu items (they had `cursor-default`) and every enabled button, tab and option (Tailwind's reset gives buttons the arrow).
 - A reply still rate limited after its four automatic tries no longer offers Try again.
 - Modals and menus open at once: the first open of search, rename, delete, the scenarios panel, the fork sheet, a tab's menu or a ⋯ menu waited about 310 ms (React holds a Suspense boundary's content back 300 ms after its fallback; every `next/dynamic` control suspended on first mount). Chunks now load first and the loaded component renders directly (5 to 25 ms measured); the dialogs' chunk is preloaded in idle time.
 - Fork tabs are back above the thread on desktop (the browser-style strip), still folder tabs on the input on phones; the reveal grows the Explore button's outline into the strip and moves it there in one step. The tab menu opens toward the free side.

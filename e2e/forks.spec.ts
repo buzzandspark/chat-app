@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { lastAssistant, openNewChat, runScenario, visible } from "./helpers";
+import { lastAssistant, openNewChat, runScenario, sendText, visible } from "./helpers";
 
 const tabs = (page: Page) => page.locator('[role="tab"]:visible');
 
@@ -28,6 +28,23 @@ async function forkAll(page: Page) {
 }
 
 test.describe("explore options", () => {
+  test("a reply's ⋯ duplicates the chat up to that reply as a new fork tab", async ({ page }, info) => {
+    const title = `duplicate me ${info.project.name}`;
+    await openNewChat(page);
+    await sendText(page, title);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    const parentUrl = page.url();
+    await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
+    const item = page.getByRole("menuitem", { name: "Duplicate chat" });
+    expect(await item.evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
+    await item.click();
+    await expect(page).not.toHaveURL(parentUrl, { timeout: 15_000 });
+    await expect(tabs(page)).toHaveText(["Main chat", `${title} (copy)`]);
+    await expect(tabs(page).nth(1)).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(1);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done");
+  });
+
   test("forking from the sheet puts each option in its own chat with tabs, a divider and the prompt as the first own message", async ({ page }) => {
     await replyWithOptions(page);
     const parentUrl = page.url();

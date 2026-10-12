@@ -1,9 +1,14 @@
 "use client";
-import { Check, Copy, MoreHorizontal, RefreshCw } from "lucide-react";
+import { Check, Copy, CopyPlus, MoreHorizontal, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IconButton } from "../ui/icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { MessageState } from "@client/store/chat-store";
+import { duplicateChat } from "@client/store/fork-chat";
+import { useChat, useChatStore } from "@client/store/hooks";
+import { useSidebarChats } from "@client/store/sidebar-store";
+import { MAX_FORKS } from "@shared/forks";
 import { ServedBy } from "./status-footer";
 
 interface AssistantActionsProps {
@@ -19,6 +24,18 @@ interface AssistantActionsProps {
 export function AssistantActions({ message, text, canRegenerate, onRegenerate, defaultOpen = null }: AssistantActionsProps) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(defaultOpen === "menu");
+  const [error, setError] = useState<string | null>(null);
+  const store = useChatStore();
+  const router = useRouter();
+  // Duplicate makes another fork of the main chat, so it's offered while the main chat has room for one.
+  const parentId = useChat(message.chatId).forkedFrom ?? message.chatId;
+  const roomForFork = useSidebarChats().filter((c) => c.forkedFrom === parentId).length < MAX_FORKS;
+  const onDuplicate = () => {
+    setError(null);
+    void duplicateChat(store, router, message.chatId, message.id).then((out) => {
+      if (out.error) setError(out.error);
+    });
+  };
   // Copy keeps the menu open long enough to show "Copied", then closes it (#68).
   const onCopy = async (e: Event) => {
     e.preventDefault();
@@ -56,8 +73,19 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
               Regenerate
             </DropdownMenuItem>
           ) : null}
+          {roomForFork ? (
+            <DropdownMenuItem onSelect={onDuplicate} className="min-h-11">
+              <CopyPlus />
+              Duplicate chat
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      {error ? (
+        <span role="alert" className="text-caption text-destructive">
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }

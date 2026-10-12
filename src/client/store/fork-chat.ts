@@ -6,7 +6,7 @@ import { CAP } from "./forks";
 import { prefetchChat } from "./prefetch";
 import { getSidebarStore, setPendingChat } from "./sidebar-store";
 
-// Loaded with the fork sheet, not the chat route: nothing forks before the sheet is open.
+// Loaded with the fork sheet or a reply's menu, not the chat route: nothing forks before one of those is open.
 
 export interface ForkOutcome {
   ok: boolean;
@@ -64,3 +64,26 @@ export async function forkChat(
   if (data.failed) return { ok: true, error: data.failed.error === "quota_exceeded" ? CAP : "Some forks could not start." };
   return { ok: true };
 }
+
+/** A reply's "Duplicate chat": a new fork tab holding the chat up to that reply, listed and opened. */
+export async function duplicateChat(store: ChatStore, router: { push: (href: string) => void }, chatId: string, messageId: string): Promise<ForkOutcome> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/chats/${chatId}/duplicate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chatId: uuidv7(), messageId }),
+    });
+  } catch {
+    return { ok: false, error: "You seem to be offline." };
+  }
+  if (res.status === 409) return { ok: false, error: `This chat already has ${MAX_FORKS} forks.` };
+  if (!res.ok) return { ok: false, error: MESSAGES[res.status] ?? `Duplicating failed (${res.status}). Try again.` };
+  const dup = (await res.json()) as { chatId: string; parentId: string; title: string; forkOrder: number };
+  getSidebarStore().upsert({ id: dup.chatId, title: dup.title, updatedAt: Date.now(), forkedFrom: dup.parentId, forkOrder: dup.forkOrder });
+  await prefetchChat(store, dup.chatId);
+  setPendingChat(dup.chatId);
+  router.push(`/c/${dup.chatId}`);
+  return { ok: true };
+}
+

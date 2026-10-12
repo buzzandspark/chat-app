@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, lte } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages } from "@db/schema";
 import { MAX_FORKS } from "@shared/forks";
@@ -152,6 +152,62 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
   // The options are spent: the button goes away and stays away.
   if (lastReply) db.update(messages).set({ forkOptions: [] }).where(eq(messages.id, lastReply.id)).run();
   return started;
+}
+
+export interface Duplicate {
+  chatId: string;
+  parentId: string;
+  title: string;
+  forkOrder: number;
+}
+
+/**
+ * A reply's "Duplicate chat": a new fork of the main chat (a fork duplicates as its sibling) holding the
+ * chat's rows up to and including that reply, and nothing more; the next turn is the user's to write.
+ * Counts toward the main chat's fork cap.
+ */
+export function duplicateChat(db: Db, input: { userId: string; chatId: string; messageId: string; newChatId: string; now?: number }): Duplicate {
+  const now = new Date(input.now ?? Date.now());
+  const source = db.select().from(chats).where(and(eq(chats.id, input.chatId), eq(chats.userId, input.userId))).get();
+  if (!source) throw new ForkError("not_found");
+  const reply = db.select().from(messages).where(and(eq(messages.id, input.messageId), eq(messages.chatId, source.id))).get();
+  if (!reply || reply.role !== "assistant" || reply.status === "streaming") throw new ForkError("not_found");
+  const parentId = source.forkedFrom ?? source.id;
+  const forkOrder = db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, parentId)).all().length;
+  if (forkOrder >= MAX_FORKS) throw new ForkError("too_many");
+  const rows = db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.chatId, source.id), lte(messages.position, reply.position)))
+    .orderBy(asc(messages.position))
+    .all();
+  const title = `${source.title ?? "New chat"} (copy)`;
+  db.transaction((tx) => {
+    tx.insert(chats)
+      .values({ id: input.newChatId, userId: input.userId, title, forkedFrom: parentId, forkPosition: reply.position + 1, forkOrder, createdAt: now, updatedAt: now, lastMessageAt: now })
+      .run();
+    for (const r of rows) {
+      tx.insert(messages)
+        .values({
+          id: uuidv7(),
+          chatId: input.newChatId,
+          role: r.role,
+          position: r.position,
+          content: r.content,
+          status: r.status,
+          requestedModel: r.requestedModel,
+          servingModel: r.servingModel,
+          stopReason: r.stopReason,
+          refusal: r.refusal,
+          error: r.error,
+          thinking: r.thinking,
+          createdAt: r.createdAt,
+          updatedAt: now,
+        })
+        .run();
+    }
+  });
+  return { chatId: input.newChatId, parentId, title, forkOrder };
 }
 
 /** Resolves when the API has begun the generation's message, when it ends first, or after `ms`. */

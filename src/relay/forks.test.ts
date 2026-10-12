@@ -7,7 +7,7 @@ import { uuidv7 } from "@shared/id";
 import type { HistoryMessage } from "./anthropic/history";
 import { buildRequest } from "./anthropic/request";
 import { Engine, type StartInput } from "./engine";
-import { createForks, declareWinner, deleteForks, ForkError, setForkOrder, type ForkRequest } from "./forks";
+import { createForks, declareWinner, deleteForks, duplicateChat, ForkError, setForkOrder, type ForkRequest } from "./forks";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { scenarioScript, type ScenarioName } from "./scenarios";
@@ -222,5 +222,46 @@ describe("createForks", () => {
     const order = db.select({ id: chats.id, forkOrder: chats.forkOrder }).from(chats).where(eq(chats.forkedFrom, parentId)).orderBy(asc(chats.forkOrder)).all();
     expect(order.map((o) => o.id)).toEqual([forks[2]!.chatId, forks[0]!.chatId, forks[1]!.chatId]);
     expect(setForkOrder(db, "nobody", parentId, [])).toBe(false);
+  });
+});
+
+describe("duplicateChat", () => {
+  const rowsOf = (chatId: string) => db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(asc(messages.position)).all();
+
+  it("copies the chat up to and including the chosen reply into a new fork of the main chat", async () => {
+    const parentId = await parentChat(2);
+    const parentRows = rowsOf(parentId);
+    const firstReply = parentRows.find((r) => r.role === "assistant")!;
+    const newChatId = uuidv7();
+    const dup = duplicateChat(db, { userId: USER, chatId: parentId, messageId: firstReply.id, newChatId });
+    const parent = db.select().from(chats).where(eq(chats.id, parentId)).get()!;
+    expect(dup).toEqual({ chatId: newChatId, parentId, title: `${parent.title ?? "New chat"} (copy)`, forkOrder: 0 });
+    const copy = db.select().from(chats).where(eq(chats.id, newChatId)).get()!;
+    expect(copy).toMatchObject({ forkedFrom: parentId, forkPosition: firstReply.position + 1, forkOrder: 0 });
+    const copied = rowsOf(newChatId);
+    expect(copied.map((r) => [r.role, r.position, r.content])).toEqual(parentRows.filter((r) => r.position <= firstReply.position).map((r) => [r.role, r.position, r.content]));
+    // New rows, not the parent's.
+    expect(copied.some((r) => parentRows.some((p) => p.id === r.id))).toBe(false);
+  });
+
+  it("duplicates a fork as another fork of the same main chat", async () => {
+    const parentId = await parentChat(1);
+    const reply = rowsOf(parentId).find((r) => r.role === "assistant")!;
+    const first = duplicateChat(db, { userId: USER, chatId: parentId, messageId: reply.id, newChatId: uuidv7() });
+    const replyInFork = rowsOf(first.chatId).find((r) => r.role === "assistant")!;
+    const second = duplicateChat(db, { userId: USER, chatId: first.chatId, messageId: replyInFork.id, newChatId: uuidv7() });
+    expect(second).toMatchObject({ parentId, forkOrder: 1 });
+    expect(second.title).toBe(`${first.title} (copy)`);
+  });
+
+  it("refuses another user's chat, a message that isn't a finished reply, and an eleventh fork", async () => {
+    const parentId = await parentChat(1);
+    const rows = rowsOf(parentId);
+    const reply = rows.find((r) => r.role === "assistant")!;
+    const question = rows.find((r) => r.role === "user")!;
+    expect(() => duplicateChat(db, { userId: "u2", chatId: parentId, messageId: reply.id, newChatId: uuidv7() })).toThrow(/not_found/);
+    expect(() => duplicateChat(db, { userId: USER, chatId: parentId, messageId: question.id, newChatId: uuidv7() })).toThrow(/not_found/);
+    for (let i = 0; i < 10; i++) duplicateChat(db, { userId: USER, chatId: parentId, messageId: reply.id, newChatId: uuidv7() });
+    expect(() => duplicateChat(db, { userId: USER, chatId: parentId, messageId: reply.id, newChatId: uuidv7() })).toThrow(ForkError);
   });
 });
