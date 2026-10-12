@@ -116,7 +116,7 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
       } else if (isModifier(e) && !e.shiftKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
         openSearch();
-      } else if (e.key === "Escape" && !desktop && phoneOpen) {
+      } else if (e.key === "Escape" && !e.defaultPrevented && !desktop && phoneOpen) {
         dismissPhone();
       } else if (openCount === 0 && (desktop || !phoneOpen)) {
         typeToFocus(e);

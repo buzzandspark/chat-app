@@ -3,6 +3,7 @@ import { useCallback, type ReactNode, type RefObject } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useBackGesture } from "@client/hooks/use-back-gesture";
+import { useMediaQuery } from "@client/hooks/use-media-query";
 
 interface ResponsiveDialogProps {
   open: boolean;
@@ -20,7 +21,9 @@ interface ResponsiveDialogProps {
 /** D19: a bottom sheet on phones (slides from the bottom, follows the keyboard), a centred modal at `md`. */
 export function ResponsiveDialog({ open, onOpenChange, title, description, children, className, returnFocus, onOpenAutoFocus }: ResponsiveDialogProps) {
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
-  useBackGesture(open, close);
+  // A sheet below `md` (as drawn), a centred modal at it: only the sheet takes the back gesture.
+  const centred = useMediaQuery("(min-width: 768px)");
+  useBackGesture(open && !centred, close);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent

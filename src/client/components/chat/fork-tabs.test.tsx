@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatStoreProvider } from "@client/store/context";
-import { ModalProvider } from "../ui/modal-manager";
+import { ModalProvider, useModals } from "../ui/modal-manager";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
 import { ForkTabs, forkTabs, moveBefore } from "./fork-tabs";
 
@@ -15,11 +15,21 @@ const chats: ChatSummary[] = [
   { id: "other", title: "Elsewhere", updatedAt: 0 },
 ];
 
+function OpenDialog() {
+  const { show } = useModals();
+  return (
+    <button type="button" onClick={() => show(() => <div role="dialog" aria-label="Delete chat" />)}>
+      Open dialog
+    </button>
+  );
+}
+
 function renderTabs(chatId: string) {
   render(
     <ChatStoreProvider>
       <ModalProvider>
         <ForkTabs chatId={chatId} />
+        <OpenDialog />
       </ModalProvider>
     </ChatStoreProvider>,
   );
@@ -78,6 +88,23 @@ describe("ForkTabs", () => {
     renderTabs("f2");
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Main chat", "SQLite", "Postgres"]);
     expect(fetch).toHaveBeenLastCalledWith("/api/chats/f2", expect.objectContaining({ body: JSON.stringify({ tabHidden: false }) }));
+  });
+
+  it("a reopen the server refuses is sent once, not retried in a loop", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    getSidebarStore().hydrate(chats.map((c) => (c.id === "f2" ? { ...c, tabHidden: true } : c)));
+    renderTabs("f2");
+    for (let i = 0; i < 5; i++) await act(() => new Promise((r) => setTimeout(r, 0)));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Main chat", "SQLite", "Postgres"]);
+  });
+
+  it("Ctrl+Shift+brackets leave the tabs alone while a dialog is open", () => {
+    getSidebarStore().hydrate(chats);
+    renderTabs("f2");
+    fireEvent.click(screen.getByRole("button", { name: "Open dialog" }));
+    fireEvent.keyDown(window, { ctrlKey: true, shiftKey: true, code: "BracketRight" });
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("closing the open tab moves to the next one; Ctrl+Shift+brackets cycle", () => {

@@ -5,8 +5,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@client/store/hooks";
 import { prefetchChat } from "@client/store/prefetch";
-import { getSidebarStore, setPendingChat, setTabHidden, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
+import { getSidebarStore, patchChat, setPendingChat, setTabHidden, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { chunk } from "../ui/lazy-chunk";
+import { useModals } from "../ui/modal-manager";
 import type { ForkTabMenu } from "./fork-tab-menu";
 import { ExploreOutline } from "./explore-options";
 
@@ -55,6 +56,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   const model = forkTabs(chats, chatId);
   const router = useRouter();
   const store = useChatStore();
+  const { openCount } = useModals();
   const [dragging, setDragging] = useState<{ id: string; ids: string[] } | null>(null);
   const [menu, setMenu] = useState<{ tab: ForkTab; x: number; y: number; Menu: typeof ForkTabMenu } | null>(null);
   const drag = useRef<{ id: string; startX: number; moved: boolean } | null>(null);
@@ -92,12 +94,14 @@ export function ForkTabs({ chatId }: { chatId: string }) {
         closing.current = null;
       };
     }
-    void setTabHidden(getSidebarStore(), chatId, false);
+    // No rollback: a failed reopen would hide the tab again and rerun this, retrying in a loop.
+    getSidebarStore().patch(chatId, { tabHidden: false });
+    void patchChat(chatId, { tabHidden: false });
   }, [activeHidden, chatId]);
-  // Ctrl+Shift+] and [ move to the next and previous tab, wrapping round.
+  // Ctrl+Shift+] and [ move to the next and previous tab, wrapping round; not while a dialog is up.
   const visibleKey = shown ? visibleIds.join(",") : "";
   useEffect(() => {
-    if (!visibleKey) return;
+    if (!visibleKey || openCount > 0) return;
     const ids = visibleKey.split(",");
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || !e.shiftKey || (e.code !== "BracketLeft" && e.code !== "BracketRight")) return;
@@ -108,7 +112,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [visibleKey, chatId, open]);
+  }, [visibleKey, chatId, open, openCount]);
   const closeMenu = useCallback(() => setMenu(null), []);
   // Before paint, so a strip that grows out of the Explore button never shows a frame at full size first.
   const parentId = model?.parentId ?? null;

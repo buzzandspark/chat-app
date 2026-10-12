@@ -1,6 +1,6 @@
 "use client";
 import { MoreHorizontal } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
 import { useMarkdownComponent } from "@client/markdown/ready";
@@ -84,13 +84,11 @@ export function AssistantMessage({ message }: { message: MessageState }) {
   const Markdown = useMarkdownComponent() ?? MarkdownLazy;
   const text = textOf(message.blocks);
   const hasText = text.length > 0;
-  const paintedRef = useRef(false);
 
   // D20: first paint is measured in a task after the committing frame, only for a reply this client sent (#46).
   const sentHere = message.timings?.client?.sent !== undefined && message.timings.client.firstPaint === undefined;
   useEffect(() => {
-    if (!hasText || !sentHere || paintedRef.current) return;
-    paintedRef.current = true;
+    if (!hasText || !sentHere) return;
     const id = message.id;
     const raf = requestAnimationFrame(() => {
       const channel = new MessageChannel();
