@@ -23,11 +23,14 @@ test.describe("guest mode", () => {
       await page.keyboard.press("Escape");
     }
 
-    // The server refuses another model even if the page asked for one.
-    const refused = await page.request.post("/api/chat", {
-      data: { generationId: crypto.randomUUID(), chatId: crypto.randomUUID(), messageId: crypto.randomUUID(), assistantMessageId: crypto.randomUUID(), text: "hi", model: "claude-opus-5-5", thinking: { harder: false } },
+    // The server runs Haiku whatever model a guest's request names.
+    const chatId = crypto.randomUUID();
+    const sent = await page.request.post("/api/chat", {
+      data: { generationId: crypto.randomUUID(), chatId, messageId: crypto.randomUUID(), assistantMessageId: crypto.randomUUID(), text: "hi", model: "claude-opus-5-5", thinking: { harder: false } },
     });
-    expect(refused.status()).toBe(403);
+    expect(sent.ok()).toBe(true);
+    const saved = (await (await page.request.get(`/api/chats/${chatId}`)).json()) as { messages: { role: string; requestedModel: string | null }[] };
+    expect(saved.messages.find((m) => m.role === "assistant")?.requestedModel).toBe("claude-haiku-5-5");
 
     // The first send gives the chat its address.
     await sendText(page, "guest question");

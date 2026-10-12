@@ -1,5 +1,6 @@
 import { getDb, schema } from "@db/client";
 import { uuidv7 } from "@shared/id";
+import { GUEST_MODEL } from "@shared/models";
 import { errorResponse, requireUser } from "@server/current-user";
 import { getLimiters, tooMany } from "@server/ratelimit";
 
@@ -20,6 +21,8 @@ export async function POST(): Promise<Response> {
     const chatId = uuidv7();
     const now = new Date();
     const turns = 100;
+    // The chat opens on its last reply's model: a guest's must be one it can use.
+    const model = user.role === "guest" ? GUEST_MODEL : "claude-sonnet-5-5";
     db.transaction((tx) => {
       tx.insert(schema.chats).values({ id: chatId, userId: user.id, title: "Scenario: extremely long chat", createdAt: now, updatedAt: now, lastMessageAt: now }).run();
       let position = 0;
@@ -45,8 +48,8 @@ export async function POST(): Promise<Response> {
             position: position++,
             content: [{ type: "text", text: body, citations: null }],
             status: "done",
-            requestedModel: "claude-sonnet-5-5",
-            servingModel: "claude-sonnet-5-5",
+            requestedModel: model,
+            servingModel: model,
             stopReason: "end_turn",
             createdAt: now,
             updatedAt: now,

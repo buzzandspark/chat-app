@@ -11,6 +11,7 @@ import { getSidebarStore } from "@client/store/sidebar-store";
 import { getGenerationClient } from "@client/transport/generation-client";
 import { watchOptions } from "@client/store/forks";
 import { MAX_FORKS } from "@shared/forks";
+import { GUEST_MODEL } from "@shared/models";
 import { isUuid, uuidv7 } from "@shared/id";
 import { isModelId } from "@shared/models";
 import { ChatActionsContext, ChatLiveStateContext, type EditingState } from "./chat-context";
@@ -35,7 +36,7 @@ export function ChatView({ children }: { children: ReactNode }) {
     return params.id ?? (fromNew && isUuid(fromNew) ? fromNew : uuidv7());
   });
   const newChatRoute = params.id === undefined;
-  const { userId, scenarioPanel, exploreOptions } = useShellUser();
+  const { userId, guest, scenarioPanel, exploreOptions } = useShellUser();
   const store = useChatStore();
   const client = useMemo(() => getGenerationClient(store), [store]);
   const chat = useChat(chatId);
@@ -208,7 +209,11 @@ export function ChatView({ children }: { children: ReactNode }) {
     }),
     [chatId, userId, client, setSettings, send, retry, editMessage, editQueued, removeQueued, scenarioPanel],
   );
-  const live = useMemo(() => ({ settings, editing, followEngaged }), [settings, editing, followEngaged]);
+  // A guest's picker always reads Haiku, even in a chat whose replies were on another model (the server runs Haiku).
+  const live = useMemo(
+    () => ({ settings: guest && settings.model !== GUEST_MODEL ? { ...settings, model: GUEST_MODEL } : settings, editing, followEngaged }),
+    [guest, settings, editing, followEngaged],
+  );
 
   if (!isUuid(chatId)) return <MissingChat />;
 

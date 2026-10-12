@@ -31,9 +31,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const user = await requireUser();
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request", issues: parsed.error.issues });
-    const body = parsed.data;
-    // A guest runs Haiku only; the other models need an account.
-    if (user.role === "guest" && body.model !== GUEST_MODEL) return jsonError(403, { error: "guest_model" });
+    // A guest runs Haiku only, whatever the request names (a reply seeded or saved on another model included).
+    const body = user.role === "guest" ? { ...parsed.data, model: GUEST_MODEL } : parsed.data;
     const { engine, store } = getRelay();
     // A duplicate POST for an id that already exists goes straight to start's `exists` and the attach
     // below (D2): the drain gates new work only, so an owner reconnecting while the reply is still
