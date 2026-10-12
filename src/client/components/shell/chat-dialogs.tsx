@@ -8,6 +8,7 @@ import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, setPendingChat, type ChatSummary } from "@client/store/sidebar-store";
 import { watchOptions } from "@client/store/forks";
+import { forkTabs } from "../chat/fork-tabs";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface DialogProps {
@@ -83,6 +84,7 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
 
 export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const newChat = useNewChat();
+  const router = useRouter();
   const deleteRef = useRef<HTMLButtonElement>(null);
   const store = useChatStore();
   const [busy, setBusy] = useState(false);
@@ -96,13 +98,22 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       if (!res.ok && res.status !== 404) setError(`Delete failed (${res.status}). Try again.`);
       if (res.ok || res.status === 404) {
         const sidebar = getSidebarStore();
+        // Deleting the open chat moves to the next tab over, as closing it does; a new chat when it has no tabs.
+        const tabs = forkTabs(sidebar.get(), chat.id)?.tabs.filter((t) => !t.hidden).map((t) => t.id) ?? [];
+        const at = tabs.indexOf(chat.id);
+        const nextTab = at === -1 ? undefined : (tabs[at + 1] ?? tabs[at - 1]);
         for (const f of sidebar.get()) if (f.forkedFrom === chat.id) sidebar.patch(f.id, { forkedFrom: null });
         sidebar.remove(chat.id);
         // The hidden view (and a Back to its URL) shows an empty chat, not the deleted rows.
         store.removeChat(chat.id);
         if (currentChatId === chat.id) markNavigationClose();
         onOpenChange(false);
-        if (currentChatId === chat.id) newChat();
+        if (currentChatId === chat.id) {
+          if (nextTab) {
+            setPendingChat(nextTab);
+            router.push(`/c/${nextTab}`);
+          } else newChat();
+        }
       }
     } catch {
       setError("Delete failed: you seem to be offline.");

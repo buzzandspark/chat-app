@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- Deleting the open chat moves to the next tab over (or the one before, if it was the last), as closing a tab does; a chat with no tabs still opens a new chat.
 - Settings usage: Explore is laid out like Chats, a total row with one row per model under it, instead of a fixed "Haiku" caption.
 - Search shows skeleton rows from the keystroke, through the 200 ms debounce, until that query's results are in; the previous query's hits no longer linger meanwhile.
 - Explore options also appear for a menu of ideas or suggestions the user could pick from, even when they could do several (a reply offering three random decisions got no button). Tips that together serve one goal still don't count. Checked on 10 replies, 3 runs each: 30/30, against 27/30 before.
