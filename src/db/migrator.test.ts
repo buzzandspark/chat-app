@@ -32,7 +32,7 @@ let dir: string;
 let sqlite: Database.Database;
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "cadence-migrator-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "chat-migrator-"));
   sqlite = new Database(path.join(dir, "app.db"));
   sqlite.pragma("foreign_keys = ON");
 });

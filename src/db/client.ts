@@ -15,10 +15,10 @@ interface DbHandle {
 
 // One connection per process (D1). Cached on globalThis so dev HMR does not
 // open a new handle on every reload.
-const g = globalThis as unknown as { __cadenceDb?: DbHandle };
+const g = globalThis as unknown as { __chatDb?: DbHandle };
 
 export function openDatabase(filePath: string = process.env.DATABASE_PATH ?? "data/app.db"): DbHandle {
-  if (g.__cadenceDb && g.__cadenceDb.path === filePath) return g.__cadenceDb;
+  if (g.__chatDb && g.__chatDb.path === filePath) return g.__chatDb;
   if (filePath !== ":memory:") fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const sqlite = new Database(filePath);
   sqlite.pragma("journal_mode = WAL");
@@ -28,8 +28,8 @@ export function openDatabase(filePath: string = process.env.DATABASE_PATH ?? "da
   // SQLite's lower() folds ASCII only; search needs the same folding as the query (JavaScript's).
   sqlite.function("unicode_lower", { deterministic: true }, (value: unknown) => (typeof value === "string" ? value.toLowerCase() : value));
   const db = drizzle(sqlite, { schema });
-  g.__cadenceDb = { db, sqlite, path: filePath };
-  return g.__cadenceDb;
+  g.__chatDb = { db, sqlite, path: filePath };
+  return g.__chatDb;
 }
 
 export function getDb(): Db {
@@ -37,14 +37,14 @@ export function getDb(): Db {
 }
 
 export function closeDatabase(): void {
-  if (!g.__cadenceDb) return;
+  if (!g.__chatDb) return;
   try {
-    g.__cadenceDb.sqlite.pragma("wal_checkpoint(TRUNCATE)");
+    g.__chatDb.sqlite.pragma("wal_checkpoint(TRUNCATE)");
   } catch {
     // best effort before close
   }
-  g.__cadenceDb.sqlite.close();
-  g.__cadenceDb = undefined;
+  g.__chatDb.sqlite.close();
+  g.__chatDb = undefined;
 }
 
 export { schema };

@@ -7,7 +7,7 @@ vi.mock("server-only", () => ({}));
 
 // Imports are hoisted above this file's code; the database path has to be set before @db/client loads.
 const dbPath = vi.hoisted(() => {
-  const p = `${process.env.TMPDIR ?? "/tmp"}/cadence-auth-${process.pid}-${Date.now()}/app.db`;
+  const p = `${process.env.TMPDIR ?? "/tmp"}/chat-auth-${process.pid}-${Date.now()}/app.db`;
   process.env.DATABASE_PATH = p;
   return p;
 });

@@ -23,7 +23,7 @@ function setDark(dark: boolean): void {
     meta.content = dark ? "#1a1816" : "#faf9f6";
   }
   try {
-    localStorage.setItem("cadence-theme", dark ? "dark" : "light");
+    localStorage.setItem("chat-theme", dark ? "dark" : "light");
   } catch {
     // storage unavailable
   }

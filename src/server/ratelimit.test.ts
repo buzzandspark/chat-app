@@ -4,15 +4,15 @@ vi.mock("server-only", () => ({}));
 
 import { getLimiters } from "./ratelimit";
 
-const g = globalThis as unknown as { __cadenceLimiters?: ReturnType<typeof getLimiters> };
+const g = globalThis as unknown as { __chatLimiters?: ReturnType<typeof getLimiters> };
 
 describe("getLimiters", () => {
   beforeEach(() => {
-    delete g.__cadenceLimiters;
+    delete g.__chatLimiters;
   });
   afterEach(() => {
-    for (const limiter of Object.values(g.__cadenceLimiters ?? {})) limiter.stopSweeper();
-    delete g.__cadenceLimiters;
+    for (const limiter of Object.values(g.__chatLimiters ?? {})) limiter.stopSweeper();
+    delete g.__chatLimiters;
     vi.restoreAllMocks();
   });
 

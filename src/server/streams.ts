@@ -5,8 +5,8 @@ interface StreamRegistry {
   waiters: Array<() => void>;
 }
 
-const g = globalThis as unknown as { __cadenceStreams?: StreamRegistry };
-const registry: StreamRegistry = (g.__cadenceStreams ??= { open: 0, waiters: [] });
+const g = globalThis as unknown as { __chatStreams?: StreamRegistry };
+const registry: StreamRegistry = (g.__chatStreams ??= { open: 0, waiters: [] });
 
 /** Counts open SSE responses so shutdown can let their last bytes flush. */
 export function streamOpened(): void {

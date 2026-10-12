@@ -28,7 +28,7 @@ async function shot(page: Page, name: string): Promise<void> {
 
 async function setTheme(page: Page, dark: boolean): Promise<void> {
   await page.evaluate((d) => {
-    localStorage.setItem("cadence-theme", d ? "dark" : "light");
+    localStorage.setItem("chat-theme", d ? "dark" : "light");
     document.documentElement.classList.toggle("dark", d);
   }, dark);
 }

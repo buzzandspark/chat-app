@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
@@ -64,11 +63,6 @@ export function LoginForm() {
       <Button type="submit" className="touch-target w-full" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
-      <p className="text-center text-small text-muted-foreground">
-        <Link href="/" className="underline">
-          Back
-        </Link>
-      </p>
     </form>
   );
 }

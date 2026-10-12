@@ -1,6 +1,6 @@
 # Self-hosting
 
-Cadence is one Node process with a SQLite file. Run it anywhere that can run a container and mount a volume.
+Chat is one Node process with a SQLite file. Run it anywhere that can run a container and mount a volume.
 
 ## Quick start
 
@@ -15,8 +15,8 @@ With no `ANTHROPIC_API_KEY` the app boots in replay mode: every model is served 
 ## Docker
 
 ```sh
-docker build -t cadence .
-docker run -p 3000:3000 -v cadence-data:/data --env-file .env cadence
+docker build -t chat .
+docker run -p 3000:3000 -v chat-data:/data --env-file .env chat
 ```
 
 The container expects a volume at `/data` and keeps its database at `/data/app.db`. Leave `DATABASE_PATH` unset (it is commented out in `.env.example`); if you set it, it must point under `/data`. A relative path such as `data/app.db` resolves inside the container's `/app`, off the volume, and the database is lost when the container is recreated. Docker's `--env-file` takes everything after `=` as the value, including a trailing `# comment`, so keep comments in `.env` on lines of their own.

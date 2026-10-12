@@ -31,7 +31,7 @@ export function proxy(request: NextRequest) {
   }
   // ADR-0004: validation happens in the layout; it needs the path to send an expired session back here.
   const headers = new Headers(request.headers);
-  headers.set("x-cadence-path", request.nextUrl.pathname);
+  headers.set("x-pathname", request.nextUrl.pathname);
   return NextResponse.next({ request: { headers } });
 }
 

@@ -15,11 +15,11 @@ interface RelaySingleton {
   options: OptionsService;
 }
 
-const g = globalThis as unknown as { __cadenceRelay?: RelaySingleton };
+const g = globalThis as unknown as { __chatRelay?: RelaySingleton };
 
 /** One engine per process (D1), created lazily and cached across dev reloads. */
 export function getRelay(): RelaySingleton {
-  if (g.__cadenceRelay) return g.__cadenceRelay;
+  if (g.__chatRelay) return g.__chatRelay;
   const db = getDb();
   // A finished buffer is kept a minute for late resumes; after that a resume gets the saved snapshot.
   const store = new EventStore({ evictAfterMs: 60_000 });
@@ -40,6 +40,6 @@ export function getRelay(): RelaySingleton {
     await engine.drain();
     store.stopSweeper();
   });
-  g.__cadenceRelay = { engine, store, quota, options };
-  return g.__cadenceRelay;
+  g.__chatRelay = { engine, store, quota, options };
+  return g.__chatRelay;
 }

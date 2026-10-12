@@ -17,7 +17,7 @@ function authSecret(): string {
 function createAuth() {
   const adminPlugin = admin({ defaultRole: "user", adminRoles: ["admin"] });
   return betterAuth({
-    appName: "Cadence",
+    appName: "Chat",
     baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
     secret: authSecret(),
     database: drizzleAdapter(getDb(), {
@@ -58,10 +58,10 @@ function createAuth() {
   });
 }
 
-const g = globalThis as unknown as { __cadenceAuth?: ReturnType<typeof createAuth> };
+const g = globalThis as unknown as { __chatAuth?: ReturnType<typeof createAuth> };
 export function getAuth(): ReturnType<typeof createAuth> {
-  g.__cadenceAuth ??= createAuth();
-  return g.__cadenceAuth;
+  g.__chatAuth ??= createAuth();
+  return g.__chatAuth;
 }
 
 export type Auth = ReturnType<typeof createAuth>;

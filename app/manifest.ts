@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Cadence",
-    short_name: "Cadence",
+    name: "Chat",
+    short_name: "Chat",
     description: "A streaming chat client built for phones first.",
-    start_url: "/",
+    start_url: "/c/new",
     display: "standalone",
     background_color: "#faf9f6",
     theme_color: "#faf9f6",

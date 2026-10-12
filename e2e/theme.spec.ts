@@ -6,7 +6,7 @@ import { ensureSidebarOpen, openNewChat } from "./helpers";
 test.describe("theme", () => {
   test("a stored dark theme is applied before the first paint", async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem("cadence-theme", "dark");
+      localStorage.setItem("chat-theme", "dark");
       const w = window as Window & { __darkAt?: number };
       const check = () => {
         if (document.documentElement?.classList.contains("dark") && w.__darkAt === undefined) w.__darkAt = performance.now();
@@ -30,7 +30,7 @@ test.describe("theme", () => {
     // arrives); ours is the first script that executes synchronously, before the RSC payload and
     // before any non-async Next script.
     const html = await (await page.request.get(page.url())).text();
-    const theme = html.indexOf('id="cadence-theme"');
+    const theme = html.indexOf('id="chat-theme"');
     expect(theme).toBeGreaterThan(-1);
     const before = html.slice(0, theme).match(/<script\b[^>]*>/g) ?? [];
     expect(before.length).toBeGreaterThan(0);
@@ -39,7 +39,7 @@ test.describe("theme", () => {
     const firstSyncNext = html.slice(theme).search(/<script\b(?![^>]*\basync\b)(?![^>]*\bnoModule\b)[^>]*src="\/_next\//);
     expect(firstSyncNext === -1 || firstSyncNext > 0).toBe(true);
     // Hydrated, the element is gone: the client never renders a script tag.
-    await expect(page.locator("script#cadence-theme")).toHaveCount(0);
+    await expect(page.locator("script#chat-theme")).toHaveCount(0);
     const errors: string[] = [];
     page.on("console", (m) => {
       if (m.type() === "error") errors.push(m.text());

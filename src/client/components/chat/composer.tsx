@@ -252,7 +252,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={onKeyDown}
               rows={1}
-              placeholder={editing ? "Edit your message" : "Message Cadence"}
+              placeholder={editing ? "Edit your message" : "Send a message"}
               aria-label="Message"
               enterKeyHint={enterSends ? "send" : "enter"}
               className="max-h-[180px] min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-body outline-none [grid-area:1/1] placeholder:text-muted-foreground"

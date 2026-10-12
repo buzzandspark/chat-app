@@ -17,7 +17,7 @@ export function ComposerSkeleton() {
     >
       <div className="mx-auto w-full max-w-thread">
         <div className="flex flex-col rounded-xl border border-input bg-card shadow-xs">
-          <div className="min-h-11 w-full px-3 py-2.5 text-body text-muted-foreground">Message Cadence</div>
+          <div className="min-h-11 w-full px-3 py-2.5 text-body text-muted-foreground">Send a message</div>
           <div className="flex items-center justify-between gap-1 px-1.5 pb-1.5">
             <div className="flex min-w-0 items-center gap-0.5">
               <Skeleton className="touch-target w-24 rounded-lg" />

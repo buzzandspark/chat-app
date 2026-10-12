@@ -1,7 +1,7 @@
 "use client";
 import { useSyncExternalStore } from "react";
 
-const PREFIX = "cadence:draft:";
+const PREFIX = "chat:draft:";
 
 export function draftKey(userId: string, chatId: string): string {
   return `${PREFIX}${userId}:${chatId}`;

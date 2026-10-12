@@ -12,8 +12,8 @@ interface ShutdownState {
   installed: boolean;
 }
 
-const g = globalThis as unknown as { __cadenceShutdown?: ShutdownState };
-const state: ShutdownState = (g.__cadenceShutdown ??= { draining: false, drains: [], closers: [], installed: false });
+const g = globalThis as unknown as { __chatShutdown?: ShutdownState };
+const state: ShutdownState = (g.__chatShutdown ??= { draining: false, drains: [], closers: [], installed: false });
 state.closers ??= [];
 
 /** True once a termination signal has arrived; new generations are refused. */

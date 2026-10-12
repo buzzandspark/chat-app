@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Working next to a running dev server (Cadence)
+## Working next to a running dev server
 
 The developer runs `pnpm dev` in this checkout. Next 16 serves one dev server per checkout (`.next/dev/lock`) and hot-reloads every file write in it. Do not edit sources, run `next build`/`next typegen`, Playwright, the screenshot pass, or the shutdown script here while that lock names a live process: the server's clients are driven and re-chunked by those actions, and a tab can end up with "module factory is not available". `scripts/dev-lock-guard.mjs` refuses those scripts in that state. Work in a worktree instead:
 

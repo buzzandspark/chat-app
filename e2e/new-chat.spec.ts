@@ -61,6 +61,12 @@ test.describe("new chat", () => {
     await expect(aside.getByRole("link", { name: third })).toBeVisible();
   });
 
+  test("the root has no landing page: it opens a new chat", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(CHAT_URL);
+    await waitForComposer(page);
+  });
+
   test("/c/new redirects to a fresh chat id that renders an empty, usable view", async ({ page }) => {
     await page.goto("/c/new");
     await expect(page).toHaveURL(CHAT_URL);

@@ -6,11 +6,11 @@ interface Limiters {
   seedLongChat: RateLimiter;
 }
 
-const g = globalThis as unknown as { __cadenceLimiters?: Limiters };
+const g = globalThis as unknown as { __chatLimiters?: Limiters };
 
 /** Per-IP or per-user windows for the open write endpoints (one process, D1). */
 export function getLimiters(): Limiters {
-  if (g.__cadenceLimiters) return g.__cadenceLimiters;
+  if (g.__chatLimiters) return g.__chatLimiters;
   const limiters: Limiters = {
     // The e2e projects share one dev user and each seeds a long chat; the harness is not the abuse case.
     seedLongChat: env.e2e ? new RateLimiter(60, 600) : new RateLimiter(2, 10),
@@ -18,7 +18,7 @@ export function getLimiters(): Limiters {
   // Idle keys are dropped every ten minutes, so a day of distinct callers does not pile up in memory.
   // Started here, once with the limiters, not per call: a timer per request would never be cleared.
   for (const limiter of Object.values(limiters)) limiter.startSweeper();
-  g.__cadenceLimiters = limiters;
+  g.__chatLimiters = limiters;
   return limiters;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useEffectEvent } from "react";
 
-const KEY = "cadenceSheet";
+const KEY = "chatSheet";
 const NAVIGATION_WINDOW_MS = 1000;
 let navigationCloseAt = -Infinity;
 

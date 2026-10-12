@@ -13,7 +13,7 @@ vi.mock("@auth/admin-seed", () => ({ seedAdmin: vi.fn(async () => undefined) }))
 vi.mock("@relay/orphans", () => ({ settleOrphan: vi.fn() }));
 vi.mock("./shutdown", () => ({ installSignalHandlers: vi.fn(), onShutdown: vi.fn() }));
 
-const g = globalThis as unknown as { __cadenceBooted?: boolean };
+const g = globalThis as unknown as { __chatBooted?: boolean };
 
 class Exit extends Error {
   constructor(readonly code: number | string | null | undefined) {
@@ -34,7 +34,7 @@ async function bootWith(vars: Record<string, string>): Promise<void> {
 
 describe("boot: the e2e harness switches in production", () => {
   beforeEach(() => {
-    delete g.__cadenceBooted;
+    delete g.__chatBooted;
     vi.spyOn(process, "exit").mockImplementation((code) => {
       throw new Exit(code);
     });
@@ -42,7 +42,7 @@ describe("boot: the e2e harness switches in production", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
   });
   afterEach(() => {
-    delete g.__cadenceBooted;
+    delete g.__chatBooted;
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
     seedDevUser.mockClear();

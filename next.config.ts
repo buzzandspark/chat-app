@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
   // scripts, fonts, the redeem POST, the page after it) may carry it in a Referer, nor `document.referrer` on
   // the next page. A header rather than a <meta>, so it holds before the head is parsed.
   // Last match wins for a repeated key, so the invite rule comes after the site-wide one.
+  // No landing page: the root opens a new chat (sign-in first, through the proxy).
+  redirects: async () => [{ source: "/", destination: "/c/new", permanent: false }],
   headers: () => [
     { source: "/:path*", headers: SECURITY_HEADERS },
     { source: "/api/:path*", headers: API_HEADERS },

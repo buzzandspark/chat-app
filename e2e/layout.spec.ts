@@ -9,9 +9,7 @@ async function noHorizontalScroll(page: import("@playwright/test").Page) {
 test.describe("phone layout", () => {
   test.use({ viewport: { width: 320, height: 568 } });
 
-  test("320 px: landing, new chat, and a giant code block have no horizontal scroll", async ({ page }) => {
-    await page.goto("/");
-    await noHorizontalScroll(page);
+  test("320 px: new chat and a giant code block have no horizontal scroll", async ({ page }) => {
     await openNewChat(page);
     await noHorizontalScroll(page);
     await runScenario(page, "giant_code_block");

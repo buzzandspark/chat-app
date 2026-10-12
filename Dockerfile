@@ -38,10 +38,10 @@ COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/src/db/migrations ./src/db/migrations
 COPY --from=build --chown=node:node /app/fixtures ./fixtures
 # Starts as root only to hand a runtime-mounted volume to `node`, then drops to `node` for the server.
-COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/cadence-entrypoint
+COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/chat-entrypoint
 EXPOSE 3000
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # Exec form so Node receives SIGTERM directly rather than via a shell or pnpm; the entrypoint execs it.
-ENTRYPOINT ["/usr/local/bin/cadence-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/chat-entrypoint"]
 CMD ["node", "server.js"]

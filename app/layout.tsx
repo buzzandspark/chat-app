@@ -23,10 +23,10 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Cadence", template: "%s · Cadence" },
+  title: { default: "Chat", template: "%s · Chat" },
   description: "A streaming chat client built for phones first.",
-  applicationName: "Cadence",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Cadence" },
+  applicationName: "Chat",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Chat" },
   formatDetection: { telephone: false },
 };
 

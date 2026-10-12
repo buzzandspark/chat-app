@@ -100,7 +100,6 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 safe-x safe-top safe-bottom py-6">
       <header className="space-y-1">
-        <p className="text-caption uppercase tracking-[0.2em] text-muted-foreground">Cadence</p>
         <h1 className="text-title font-semibold">Admin</h1>
       </header>
 

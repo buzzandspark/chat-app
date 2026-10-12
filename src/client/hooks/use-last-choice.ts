@@ -2,7 +2,7 @@
 import type { ChatSettings } from "@client/store/chat-store";
 import { isModelId } from "@shared/models";
 
-const PREFIX = "cadence:settings:";
+const PREFIX = "chat:settings:";
 
 type Choice = Pick<ChatSettings, "model" | "thinking">;
 

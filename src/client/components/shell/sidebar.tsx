@@ -75,7 +75,7 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               <X className="dock:hidden" />
               <PanelLeft className="hidden dock:block" />
             </IconButton>
-            <span className="truncate px-1 text-small font-semibold tracking-tight">Cadence</span>
+            <span className="truncate px-1 text-small font-semibold tracking-tight">Chat</span>
           </div>
           <div className="flex items-center">
             <IconButton label="Search chats" shortcut="⌘K" aria-keyshortcuts="Meta+K Control+K" onClick={onSearch}>

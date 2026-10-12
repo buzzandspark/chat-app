@@ -9,11 +9,11 @@ import { settleOrphan } from "@relay/orphans";
 import { redactInviteTokens } from "@shared/redact";
 import { installSignalHandlers, onShutdown } from "./shutdown";
 
-const g = globalThis as unknown as { __cadenceBooted?: boolean };
+const g = globalThis as unknown as { __chatBooted?: boolean };
 
 export async function boot(): Promise<void> {
-  if (g.__cadenceBooted) return;
-  g.__cadenceBooted = true;
+  if (g.__chatBooted) return;
+  g.__chatBooted = true;
 
   if (env.isProd && !env.BETTER_AUTH_SECRET) {
     // Without it better-auth fails every auth call while /api/health stays green, and with TEST set
@@ -49,7 +49,7 @@ export async function boot(): Promise<void> {
   }
 
   console.log(
-    `[boot] cadence ready (${env.replayMode ? "replay mode" : "live models"}, db=${env.DATABASE_PATH})`,
+    `[boot] chat ready (${env.replayMode ? "replay mode" : "live models"}, db=${env.DATABASE_PATH})`,
   );
 }
 

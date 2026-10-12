@@ -19,7 +19,7 @@ const currentUser = cache(async () => {
   const user = await getCurrentUser();
   if (!user) {
     // The cookie got past the proxy but the session is expired, purged or banned: sign in again, then come back.
-    const path = (await headers()).get("x-cadence-path") ?? "/c/new";
+    const path = (await headers()).get("x-pathname") ?? "/c/new";
     redirect(`/login?next=${encodeURIComponent(path)}`);
   }
   return user;
