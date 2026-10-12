@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { lastAssistant, openNewChat, runScenario, visible } from "./helpers";
+import { lastAssistant, openNewChat, runScenario, sendText, visible } from "./helpers";
 
 // D16 auto-follow and the thread's pinning (review findings on scroll).
 test.describe("scroll", () => {
@@ -21,6 +21,8 @@ test.describe("scroll", () => {
     const row = lastAssistant(page);
     await expect(row.locator(".markdown")).not.toHaveText("", { timeout: 60_000 });
     const list = visible(page, "message-list");
+    // Once there is something above to read back to.
+    await expect.poll(() => list.evaluate((el) => el.scrollHeight - el.clientHeight), { timeout: 60_000 }).toBeGreaterThan(2);
     await list.hover();
     await page.mouse.wheel(0, -10);
     await expect(page.getByRole("button", { name: "Jump to latest" })).toBeVisible();
@@ -30,6 +32,20 @@ test.describe("scroll", () => {
     await page.waitForTimeout(200);
     const distance = await list.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
     expect(distance).toBeLessThanOrEqual(2);
+  });
+
+  test("a chat that fits on screen never offers Jump to latest", async ({ page, isMobile }) => {
+    test.skip(isMobile, "a wheel is a desktop input");
+    await openNewChat(page);
+    await sendText(page, "a short question");
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    const list = visible(page, "message-list");
+    expect(await list.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(2);
+    await list.hover();
+    await page.mouse.wheel(0, -200);
+    await page.keyboard.press("PageUp");
+    await page.waitForTimeout(300);
+    await expect(page.getByRole("button", { name: "Jump to latest" })).toHaveCount(0);
   });
 
   test("the thread stays pinned to its end when the viewport shrinks (keyboard)", async ({ page, isMobile }) => {

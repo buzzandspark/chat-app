@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- A chat that fits on screen never shows Jump to latest: an upward wheel, drag or scroll key only stops auto-follow when the thread can scroll.
 - Deleting the open chat moves to the next tab over (or the one before, if it was the last), as closing a tab does; a chat with no tabs still opens a new chat.
 - Settings usage: Explore is laid out like Chats, a total row with one row per model under it, instead of a fixed "Haiku" caption.
 - Search shows skeleton rows from the keystroke, through the 200 ms debounce, until that query's results are in; the previous query's hits no longer linger meanwhile.

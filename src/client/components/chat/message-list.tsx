@@ -100,9 +100,11 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
     useImperativeHandle(ref, () => ({ engage, disengage }), [engage, disengage]);
 
     // Intent, not position: an upward wheel, an upward touch drag or a scroll key means "I am reading".
-    // Only in the thread itself: React events also bubble here from portals (a row's open ⋯ menu).
+    // Only in the thread itself (React events also bubble here from portals, a row's open ⋯ menu), and only
+    // when it can scroll: a chat that fits on screen has no "latest" to jump back to.
     const touchY = useRef(0);
-    const inThread = (e: { currentTarget: HTMLElement; target: EventTarget }) => e.target instanceof Node && e.currentTarget.contains(e.target);
+    const inThread = (e: { currentTarget: HTMLElement; target: EventTarget }) =>
+      e.target instanceof Node && e.currentTarget.contains(e.target) && e.currentTarget.scrollHeight - e.currentTarget.clientHeight > 2;
     const onWheel = (e: WheelEvent<HTMLDivElement>) => {
       if (inThread(e) && e.deltaY < 0) setEngaged(false);
     };
