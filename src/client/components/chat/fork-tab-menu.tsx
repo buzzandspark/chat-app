@@ -1,6 +1,6 @@
 "use client";
 import { Trash2, Trophy } from "lucide-react";
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import type { KeyboardEvent } from "react";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
 import { loadDialogs } from "../shell/load-dialogs";
 import { useModals } from "../ui/modal-manager";
@@ -19,15 +19,15 @@ export interface ForkTabMenuProps {
 /** A tab's right-click menu: Declare winner (a fork stays alone) or Delete forks (the main chat stays), then Delete chat; each confirms in a dialog. */
 export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose }: ForkTabMenuProps) {
   const { show } = useModals();
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+  // Opens on its first item; a press anywhere outside closes it.
+  const attach = (menu: HTMLDivElement) => {
+    menu.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
     const onPointerDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
+      if (!menu.contains(e.target as Node)) onClose();
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
-  }, [onClose]);
+  };
   const chat = (): ChatSummary => getSidebarStore().get().find((c) => c.id === tabId) ?? { id: tabId, title, updatedAt: 0 };
   const onDelete = () => {
     onClose();
@@ -51,7 +51,7 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
     );
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const items = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? []);
+    const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]"));
     const i = items.indexOf(document.activeElement as HTMLButtonElement);
     if (e.key === "Escape" || e.key === "Tab") {
       e.preventDefault();
@@ -64,7 +64,7 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
   const left = Math.min(x, (typeof window === "undefined" ? x : window.innerWidth) - 200);
   return (
     <div
-      ref={ref}
+      ref={attach}
       role="menu"
       aria-label={`Tab actions for ${title}`}
       className="fixed z-50 min-w-44 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"

@@ -389,6 +389,16 @@ describe("ChatStore", () => {
     expect(store.removeQueued("q", "zzz")).toBeUndefined();
   });
 
+  it("evicts chats' rows but skips, and returns, one whose reply is still streaming (#72)", () => {
+    const { store } = makeStore();
+    store.seedChat("c1", null, [row({ id: "u1", role: "user", content: [text("q")] })]);
+    store.seedChat("c2", null, [row({ id: "u2", chatId: "c2", role: "user" }), row({ id: "a2", chatId: "c2", role: "assistant", status: "streaming", generationId: "g2" })]);
+    expect(store.evictChats(["c1", "c2", "unknown"])).toEqual(["c2"]);
+    expect(store.getChat("c1")).toMatchObject({ seeded: false, messageIds: [] });
+    expect(store.getMessage("u1")).toBeUndefined();
+    expect(store.getChat("c2").messageIds).toEqual(["u2", "a2"]);
+  });
+
   it("offers a retry of a failed reply only while it is the chat's last message", () => {
     const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
     const rateLimited = { kind: "rate_limited", message: "Rate limited", retryable: true, retryAfterMs: 1000 } as const;

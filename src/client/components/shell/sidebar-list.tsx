@@ -114,7 +114,7 @@ const SidebarRow = memo(function SidebarRow({
           href={href}
           prefetch={false}
           onClick={onNavigate}
-          onNavigate={() => setPendingChat(chat.id)}
+          onNavigate={() => setPendingChat(chat.id === currentChatId ? null : chat.id)}
           onTouchStart={() => warm(chat.id)}
           onPointerEnter={() => warm(chat.id)}
           onFocus={() => warm(chat.id)}

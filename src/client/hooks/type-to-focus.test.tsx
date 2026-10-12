@@ -1,9 +1,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-import { useTypeToFocus } from "./use-type-to-focus";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { typeToFocus } from "./type-to-focus";
 
-function Page({ enabled = true }: { enabled?: boolean }) {
-  useTypeToFocus(enabled);
+function Page() {
   return (
     <div>
       <button type="button">Send</button>
@@ -13,9 +12,13 @@ function Page({ enabled = true }: { enabled?: boolean }) {
   );
 }
 
-afterEach(cleanup);
+beforeEach(() => window.addEventListener("keydown", typeToFocus));
+afterEach(() => {
+  window.removeEventListener("keydown", typeToFocus);
+  cleanup();
+});
 
-describe("useTypeToFocus", () => {
+describe("typeToFocus", () => {
   it("a letter typed with nothing editable focused focuses the composer, caret at the end", () => {
     render(<Page />);
     const composer = screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
@@ -25,8 +28,8 @@ describe("useTypeToFocus", () => {
     expect(composer.selectionStart).toBe("draft".length);
   });
 
-  it("leaves modifiers, spaces, special keys, other fields and a disabled hook alone", () => {
-    const { rerender } = render(<Page />);
+  it("leaves modifiers, spaces, special keys and other fields alone", () => {
+    render(<Page />);
     const composer = screen.getByRole("textbox", { name: "Message" });
     const search = screen.getByRole("textbox", { name: "Search" });
     for (const init of [{ key: "k", metaKey: true }, { key: "k", ctrlKey: true }, { key: " " }, { key: "Enter" }, { key: "Escape" }, { key: "ArrowUp" }]) {
@@ -37,9 +40,5 @@ describe("useTypeToFocus", () => {
     search.focus();
     fireEvent.keyDown(search, { key: "h" });
     expect(document.activeElement).toBe(search);
-    rerender(<Page enabled={false} />);
-    document.body.focus();
-    fireEvent.keyDown(document.body, { key: "h" });
-    expect(document.activeElement).not.toBe(composer);
   });
 });

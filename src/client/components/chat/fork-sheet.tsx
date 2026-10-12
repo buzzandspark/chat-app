@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,11 +27,6 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const instructionRef = useRef<HTMLInputElement>(null);
-  // Opens on the instruction: one line there reaches every prompt. After Radix's own open focus, so this one wins.
-  useEffect(() => {
-    const t = setTimeout(() => instructionRef.current?.focus(), 50);
-    return () => clearTimeout(t);
-  }, []);
   const selected = items.filter((it) => it.selected);
   const update = (index: number, patch: Partial<Item>) => setItems((list) => list.map((it, i) => (i === index ? { ...it, ...patch } : it)));
   const toggle = (index: number) => {
@@ -92,7 +87,18 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Explore options" description={`Each option becomes its own chat, up to ${MAX_FORKS}.`} className="md:max-w-xl">
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Explore options"
+      description={`Each option becomes its own chat, up to ${MAX_FORKS}.`}
+      className="md:max-w-xl"
+      // Opens on the instruction, not Radix's first checkbox: one line there reaches every prompt.
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        instructionRef.current?.focus();
+      }}
+    >
       <form
         className="flex flex-col gap-3"
         onKeyDown={onKeyDown}

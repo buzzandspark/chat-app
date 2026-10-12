@@ -420,12 +420,19 @@ export class ChatStore {
     this.notifyChat(m.chatId);
   }
 
-  /** Drops the rows of the given chats (#72: opened long ago); a view that still shows one re-seeds from its own rows. */
-  evictChats(ids: Iterable<string>): void {
+  /**
+   * Drops the rows of the given chats (#72: opened long ago); a view that still shows one re-seeds from its own rows.
+   * Returns the chats it skipped because a reply is still streaming.
+   */
+  evictChats(ids: Iterable<string>): string[] {
+    const streaming: string[] = [];
     for (const id of ids) {
       const chat = this.chats.get(id);
       if (!chat || !chat.seeded || chat.messageIds.length === 0) continue;
-      if (chat.messageIds.some((mid) => this.messages.get(mid)?.status === "streaming")) continue;
+      if (chat.messageIds.some((mid) => this.messages.get(mid)?.status === "streaming")) {
+        streaming.push(id);
+        continue;
+      }
       for (const mid of chat.messageIds) {
         const m = this.messages.get(mid);
         this.messages.delete(mid);
@@ -435,6 +442,7 @@ export class ChatStore {
       this.chats.set(id, { ...chat, messageIds: [], seeded: false });
       this.notifyChat(id);
     }
+    return streaming;
   }
 
   /** The chat was deleted: drop its messages and leave a seeded, empty chat so the view shows the empty state. */

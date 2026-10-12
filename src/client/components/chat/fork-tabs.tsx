@@ -42,6 +42,8 @@ export function moveBefore(ids: readonly string[], id: string, target: string): 
 }
 
 const DRAG_PX = 6;
+// The open tab scrolls into view, clear of the fade at the strip's end, so its × can be reached.
+const scrollOpenTabIntoView = (slot: HTMLDivElement | null) => slot?.scrollIntoView({ block: "nearest", inline: "nearest" });
 
 /**
  * The main chat and its forks as tabs: above the thread when docked, folder tabs on the composer's input on a phone. A closed tab stays closed until
@@ -92,10 +94,6 @@ export function ForkTabs({ chatId }: { chatId: string }) {
     }
     void setTabHidden(getSidebarStore(), chatId, false);
   }, [activeHidden, chatId]);
-  // The open tab scrolls into view, clear of the fade at the strip's end, so its × can be reached.
-  useEffect(() => {
-    if (shown) stripRef.current?.querySelector('[aria-selected="true"]')?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [shown, chatId]);
   // Ctrl+Shift+] and [ move to the next and previous tab, wrapping round.
   const visibleKey = shown ? visibleIds.join(",") : "";
   useEffect(() => {
@@ -184,6 +182,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
             return (
               <div
                 key={tab.id}
+                ref={active ? scrollOpenTabIntoView : undefined}
                 data-tab-slot
                 data-fork-tab={isMain ? undefined : tab.id}
                 className={cn(

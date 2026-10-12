@@ -16,7 +16,7 @@ import type { TitleInput as TitleInputComponent } from "./title-input";
 import { markNavigationClose, useBackGesture } from "@client/hooks/use-back-gesture";
 import { useIsDesktopOrNull } from "@client/hooks/use-media-query";
 import { useNewChat } from "@client/hooks/use-new-chat";
-import { useTypeToFocus } from "@client/hooks/use-type-to-focus";
+import { typeToFocus } from "@client/hooks/type-to-focus";
 import { Sidebar } from "./sidebar";
 
 // The inline rename loads on intent (hover, focus, touch on the title); the title stays until it has.
@@ -53,8 +53,6 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
   const { show, openCount } = useModals();
   const newChat = useNewChat();
   const searchCloser = useRef<(() => void) | null>(null);
-  // Typing with nothing focused goes to the composer; not while a dialog is up or the phone sidebar covers the chat.
-  useTypeToFocus(openCount === 0 && !(!desktop && phoneOpen));
 
   const open = desktop ? desktopOpen : phoneOpen;
   // Focus moves in the handlers that open and close the sidebar, once the DOM has the new state (flushSync).
@@ -108,7 +106,8 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
     }, () => {});
   }, [show, desktop, phoneOpen]);
 
-  // D19 shortcuts: ⌘/Ctrl+Shift+O new chat, ⌘/Ctrl+K search, Esc closes the phone sidebar first.
+  // D19 shortcuts: ⌘/Ctrl+Shift+O new chat, ⌘/Ctrl+K search, Esc closes the phone sidebar first; any other
+  // character typed with nothing focused goes to the composer, unless a dialog is up or the phone sidebar covers the chat.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isModifier(e) && e.shiftKey && e.key.toLowerCase() === "o") {
@@ -119,11 +118,13 @@ function ChatShellInner({ sidebarList, userLabel, children }: ChatShellProps) {
         openSearch();
       } else if (e.key === "Escape" && !desktop && phoneOpen) {
         dismissPhone();
+      } else if (openCount === 0 && (desktop || !phoneOpen)) {
+        typeToFocus(e);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [desktop, phoneOpen, newChat, openSearch, dismissPhone]);
+  }, [desktop, phoneOpen, openCount, newChat, openSearch, dismissPhone]);
 
   // Inset swipe-to-open: starts at least 24 px in from the left edge (D0).
   const swipe = useRef({ x: 0, y: 0, tracking: false });
@@ -196,26 +197,20 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
   const store = useChatStore();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;
   const pendingChatId = usePendingChat();
-  // The pending chat is released once the router has committed it (or left the chat routes).
-  useEffect(() => {
-    if (pendingChatId !== null && (pendingChatId === currentChatId || currentChatId === null)) setPendingChat(null);
-  }, [pendingChatId, currentChatId]);
-  // Any navigation puts the phone sidebar away, whatever started it (#34).
-  useEffect(() => {
-    onPathnameChange();
-  }, [pathname, onPathnameChange]);
   const openChat = useChat(currentChatId ?? "");
   // #72: of the chats that were opened, the store keeps the current one and the eight before it; older
   // ones give their rows back. Chats only prefetched for the sidebar are small and stay.
   const visitedRef = useRef<string[]>([]);
+  // Each committed navigation puts the phone sidebar away, whatever started it (#34), and releases the pending chat.
   useEffect(() => {
+    onPathnameChange();
+    setPendingChat(null);
     if (!currentChatId) return;
     const visited = visitedRef.current.filter((id) => id !== currentChatId);
     visited.push(currentChatId);
-    visitedRef.current = visited;
-    const stale = visited.slice(0, -9).filter((id) => id !== pendingChatId);
-    if (stale.length > 0) store.evictChats(stale);
-  }, [currentChatId, pendingChatId, store]);
+    // A chat still streaming when it ages out stays listed, so a later navigation evicts it once the reply ends.
+    visitedRef.current = [...store.evictChats(visited.slice(0, -9)), ...visited.slice(-9)];
+  }, [pathname, currentChatId, onPathnameChange, store]);
   const currentSummary = currentChatId ? chats.find((c) => c.id === currentChatId) : undefined;
   const pendingSummary = pendingChatId ? chats.find((c) => c.id === pendingChatId) : undefined;
   // D21: the header switches to the clicked chat's title on click. An id the server knows nothing

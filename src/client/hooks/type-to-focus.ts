@@ -1,5 +1,4 @@
 "use client";
-import { useEffect } from "react";
 
 const EDITABLE = "input, textarea, select, [contenteditable=''], [contenteditable=true], [role=menu], [role=dialog]";
 
@@ -22,19 +21,12 @@ export function shouldFocusComposer(e: KeyboardEvent): boolean {
   return !active?.closest?.(EDITABLE);
 }
 
-export function useTypeToFocus(enabled: boolean): void {
-  useEffect(() => {
-    if (!enabled) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (!shouldFocusComposer(e)) return;
-      const composer = visibleComposer();
-      if (!composer || composer.disabled) return;
-      composer.focus();
-      // The caret at the end, so the character joins a draft instead of leading it.
-      const end = composer.value.length;
-      composer.setSelectionRange(end, end);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [enabled]);
+export function typeToFocus(e: KeyboardEvent): void {
+  if (!shouldFocusComposer(e)) return;
+  const composer = visibleComposer();
+  if (!composer || composer.disabled) return;
+  composer.focus();
+  // The caret at the end, so the character joins a draft instead of leading it.
+  const end = composer.value.length;
+  composer.setSelectionRange(end, end);
 }
