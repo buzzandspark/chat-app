@@ -271,9 +271,30 @@
 .explore-border {
   animation: explore-march 1.2s linear infinite;
 }
+@keyframes explore-sweep {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+  10%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+/* After the 300 ms pop-up, once round. */
+.explore-sweep {
+  animation: explore-sweep 1.2s ease-in-out 0.3s both;
+}
 @media (prefers-reduced-motion: reduce) {
   .explore-border {
     animation: none;
+  }
+  .explore-sweep {
+    display: none;
   }
 }
 

@@ -67,7 +67,7 @@ export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen, 
       >
         {/* Dimmed and pulsing inside, so the tooltip (the button's ::after) stays opaque. */}
         <span className={cn("flex items-center gap-1.5", state === "awaiting" && "animate-pulse", state === "busy" && "opacity-60")} data-part="label">
-          <ExploreOutline marching={state !== "ready"} />
+          <ExploreOutline marching={state !== "ready"} sweep={shown} />
           <GitFork className="size-4" />
           {label}
         </span>
@@ -77,7 +77,7 @@ export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen, 
 }
 
 /** The button's dashed gradient outline, drawn behind its content; the tab strip's reveal starts from it too. */
-export function ExploreOutline({ marching = false }: { marching?: boolean }) {
+export function ExploreOutline({ marching = false, sweep = false }: { marching?: boolean; sweep?: boolean }) {
   const gradient = useId();
   return (
     <svg aria-hidden className="pointer-events-none absolute inset-0 -z-10 size-full">
@@ -101,6 +101,22 @@ export function ExploreOutline({ marching = false }: { marching?: boolean }) {
         strokeWidth="1.5"
         strokeDasharray="6 4"
       />
+      {/* Once it has popped up, a light runs once round the border; remounted, so it replays on every pop-up. */}
+      {sweep ? (
+        <rect
+          x="1"
+          y="1"
+          rx="7"
+          className="explore-sweep"
+          style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
+          fill="none"
+          stroke={`url(#${gradient})`}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          pathLength="100"
+          strokeDasharray="20 80"
+        />
+      ) : null}
     </svg>
   );
 }
