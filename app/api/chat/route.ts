@@ -7,7 +7,7 @@ import { QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
-import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import { errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
 import { singleEventResponse, streamGeneration } from "@server/sse-response";
@@ -31,6 +31,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const user = await requireUser();
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request", issues: parsed.error.issues });
+    // Refused, not stripped: a scenario request must never fall through to the live model.
+    if (parsed.data.scenario && !scenariosAllowed(user.role)) return jsonError(403, { error: "forbidden" });
     // A guest runs Haiku only, whatever the request names (a reply seeded or saved on another model included).
     const body = user.role === "guest" ? { ...parsed.data, model: GUEST_MODEL } : parsed.data;
     const { engine, store } = getRelay();
