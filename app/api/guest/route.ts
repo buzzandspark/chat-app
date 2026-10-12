@@ -4,18 +4,7 @@ import { getAuth } from "@auth/server";
 import { getDb, schema } from "@db/client";
 import { clientIp, getLimiters } from "@server/ratelimit";
 import { isDraining } from "@server/shutdown";
-
-/** Only a path on this site: `next` comes from the query string. Parsed as a browser would, so tabs,
- *  backslashes and the like cannot turn it into another origin. */
-function safeNext(raw: string | null): string {
-  const base = "http://same.invalid";
-  try {
-    const url = new URL(raw ?? "/c", base);
-    return url.origin === base ? url.pathname + url.search + url.hash : "/c";
-  } catch {
-    return "/c";
-  }
-}
+import { safeNext } from "@shared/safe-next";
 
 // A relative Location: the browser stays on the host it used, so the cookie set here goes with it
 // (request.url can name another host than the one in the address bar, e.g. localhost for 127.0.0.1).
@@ -29,7 +18,7 @@ function redirectTo(path: string): Response {
  */
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const next = safeNext(url.searchParams.get("next"));
+  const next = safeNext(url.searchParams.get("next")) ?? "/c";
   const back = redirectTo(next);
   const auth = getAuth();
   const reqHeaders = await headers();

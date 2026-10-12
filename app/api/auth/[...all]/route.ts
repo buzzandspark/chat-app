@@ -1,13 +1,17 @@
-import { toNextJsHandler } from "better-auth/next-js";
 import { getAuth } from "@auth/server";
 
-const handler = toNextJsHandler((request: Request) => getAuth().handler(request));
+// Only what the app's own pages call over HTTP; the server reads sessions and signs guests in through auth.api.
+const ALLOWED = new Set(["/api/auth/sign-in/email", "/api/auth/sign-out"]);
 
-// A guest is created only through /api/guest (rate limited per address), never over this endpoint.
-const BLOCKED = new Set(["/api/auth/sign-in/anonymous"]);
+function notFound(): Response {
+  return Response.json({ error: "not_found" }, { status: 404 });
+}
 
-export const GET = handler.GET;
+export function GET(): Response {
+  return notFound();
+}
+
 export async function POST(request: Request): Promise<Response> {
-  if (BLOCKED.has(new URL(request.url).pathname)) return Response.json({ error: "not_found" }, { status: 404 });
-  return handler.POST(request);
+  if (!ALLOWED.has(new URL(request.url).pathname)) return notFound();
+  return getAuth().handler(request);
 }
