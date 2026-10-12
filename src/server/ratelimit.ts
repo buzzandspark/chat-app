@@ -17,10 +17,10 @@ export function getLimiters(): Limiters {
   const limiters: Limiters = {
     // The e2e projects share one dev user and each seeds a long chat; the harness is not the abuse case.
     seedLongChat: env.e2e ? new RateLimiter(60, 600) : new RateLimiter(2, 10),
-    // New guests per address: clearing cookies must not hand out a fresh allowance every time.
-    guestStart: env.e2e ? new RateLimiter(60, 600) : new RateLimiter(3, 20),
-    // And across every address, a ceiling on new guests a day (each can spend up to the guest cap).
-    guestStartAll: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(30, 500),
+    // New guests per address and across every address. They guard database rows, not spend, so they
+    // leave room for a shared address.
+    guestStart: env.e2e ? new RateLimiter(60, 600) : new RateLimiter(10, 100),
+    guestStartAll: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(60, 3000),
   };
   // Idle keys are dropped every ten minutes, so a day of distinct callers does not pile up in memory.
   // Started here, once with the limiters, not per call: a timer per request would never be cleared.

@@ -9,9 +9,8 @@ export default function LoginPage() {
           <p className="text-small text-muted-foreground">Accounts are by invitation.</p>
         </div>
         <LoginForm />
-        {/* An API route, not a page: a plain GET form, so the browser follows its redirect with the new cookie. */}
-        <form action="/api/guest" method="get" className="text-center text-small text-muted-foreground">
-          <input type="hidden" name="next" value="/c" />
+        {/* An API route, not a page: a plain POST form, so the browser follows its redirect with the new cookie. */}
+        <form action="/api/guest?next=/c" method="post" className="text-center text-small text-muted-foreground">
           <button type="submit" className="cursor-pointer underline">
             Continue as a guest
           </button>
