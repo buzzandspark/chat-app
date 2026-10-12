@@ -10,9 +10,9 @@ function usd(n: number): string {
   return n > 0 && n < 0.01 ? "<$0.01" : `$${n.toFixed(2)}`;
 }
 
-function Cell({ totals }: { totals: UsageTotals }) {
+function Cell({ totals, className }: { totals: UsageTotals; className: string }) {
   return (
-    <td className="py-2.5 pl-3 text-right align-top tabular-nums">
+    <td className={cn("pl-3 text-right align-middle tabular-nums", className)}>
       <div className="text-small font-medium">{usd(totals.costUsd)}</div>
       <div className="text-caption text-muted-foreground">
         {compact.format(totals.inputTokens)} in · {compact.format(totals.outputTokens)} out
@@ -21,16 +21,29 @@ function Cell({ totals }: { totals: UsageTotals }) {
   );
 }
 
-function ModelRows({ models }: { models: ModelUsage[] }) {
-  return models.map((m) => (
-    <tr key={m.model} data-testid="usage-model">
-      <th scope="row" className="py-1.5 pl-3 text-left align-middle text-small font-normal text-muted-foreground">
-        {m.label}
-      </th>
-      <Cell totals={m.month} />
-      <Cell totals={m.all} />
-    </tr>
-  ));
+/** A total and its models, tight together; the group's own padding sits above its border and below its last row. */
+function UsageGroup({ name, testId, period, models }: { name: string; testId: string; period: { month: UsageTotals; all: UsageTotals }; models: ModelUsage[] }) {
+  const pad = (i: number) => cn(i === 0 ? "pt-3" : "pt-1.5", i === models.length ? "pb-3" : "pb-1.5");
+  return (
+    <>
+      <tr className="border-t border-border" data-testid={testId}>
+        <th scope="row" className={cn("text-left align-middle text-small font-medium", pad(0))}>
+          {name}
+        </th>
+        <Cell totals={period.month} className={pad(0)} />
+        <Cell totals={period.all} className={pad(0)} />
+      </tr>
+      {models.map((m, i) => (
+        <tr key={m.model} data-testid="usage-model">
+          <th scope="row" className={cn("pl-4 text-left align-middle text-small font-normal text-foreground", pad(i + 1))}>
+            {m.label}
+          </th>
+          <Cell totals={m.month} className={pad(i + 1)} />
+          <Cell totals={m.all} className={pad(i + 1)} />
+        </tr>
+      ))}
+    </>
+  );
 }
 
 export function UsageSkeleton() {
@@ -64,22 +77,8 @@ export function UsageSection({ usage }: { usage: UsageSummary }) {
           </tr>
         </thead>
         <tbody>
-          <tr className="border-t border-border" data-testid="usage-chats">
-            <th scope="row" className="py-2.5 text-left align-top text-small font-medium">
-              Chats
-            </th>
-            <Cell totals={usage.month.chats} />
-            <Cell totals={usage.all.chats} />
-          </tr>
-          <ModelRows models={usage.chatModels} />
-          <tr className="border-t border-border" data-testid="usage-explore">
-            <th scope="row" className="py-2.5 text-left align-top text-small font-medium">
-              Explore
-            </th>
-            <Cell totals={usage.month.explore} />
-            <Cell totals={usage.all.explore} />
-          </tr>
-          <ModelRows models={usage.exploreModels} />
+          <UsageGroup name="Chats" testId="usage-chats" period={{ month: usage.month.chats, all: usage.all.chats }} models={usage.chatModels} />
+          <UsageGroup name="Explore" testId="usage-explore" period={{ month: usage.month.explore, all: usage.all.explore }} models={usage.exploreModels} />
         </tbody>
       </table>
       {capUsd !== null ? (
