@@ -51,7 +51,7 @@ function ChatItemMenuOnIntent({
   // Destructured: the compiler's lint takes an object one of whose fields is a `ref` for a ref itself.
   const { standIn } = intent;
   return (
-    <IconButton ref={standIn} label={`Actions for ${props.title}`} className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
+    <IconButton ref={standIn} label={`Actions for ${props.title}`} tip={false} className={MENU_BUTTON} {...intentProps(intent)} onClick={() => intent.press("menu")}>
       <MoreHorizontal />
     </IconButton>
   );
@@ -129,7 +129,11 @@ const SidebarRow = memo(function SidebarRow({
           onFocus={() => warm(chat.id)}
           aria-current={active ? "page" : undefined}
           aria-label={forked ? `Forked: ${chat.title}` : undefined}
-          className={cn("flex min-h-11 min-w-0 flex-1 items-center rounded-lg text-small", nested ? "pl-2" : "pl-3", active && "font-medium")}
+          // The full title, which the row truncates; it wraps within the row rather than running past the sidebar.
+          data-tip={chat.title}
+          data-tip-align="start"
+          data-tip-wrap
+          className={cn("tip flex min-h-11 min-w-0 flex-1 items-center rounded-lg text-small", nested ? "pl-2" : "pl-3", active && "font-medium")}
         >
           {forked ? <GitFork aria-hidden className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" /> : null}
           <span className="truncate">{chat.title}</span>

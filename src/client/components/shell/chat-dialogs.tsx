@@ -89,6 +89,8 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
   const store = useChatStore();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A main chat's forks outlive it (the server unlinks them), which the dialog says.
+  const [forkCount] = useState(() => getSidebarStore().get().filter((c) => c.forkedFrom === chat.id).length);
   const confirm = async () => {
     if (busy) return;
     setBusy(true);
@@ -126,7 +128,11 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       open={open}
       onOpenChange={onOpenChange}
       title="Delete chat?"
-      description={`"${chat.title}" and its messages will be removed. This cannot be undone.`}
+      description={
+        forkCount > 0
+          ? `"${chat.title}" and its messages will be removed. This cannot be undone. Its ${forkCount === 1 ? "fork stays as a normal chat" : `${forkCount} forks stay as normal chats`}.`
+          : `"${chat.title}" and its messages will be removed. This cannot be undone.`
+      }
       // Opens on Delete, so Enter confirms.
       onOpenAutoFocus={(e) => {
         e.preventDefault();
@@ -286,7 +292,7 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
   );
 }
 
-/** The sidebar's Delete all chats on a main chat with forks: the main chat and every fork go. */
+/** The sidebar's Delete all on a main chat with forks: the main chat and every fork go. */
 export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const store = useChatStore();
   const newChat = useNewChat();

@@ -13,6 +13,8 @@ type IconButtonProps = ComponentProps<typeof Button> & {
   tipAlign?: TipAlign;
   /** A keyboard shortcut, shown after the label in the tooltip, e.g. "⌘K". */
   shortcut?: string;
+  /** False where the tooltip would only repeat what the button shows (a row's ⋯). */
+  tip?: boolean;
 };
 
 const MARGIN = 4;
@@ -38,7 +40,7 @@ function alignTip(el: HTMLElement): void {
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, shortcut, tipSide = "bottom", tipAlign, className, size = "icon", variant = "ghost", onPointerEnter, onFocus, ...props },
+  { label, shortcut, tip = true, tipSide = "bottom", tipAlign, className, size = "icon", variant = "ghost", onPointerEnter, onFocus, ...props },
   ref,
 ) {
   const auto = tipAlign === undefined;
@@ -62,10 +64,10 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       size={size}
       variant={variant}
       aria-label={label}
-      data-tip={shortcut ? `${label}  ${shortcut}` : label}
-      data-tip-side={tipSide}
-      data-tip-align={tipAlign ?? "center"}
-      className={cn("tip touch-target", className)}
+      data-tip={tip ? (shortcut ? `${label}  ${shortcut}` : label) : undefined}
+      data-tip-side={tip ? tipSide : undefined}
+      data-tip-align={tip ? (tipAlign ?? "center") : undefined}
+      className={cn(tip && "tip", "touch-target", className)}
       onPointerEnter={enter}
       onFocus={focus}
       {...props}

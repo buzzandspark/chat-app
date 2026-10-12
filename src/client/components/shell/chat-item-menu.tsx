@@ -34,7 +34,7 @@ export function ChatItemMenu({
   return (
     <DropdownMenu defaultOpen={defaultOpen}>
       <DropdownMenuTrigger asChild>
-        <IconButton ref={triggerRef} label={`Actions for ${title}`} className={BUTTON}>
+        <IconButton ref={triggerRef} label={`Actions for ${title}`} tip={false} className={BUTTON}>
           <MoreHorizontal />
         </IconButton>
       </DropdownMenuTrigger>
@@ -56,7 +56,7 @@ export function ChatItemMenu({
         {onDeleteAll ? (
           <DropdownMenuItem className="min-h-11" variant="destructive" onSelect={onDeleteAll}>
             <ListX />
-            Delete all chats
+            Delete all
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>

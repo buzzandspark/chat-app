@@ -331,6 +331,12 @@
   .tip:not(:hover, :focus-visible)::after {
     scale: 0;
   }
+  .tip[data-tip-wrap]::after {
+    white-space: normal;
+    width: max-content;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
   .tip[data-tip-side="top"]::after {
     top: auto;
     bottom: calc(100% + 6px);
