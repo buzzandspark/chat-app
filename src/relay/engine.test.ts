@@ -322,6 +322,26 @@ describe("Engine", () => {
     expect(() => engine.start(input())).toThrow(QuotaExceededError);
   });
 
+  it("stops every running reply of a user once spend reaches the cap, keeping the text so far (D22)", async () => {
+    // Room for the input and a few hundred characters of output, not for two long replies.
+    db.update(users).set({ costCapUsd: 0.003 }).where(eq(users.id, USER)).run();
+    const slow = makeEngine(1);
+    const a = input({ scenario: "long_reply" });
+    const b = input({ scenario: "long_reply" });
+    slow.start(a);
+    slow.start(b);
+    const ended = await Promise.all([a, b].map((inp) => collectUntilTerminal(store, inp.generationId)));
+    for (const [i, inp] of [a, b].entries()) {
+      const events = ended[i]!;
+      expect(events.at(-1)).toMatchObject({ type: "error", error: { kind: "quota_exceeded", retryable: false } });
+      const row = db.select().from(messages).where(eq(messages.id, inp.assistantMessageId)).get();
+      expect(row?.status).toBe("error");
+      expect(row?.content.some((b) => b.type === "text" && b.text.length > 0)).toBe(true);
+    }
+    // The settled spend sits at the cap, give or take the last delta of each stream.
+    expect(db.select({ spent: users.costSpentUsd }).from(users).where(eq(users.id, USER)).get()?.spent).toBeLessThan(0.006);
+  });
+
   it("builds history from earlier turns and keeps a retry's existing user message", async () => {
     const chatId = uuidv7();
     const first = input({ chatId, text: "first question" });

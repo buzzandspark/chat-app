@@ -13,6 +13,12 @@ const usd = (n: number) => `$${n.toFixed(2)}`;
 export function UsageBar({ initial }: { initial: CapUsage }) {
   const store = useChatStore();
   const [usage, setUsage] = useState(initial);
+  // The server's figures again after a sign-in (the layout re-renders on its refresh): a new account, a new bar.
+  const [fromServer, setFromServer] = useState(initial);
+  if (initial !== fromServer) {
+    setFromServer(initial);
+    setUsage(initial);
+  }
   // A reply's cost is settled by the time its end reaches the page: read the counter again then.
   useEffect(
     () =>

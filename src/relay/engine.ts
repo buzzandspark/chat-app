@@ -125,7 +125,7 @@ export type ResumeOutcome =
   | { kind: "snapshot"; event: RelayEvent }
   | { kind: "not_found" };
 
-type AbortReason = "stop" | "shutdown" | "scenario" | "idle";
+type AbortReason = "stop" | "shutdown" | "scenario" | "idle" | "cap";
 
 interface FinalState {
   content: StoredContentBlock[];
@@ -221,10 +221,10 @@ export class Engine {
       scenario: input.scenario,
     });
     const billable = isBillableProvider(provider.name);
-    // A scripted or replayed run spends nothing, so it neither reserves against the cap nor can be refused by it.
+    // A scripted or replayed run spends nothing, so it is neither metered against the cap nor refused by it.
     if (billable) {
       // A retry's text is already in the chat; count it once.
-      this.quota.reserve(
+      this.quota.admit(
         input.userId,
         input.generationId,
         input.model,
@@ -569,6 +569,10 @@ export class Engine {
           }
           if (body.type === "error") return body.error;
           this.append(active, body);
+          // D22: metered as it streams; at the cap every running reply of the user stops.
+          if ((body.type === "text_delta" || body.type === "thinking_delta") && active.billable && this.quota.meter(active.id, body.text.length)) {
+            this.stopAtCap(active.userId);
+          }
           if ((body.type === "text_delta" || body.type === "thinking_delta") && active.firstRelayedAt === null) {
             active.firstRelayedAt = this.now();
             timings.firstRelayed = active.firstRelayedAt;
@@ -587,6 +591,15 @@ export class Engine {
     } catch (err) {
       if (active.controller.signal.aborted || isAbortError(err)) throw err;
       return err instanceof ProviderStatusError ? statusErrorToRelay(err) : toRelayError(err);
+    }
+  }
+
+  /** The user's spend plus their live replies reached the cap: each running reply ends, keeping its text. */
+  private stopAtCap(userId: string): void {
+    for (const active of this.active.values()) {
+      if (active.userId !== userId || active.abortReason) continue;
+      active.abortReason = "cap";
+      active.controller.abort(new DOMException("cap", "AbortError"));
     }
   }
 
@@ -678,6 +691,10 @@ export class Engine {
   }
 
   private finishAborted(active: Active, reason: AbortReason, timings: ServerTimings): void {
+    if (reason === "cap") {
+      this.finishError(active, { kind: "quota_exceeded", message: "Spending cap reached", retryable: false }, timings);
+      return;
+    }
     if (reason === "stop") {
       const servingModel = resolveServingModel(active.acc);
       timings.done = this.now();
