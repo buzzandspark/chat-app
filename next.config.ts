@@ -20,6 +20,7 @@ const API_HEADERS = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  poweredByHeader: false,
   // `SOURCEMAPS=1 pnpm build` for scripts/bundle-report.mjs (D21 attribution).
   productionBrowserSourceMaps: process.env.SOURCEMAPS === "1",
   cacheComponents: true,
