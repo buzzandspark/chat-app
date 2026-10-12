@@ -11,6 +11,7 @@ export interface ProviderRequest {
   scenario?: string;
   /** A fork's first request also caches the parent's final reply. */
   cacheTail?: boolean;
+  maxTokens?: number;
 }
 
 export interface ProviderStreamOptions {

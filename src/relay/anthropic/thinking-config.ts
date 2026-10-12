@@ -2,6 +2,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { ModelId, ThinkingOptions } from "@shared/types";
 
 export const MAX_TOKENS = 16_000;
+/** Thinking included: with the guest prompt cap it bounds what one guest reply can cost. */
+export const GUEST_MAX_TOKENS = 8192;
 
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 const BINDING_BETA = "thinking-binding-controls-2026-08-01";

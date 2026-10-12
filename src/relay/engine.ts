@@ -24,6 +24,7 @@ import {
   type StreamAccumulator,
 } from "./anthropic/parse-stream";
 import { priceIterations, summarize, type UsageRow } from "./anthropic/pricing";
+import { GUEST_MAX_TOKENS } from "./anthropic/thinking-config";
 import type { MessageSnapshot, RelayEvent, RelayEventBody, ServerTimings } from "./events";
 import { ProviderStatusError, sleep } from "./providers/replay";
 import { isBillableProvider, type Provider, type ProviderRequest } from "./providers/types";
@@ -42,6 +43,13 @@ export class ForbiddenError extends Error {
   constructor(message = "Forbidden") {
     super(message);
     this.name = "ForbiddenError";
+  }
+}
+/** A guest has as many replies running as it may, or guests together do. */
+export class BusyError extends Error {
+  constructor(public retryAfterMs = 10_000) {
+    super("Too many replies running; try again in a moment");
+    this.name = "BusyError";
   }
 }
 
@@ -86,6 +94,8 @@ export interface EngineOptions {
   upstreamIdleMs?: number;
   isDraining?: () => boolean;
   afterDone?: (info: ReplyDoneInfo) => void;
+  /** Live replies running at once for one guest and for all guests together. */
+  guestRunning?: { perGuest: number; total: number };
 }
 
 export interface StartInput {
@@ -109,6 +119,8 @@ export interface StartInput {
   cacheTail?: boolean;
   /** Re-send a request that fails before the API begins a message, with exponential backoff. */
   retry?: RetryPolicy;
+  /** Starts that share a group (one Explore fan-out) count as one of a guest's running replies. */
+  group?: string;
 }
 
 /**
@@ -159,6 +171,8 @@ interface Active {
   faults: EngineFaults;
   /** False for scripted and replayed runs: no reservation, zero-cost usage rows, no TPS sample. */
   billable: boolean;
+  guest: boolean;
+  group: string;
 }
 
 /** A generation runs as a detached promise that outlives the response. */
@@ -173,6 +187,7 @@ export class Engine {
   private upstreamIdleMs: number;
   private isDraining: () => boolean;
   private afterDone: ((info: ReplyDoneInfo) => void) | null;
+  private guestRunning: { perGuest: number; total: number };
   private active = new Map<string, Active>();
 
   constructor(options: EngineOptions) {
@@ -186,6 +201,7 @@ export class Engine {
     this.upstreamIdleMs = options.upstreamIdleMs ?? 60_000;
     this.isDraining = options.isDraining ?? (() => false);
     this.afterDone = options.afterDone ?? null;
+    this.guestRunning = options.guestRunning ?? { perGuest: 2, total: 50 };
   }
 
   /** Idempotent on `generationId`: a duplicate returns `created: false`. */
@@ -220,8 +236,11 @@ export class Engine {
       scenario: input.scenario,
     });
     const billable = isBillableProvider(provider.name);
+    const guest = input.userRole === "guest";
+    const group = input.group ?? input.generationId;
     // A scripted or replayed run spends nothing, so it is neither metered against the cap nor refused by it.
     if (billable) {
+      if (guest) this.admitGuestReply(input.userId, group);
       // A retry's text is already in the chat; count it once.
       this.quota.admit(
         input.userId,
@@ -368,6 +387,8 @@ export class Engine {
       promise: Promise.resolve(),
       faults: input.faults ?? {},
       billable,
+      guest,
+      group,
     };
     this.active.set(active.id, active);
     this.append(active, {
@@ -382,6 +403,19 @@ export class Engine {
       console.error(`[engine] generation ${active.id} crashed`, err);
     });
     return { created: true };
+  }
+
+  /** Budgets are checked only when a reply starts, so running guest replies are capped to bound the overshoot; a group counts once. */
+  private admitGuestReply(userId: string, group: string): void {
+    const mine = new Set<string>();
+    const all = new Set<string>();
+    for (const a of this.active.values()) {
+      if (!a.guest || !a.billable) continue;
+      if (a.group === group) return;
+      all.add(a.group);
+      if (a.userId === userId) mine.add(a.group);
+    }
+    if (mine.size >= this.guestRunning.perGuest || all.size >= this.guestRunning.total) throw new BusyError();
   }
 
   /** Stops and settles every running generation of a user (admin delete or ban). */
@@ -502,6 +536,7 @@ export class Engine {
         userId: input.userId,
         scenario: input.scenario,
         cacheTail: input.cacheTail,
+        maxTokens: active.guest ? GUEST_MAX_TOKENS : undefined,
       };
 
       for (let attempt = 0; ; attempt++) {

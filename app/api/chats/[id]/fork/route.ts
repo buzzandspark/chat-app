@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb } from "@db/client";
-import { DrainingError, ForbiddenError } from "@relay/engine";
+import { BusyError, DrainingError, ForbiddenError } from "@relay/engine";
 import { createForks, ForkError, ForkStartError } from "@relay/forks";
 import { ForkOptionBody } from "@relay/options/schema";
 import { BudgetExceededError, PromptTooLongError, QuotaExceededError } from "@relay/quota";
@@ -28,7 +28,7 @@ const Body = z.object({
 function failure(err: unknown): Response {
   if (err instanceof QuotaExceededError) return jsonError(402, { error: "quota_exceeded", spentUsd: err.spentUsd, capUsd: err.capUsd });
   if (err instanceof PromptTooLongError) return jsonError(413, { error: "context_full" });
-  if (err instanceof BudgetExceededError) return tooMany(err.retryAfterMs);
+  if (err instanceof BudgetExceededError || err instanceof BusyError) return tooMany(err.retryAfterMs);
   if (err instanceof ForbiddenError) return jsonError(403, { error: "forbidden" });
   if (err instanceof DrainingError) return jsonError(503, { error: "draining" });
   throw err;

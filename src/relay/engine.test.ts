@@ -4,7 +4,7 @@ import { generations, messages, spendBuckets, usageEvents, users } from "@db/sch
 import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
 import { Budgets } from "./budgets";
-import { Engine, ForbiddenError, type ReplyDoneInfo, type StartInput } from "./engine";
+import { BusyError, Engine, ForbiddenError, type ReplyDoneInfo, type StartInput } from "./engine";
 import { ProviderStatusError } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
@@ -625,5 +625,53 @@ describe("Engine: guest budgets", () => {
       expect(ip, ending).toBeCloseTo(spent(), 12);
       expect(all, ending).toBeCloseTo(spent(), 12);
     }
+  });
+});
+
+describe("Engine: guests' running replies", () => {
+  const guest = (userId: string, overrides: Partial<StartInput> = {}) =>
+    input({ userId, userRole: "guest", model: "claude-haiku-5-5", scenario: "slow_tokens", ...overrides });
+
+  beforeEach(() => {
+    for (const id of ["g1", "g2", "g3"]) seedUser(db, id, { role: "guest", costCapUsd: 1 });
+  });
+
+  it("runs two live replies at once per guest, a fork fan-out counting as one, each asking for at most 8192 tokens", async () => {
+    const requests: ProviderRequest[] = [];
+    const slow = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
+    const free = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
+    const live: Provider = {
+      name: "anthropic",
+      stream(req, opts) {
+        requests.push(req);
+        return slow.stream(req, opts);
+      },
+    };
+    engine = new Engine({ db, store, providers: (ctx) => (ctx.scenario === "normal" ? free : live), partialPersistMs: 50 });
+    const first = guest("g1");
+    engine.start(first);
+    engine.start(guest("g1", { group: "fan-out" }));
+    engine.start(guest("g1", { group: "fan-out" }));
+    expect(() => engine.start(guest("g1"))).toThrow(BusyError);
+    // Another guest, an invited user and a scripted run are not held back.
+    expect(engine.start(guest("g2"))).toEqual({ created: true });
+    expect(engine.start(input({ scenario: "slow_tokens" }))).toEqual({ created: true });
+    expect(engine.start(guest("g1", { scenario: "normal" }))).toEqual({ created: true });
+    await engine.stopAndWait(first.generationId);
+    expect(engine.start(guest("g1"))).toEqual({ created: true });
+    await waitFor(() => requests.length === 6);
+    expect(requests.map((r) => [r.userId, r.maxTokens])).toEqual(expect.arrayContaining([["g1", 8192], ["g2", 8192], [USER, undefined]]));
+    expect(requests.filter((r) => r.userId !== USER).every((r) => r.maxTokens === 8192)).toBe(true);
+    await engine.drain();
+  });
+
+  it("holds all guests together to the total", async () => {
+    engine = makeEngine(1, { guestRunning: { perGuest: 2, total: 3 } });
+    engine.start(guest("g1"));
+    engine.start(guest("g1"));
+    engine.start(guest("g2"));
+    expect(() => engine.start(guest("g3"))).toThrow(BusyError);
+    expect(engine.start(input({ scenario: "slow_tokens" }))).toEqual({ created: true });
+    await engine.drain();
   });
 });

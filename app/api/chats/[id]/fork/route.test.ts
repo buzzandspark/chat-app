@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BusyError } from "@relay/engine";
 import { createForks, ForkStartError } from "@relay/forks";
 import { BudgetExceededError, PromptTooLongError } from "@relay/quota";
 import { requireUser } from "@server/current-user";
@@ -28,7 +29,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/chats/[id]/fork refused by a guest limit", () => {
-  it("answers spent budgets with 429 and the wait, and an oversized prompt with 413", async () => {
+  it("answers spent budgets or too many running replies with 429 and the wait, and an oversized prompt with 413", async () => {
     vi.mocked(createForks).mockImplementationOnce(() => {
       throw new ForkStartError(new BudgetExceededError(30_000), []);
     });
@@ -43,6 +44,11 @@ describe("POST /api/chats/[id]/fork refused by a guest limit", () => {
     const long = await fork();
     expect(long.status).toBe(413);
     expect(await long.json()).toEqual({ error: "context_full" });
+
+    vi.mocked(createForks).mockImplementationOnce(() => {
+      throw new ForkStartError(new BusyError(), []);
+    });
+    expect((await fork()).status).toBe(429);
   });
 
   it("keeps the forks that started and names why the rest did not", async () => {

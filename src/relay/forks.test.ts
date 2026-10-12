@@ -6,7 +6,7 @@ import { chats, generations, messages } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import type { HistoryMessage } from "./anthropic/history";
 import { buildRequest } from "./anthropic/request";
-import { Engine, type StartInput } from "./engine";
+import { BusyError, Engine, type StartInput } from "./engine";
 import { createForks, declareWinner, deleteForks, duplicateChat, ForkError, setForkOrder, type ForkRequest } from "./forks";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
@@ -147,6 +147,18 @@ describe("createForks", () => {
     expect(forkMessages).toHaveLength(parentMessages.length + 2);
     expect(forkMessages.at(-2)!.role).toBe("assistant");
     expect(forkMessages.at(-1)!.role).toBe("user");
+  });
+
+  it("runs a guest's whole fan-out as one of its two running replies", async () => {
+    seedUser(db, "g1", { role: "guest", costCapUsd: 1 });
+    const parentId = await parentChat(1, { userId: "g1", userRole: "guest" });
+    const started = createForks(deps(), { userId: "g1", userRole: "guest", parentId, forks: [fork("A"), fork("B"), fork("C")] });
+    expect(started).toHaveLength(3);
+    const send = (): StartInput => ({ generationId: uuidv7(), chatId: uuidv7(), userId: "g1", userRole: "guest", userMessageId: uuidv7(), assistantMessageId: uuidv7(), text: "hi", model: "claude-haiku-5-5", thinking: { harder: false } });
+    const own = send();
+    expect(engine.start(own)).toEqual({ created: true });
+    expect(() => engine.start(send())).toThrow(BusyError);
+    await Promise.all([...started, own].map((s) => collectUntilTerminal(store, s.generationId)));
   });
 
   it("refuses another user's chat, a fork of a fork, and more than the cap", async () => {

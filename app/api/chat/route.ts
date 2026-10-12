@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@db/client";
-import { DrainingError, ForbiddenError } from "@relay/engine";
+import { BusyError, DrainingError, ForbiddenError } from "@relay/engine";
 import { BudgetExceededError, PromptTooLongError, QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       if (err instanceof QuotaExceededError) {
         return jsonError(402, { error: "quota_exceeded", spentUsd: err.spentUsd, capUsd: err.capUsd });
       }
-      if (err instanceof BudgetExceededError) return tooMany(err.retryAfterMs);
+      if (err instanceof BudgetExceededError || err instanceof BusyError) return tooMany(err.retryAfterMs);
       if (err instanceof ForbiddenError) return jsonError(403, { error: "forbidden" });
       if (err instanceof DrainingError) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
       if (err instanceof Error && /retry without/.test(err.message)) return jsonError(409, { error: "missing_user_message" });

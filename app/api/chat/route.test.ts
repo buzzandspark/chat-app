@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BusyError } from "@relay/engine";
 import { BudgetExceededError, PromptTooLongError } from "@relay/quota";
 import { SCENARIO_NAMES } from "@relay/scenarios";
 import { requireUser } from "@server/current-user";
@@ -68,5 +69,14 @@ describe("POST /api/chat refused by a guest limit", () => {
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("91");
     expect(await res.json()).toEqual({ error: "rate_limited", retryAfterMs: 90_500 });
+  });
+
+  it("answers a guest with as many replies running as it may with 429", async () => {
+    start.mockImplementationOnce(() => {
+      throw new BusyError();
+    });
+    const res = await send("guest", {});
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("10");
   });
 });
