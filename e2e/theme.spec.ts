@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openNewChat } from "./helpers";
+import { ensureSidebarOpen, openNewChat } from "./helpers";
 
 // The theme script is a raw inline <script> in <head> ahead of every Next script, so a stored dark
 // preference is applied before the first paint, and the element is not re-created on the client.
@@ -47,5 +47,22 @@ test.describe("theme", () => {
     await page.reload();
     await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
     expect(errors.filter((e) => /script tag/i.test(e))).toHaveLength(0);
+  });
+
+  test("toggling the theme switches every control's colour in the same frame", async ({ page }) => {
+    await openNewChat(page);
+    await ensureSidebarOpen(page);
+    await page.getByRole("textbox", { name: "Message" }).fill("hello");
+    const toggle = page.getByRole("button", { name: /Switch to (dark|light) theme/ }).first();
+    // Send's colour right after the click and once any transition would have run must match.
+    const colours = await toggle.evaluate(async (button: HTMLElement) => {
+      const send = document.querySelector<HTMLElement>('button[aria-label="Send message"]')!;
+      button.click();
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      const first = getComputedStyle(send).backgroundColor;
+      await new Promise((r) => setTimeout(r, 500));
+      return [first, getComputedStyle(send).backgroundColor];
+    });
+    expect(colours[0]).toBe(colours[1]);
   });
 });

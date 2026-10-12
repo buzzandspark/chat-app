@@ -8,7 +8,15 @@ function readDark(): boolean {
   return document.documentElement.classList.contains("dark");
 }
 function setDark(dark: boolean): void {
+  // Every colour flips in the same frame: without this, controls with a colour transition (buttons, rows)
+  // eased into the new theme ~150 ms behind the rest of the page.
+  const freeze = document.createElement("style");
+  freeze.textContent = "*,*::before,*::after{transition:none!important}";
+  document.head.appendChild(freeze);
   document.documentElement.classList.toggle("dark", dark);
+  // The new colours are computed while transitions are off, then the styles come back.
+  void getComputedStyle(document.body).backgroundColor;
+  requestAnimationFrame(() => freeze.remove());
   // The browser chrome follows the in-app theme, not the OS one (#77); the colours match app/layout.tsx.
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
     meta.removeAttribute("media");
