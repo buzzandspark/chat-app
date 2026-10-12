@@ -73,13 +73,13 @@ describe("ExploreOptions", () => {
 });
 
 describe("optionsFound", () => {
-  const ok = { isFork: false, remaining: 10, editing: false };
+  const ok = { isFork: false, forks: 0, editing: false };
   const reply = (patch: Parameters<typeof createMessageState>[0] extends infer P ? Partial<P> : never = {}) =>
     createMessageState({ id: "m", chatId: "c", role: "assistant", status: "done", options: [{ title: "A", prompt: "a" }, { title: "B", prompt: "b" }], ...patch });
 
   it("is false whenever the chat or the reply can't be explored", () => {
     expect(optionsFound(reply(), { ...ok, isFork: true })).toBe(false);
-    expect(optionsFound(reply(), { ...ok, remaining: 0 })).toBe(false);
+    expect(optionsFound(reply(), { ...ok, forks: 1 })).toBe(false);
     expect(optionsFound(reply(), { ...ok, editing: true })).toBe(false);
     expect(optionsFound(undefined, ok)).toBe(false);
     expect(optionsFound(createMessageState({ id: "u", chatId: "c", role: "user" }), ok)).toBe(false);

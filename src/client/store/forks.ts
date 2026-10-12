@@ -25,6 +25,8 @@ export async function forkChat(
   chatId: string,
   messageId: string,
   options: readonly ForkOption[],
+  /** Just before the forks are listed, which is when the tab strip appears. */
+  onListed?: () => void,
 ): Promise<ForkOutcome> {
   const forks = options.slice(0, MAX_FORKS).map((o) => ({
     chatId: uuidv7(),
@@ -45,6 +47,7 @@ export async function forkChat(
   const first = data.forks[0];
   if (!first) return { ok: false, error: "No fork could be started." };
   store.updateMessage(messageId, { options: [], optionsStream: null });
+  onListed?.();
   const sidebar = getSidebarStore();
   const existing = sidebar.get().filter((c) => c.forkedFrom === chatId).length;
   const now = Date.now();

@@ -219,8 +219,8 @@ export function ChatView({ children }: { children: ReactNode }) {
       <ChatLiveStateContext.Provider value={live}>
         <div className="group/chat flex min-h-0 flex-1 flex-col">
           {children}
-          <ForkTabs chatId={chatId} />
           <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />
+          <ForkTabs chatId={chatId} />
           <LiveRegion chatId={chatId} />
           <Composer ref={composerRef} chatId={chatId} />
         </div>

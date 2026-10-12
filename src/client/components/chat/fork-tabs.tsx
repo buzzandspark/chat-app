@@ -2,12 +2,13 @@
 import { X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@client/store/hooks";
 import { prefetchChat } from "@client/store/prefetch";
 import { getSidebarStore, setPendingChat, setTabHidden, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
 import { lazyChunk } from "../ui/lazy-chunk";
+import { ExploreOutline } from "./explore-options";
 
 const ForkTabMenu = lazyChunk(() => dynamic(() => import("./fork-tab-menu").then((m) => m.ForkTabMenu), { ssr: false }));
 
@@ -43,7 +44,7 @@ export function moveBefore(ids: readonly string[], id: string, target: string): 
 const DRAG_PX = 6;
 
 /**
- * Browser-style tabs above the thread: the main chat, then its forks. A closed tab stays closed until
+ * Browser-style tabs between the thread and the composer: the main chat, then its forks. A closed tab stays closed until
  * the chat is opened again (from the sidebar); Ctrl+Shift+[ and ] cycle; a right-click offers Declare
  * winner and Delete chat; forks reorder by dragging with a mouse or pen.
  */
@@ -56,6 +57,8 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   const [menu, setMenu] = useState<{ tab: ForkTab; x: number; y: number } | null>(null);
   const drag = useRef<{ id: string; startX: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const morphRef = useRef<HTMLDivElement>(null);
 
   const warm = useCallback(
     (id: string) => {
@@ -97,6 +100,14 @@ export function ForkTabs({ chatId }: { chatId: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [visibleKey, chatId, open]);
   const closeMenu = useCallback(() => setMenu(null), []);
+  // Before paint, so a strip that grows out of the Explore button never shows a frame at full size first.
+  const parentId = model?.parentId ?? null;
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    const morph = morphRef.current;
+    // Loaded while the sheet was open, the chunk resolves in a microtask, still before the frame is painted.
+    if (shown && parentId && strip && morph) void import("./tab-reveal").then((m) => m.playTabReveal(parentId, strip, morph));
+  }, [shown, parentId]);
 
   if (!model || !shown) return null;
   const forkIds = dragging?.ids ?? model.tabs.slice(1).map((t) => t.id);
@@ -140,19 +151,27 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   };
 
   return (
-    <>
-      <div role="tablist" aria-label="Chat and its forks" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-sidebar-accent px-2 pt-1.5 [touch-action:pan-x] safe-x" data-testid="fork-tabs">
+    <div className="relative shrink-0">
+      {/* The line under the tabs is an inset shadow (the composer drops its own border), so the open tab can cover it inside the scroller. */}
+      <div
+        ref={stripRef}
+        role="tablist"
+        aria-label="Chat and its forks"
+        className="flex gap-1 overflow-x-auto border-t border-border bg-sidebar-accent px-2 pt-1.5 shadow-[inset_0_-1px_0_var(--border)] [touch-action:pan-x] safe-x"
+        data-testid="fork-tabs"
+      >
         {tabs.map((tab) => {
           const active = tab.id === chatId;
           const isMain = tab.id === model.parentId;
           return (
             <div
               key={tab.id}
+              data-tab-slot
               data-fork-tab={isMain ? undefined : tab.id}
               className={cn(
                 "group/tab flex h-9 max-w-56 shrink-0 items-center rounded-t-lg border border-b-0 pr-1 select-none",
-                // The open tab takes the page's colour and covers the strip's bottom border, joining the chat below.
-                active ? "relative -mb-px border-border bg-background" : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10",
+                // The open tab takes the page's colour and covers the strip's bottom line, joining the composer below.
+                active ? "relative border-border bg-background" : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10",
                 dragging?.id === tab.id && "opacity-60",
               )}
               onPointerEnter={() => warm(tab.id)}
@@ -196,7 +215,10 @@ export function ForkTabs({ chatId }: { chatId: string }) {
           );
         })}
       </div>
+      <div ref={morphRef} aria-hidden className="pointer-events-none absolute isolate z-20 bg-background opacity-0 shadow-md">
+        <ExploreOutline />
+      </div>
       {menu ? <ForkTabMenu tabId={menu.tab.id} title={menu.tab.title} isMain={menu.tab.id === model.parentId} currentChatId={chatId} x={menu.x} y={menu.y} onClose={closeMenu} /> : null}
-    </>
+    </div>
   );
 }

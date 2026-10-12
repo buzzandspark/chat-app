@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { rewriteOptions } from "@client/store/forks";
-import { MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption } from "@shared/forks";
+import { MAX_FORKS, MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption } from "@shared/forks";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
 interface ForkSheetProps {
@@ -13,15 +13,15 @@ interface ForkSheetProps {
   onOpenChange: (open: boolean) => void;
   messageId: string;
   options: readonly ForkOption[];
-  remaining: number;
-  onFork: (options: readonly ForkOption[]) => Promise<{ ok: boolean; error?: string }>;
+  /** `onListed` closes the sheet as soon as the forks exist, so the tabs' reveal plays in the open. */
+  onFork: (options: readonly ForkOption[], onListed: () => void) => Promise<{ ok: boolean; error?: string }>;
 }
 
 type Item = ForkOption & { selected: boolean };
 
 /** Pick, retitle and reword the options before forking; one instruction can rewrite every prompt. */
-export function ForkSheet({ open, onOpenChange, messageId, options, remaining, onFork }: ForkSheetProps) {
-  const [items, setItems] = useState<Item[]>(() => options.map((o, i) => ({ ...o, selected: i < remaining })));
+export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: ForkSheetProps) {
+  const [items, setItems] = useState<Item[]>(() => options.map((o, i) => ({ ...o, selected: i < MAX_FORKS })));
   const [instruction, setInstruction] = useState("");
   const [applying, setApplying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,7 +36,7 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
   const update = (index: number, patch: Partial<Item>) => setItems((list) => list.map((it, i) => (i === index ? { ...it, ...patch } : it)));
   const toggle = (index: number) => {
     const it = items[index]!;
-    if (!it.selected && selected.length >= remaining) return;
+    if (!it.selected && selected.length >= MAX_FORKS) return;
     update(index, { selected: !it.selected });
   };
 
@@ -57,15 +57,24 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
     if (selected.length === 0 || busy) return;
     setBusy(true);
     setError(null);
-    const out = await onFork(selected.map(({ title, prompt }) => ({ title: title.trim(), prompt: prompt.trim() })));
+    let closed = false;
+    // The first fork is about to be opened: the sheet's history entry must stay, or going back would undo it.
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      markNavigationClose();
+      onOpenChange(false);
+    };
+    const out = await onFork(
+      selected.map(({ title, prompt }) => ({ title: title.trim(), prompt: prompt.trim() })),
+      close,
+    );
     setBusy(false);
     if (!out.ok) {
       setError(out.error ?? "Forking failed.");
       return;
     }
-    // The first fork is already being opened: the sheet's history entry must stay, or going back would undo it.
-    markNavigationClose();
-    onOpenChange(false);
+    close();
   };
 
   // Enter in the instruction applies it; Shift+Enter anywhere forks; Enter in another field does nothing.
@@ -83,7 +92,7 @@ export function ForkSheet({ open, onOpenChange, messageId, options, remaining, o
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Explore options" description={`Each option becomes its own chat; ${remaining} more can be forked.`} className="md:max-w-xl">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} title="Explore options" description={`Each option becomes its own chat, up to ${MAX_FORKS}.`} className="md:max-w-xl">
       <form
         className="flex flex-col gap-3"
         onKeyDown={onKeyDown}

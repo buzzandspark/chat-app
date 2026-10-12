@@ -224,7 +224,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string }>(function 
     <div
       ref={rootRef}
       data-tip-boundary
-      className="relative shrink-0 border-t border-border bg-background safe-x pt-2"
+      className="relative shrink-0 border-t border-border bg-background safe-x pt-2 group-has-[[data-testid=fork-tabs]]/chat:border-t-transparent"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
       data-testid="composer"
     >

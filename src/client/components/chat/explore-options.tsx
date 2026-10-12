@@ -2,7 +2,7 @@
 import { GitFork } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react";
 import { cn } from "@/lib/utils";
 import { useNow } from "@client/hooks/use-now";
 import type { MessageState } from "@client/store/chat-store";
@@ -27,11 +27,11 @@ export interface ExploreOptionsProps {
   now: number;
   state: ExploreState;
   onOpen: () => void;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 /** Pops up from behind the composer's top border while the last reply has options, to where Jump to latest sits. */
-export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen }: ExploreOptionsProps) {
-  const gradient = useId();
+export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen, ref }: ExploreOptionsProps) {
   const expired = state === "ready" && now > 0 && now - requestedAt > CACHE_WARM_MS;
   const tip = expired ? "Cache expired: the first fork re-sends the whole chat" : null;
   const label = state === "busy" ? "Forking…" : `Explore ${count} option${count === 1 ? "" : "s"}`;
@@ -43,6 +43,7 @@ export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen }
       inert={!shown}
     >
       <button
+        ref={ref}
         type="button"
         data-testid="explore-options"
         data-state={state}
@@ -63,28 +64,7 @@ export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen }
       >
         {/* Dimmed and pulsing inside, so the tooltip (the button's ::after) stays opaque. */}
         <span className={cn("flex items-center gap-1.5", state === "awaiting" && "animate-pulse", state === "busy" && "opacity-60")} data-part="label">
-          <svg aria-hidden className="pointer-events-none absolute inset-0 -z-10 size-full">
-            <defs>
-              <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0" stopColor="var(--primary)" />
-                <stop offset="0.5" stopColor="var(--chart-2)" />
-                <stop offset="1" stopColor="var(--chart-3)" />
-              </linearGradient>
-            </defs>
-            <rect
-              data-part="border"
-              x="1"
-              y="1"
-              rx="7"
-              // The animation lives in an unlayered rule that no utility can override, so the class itself is the switch.
-              className={state === "ready" ? undefined : "explore-border"}
-              style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
-              fill="none"
-              stroke={`url(#${gradient})`}
-              strokeWidth="1.5"
-              strokeDasharray="6 4"
-            />
-          </svg>
+          <ExploreOutline marching={state !== "ready"} />
           <GitFork className="size-4" />
           {label}
         </span>
@@ -93,9 +73,39 @@ export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen }
   );
 }
 
+/** The button's dashed gradient outline, drawn behind its content; the tab strip's reveal starts from it too. */
+export function ExploreOutline({ marching = false }: { marching?: boolean }) {
+  const gradient = useId();
+  return (
+    <svg aria-hidden className="pointer-events-none absolute inset-0 -z-10 size-full">
+      <defs>
+        <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="var(--primary)" />
+          <stop offset="0.5" stopColor="var(--chart-2)" />
+          <stop offset="1" stopColor="var(--chart-3)" />
+        </linearGradient>
+      </defs>
+      <rect
+        data-part="border"
+        x="1"
+        y="1"
+        rx="7"
+        // The animation lives in an unlayered rule that no utility can override, so the class itself is the switch.
+        className={marching ? "explore-border" : undefined}
+        style={{ width: "calc(100% - 2px)", height: "calc(100% - 2px)" }}
+        fill="none"
+        stroke={`url(#${gradient})`}
+        strokeWidth="1.5"
+        strokeDasharray="6 4"
+      />
+    </svg>
+  );
+}
+
 /** Whether the last reply has options this chat can still fork: the only time the button is up. */
-export function optionsFound(message: MessageState | undefined, chat: { isFork: boolean; remaining: number; editing: boolean }): boolean {
-  if (chat.isFork || chat.remaining <= 0 || chat.editing) return false;
+export function optionsFound(message: MessageState | undefined, chat: { isFork: boolean; forks: number; editing: boolean }): boolean {
+  // A chat with forks shows its tabs here instead.
+  if (chat.isFork || chat.forks > 0 || chat.editing) return false;
   if (message?.role !== "assistant" || message.status !== "done") return false;
   const count = message.optionsStream ? message.optionsStream.count : (message.options?.length ?? 0);
   return count !== null && count >= 2;
@@ -112,10 +122,10 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
   const [awaiting, setAwaiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const waitRef = useRef<(() => void) | null>(null);
-  const remaining = MAX_FORKS - forks;
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const messageId = message?.id ?? "";
-  const found = optionsFound(message, { isFork, remaining, editing });
-  const count = Math.min(message?.optionsStream ? (message.optionsStream.count ?? 0) : (message?.options?.length ?? 0), remaining);
+  const found = optionsFound(message, { isFork, forks, editing });
+  const count = Math.min(message?.optionsStream ? (message.optionsStream.count ?? 0) : (message?.options?.length ?? 0), MAX_FORKS);
   // The last count shown, so the label doesn't change while the button tucks away.
   const [shownCount, setShownCount] = useState(count);
   if (found && count !== shownCount) setShownCount(count);
@@ -125,10 +135,16 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
     return () => wait.current?.();
   }, [found]);
   const fork = useCallback(
-    async (chosen: readonly ForkOption[]) => {
+    async (chosen: readonly ForkOption[], closeSheet: () => void) => {
       setBusy(true);
       setError(null);
-      const out = await forkChat(store, router, chatId, messageId, chosen);
+      // The strip that replaces the button grows out of it, once the sheet is out of the way.
+      const out = await forkChat(store, router, chatId, messageId, chosen, () => {
+        const from = buttonRef.current?.getBoundingClientRect();
+        closeSheet();
+        // Started before the forks are listed: the strip's own import of the chunk resolves after this one.
+        if (from) void import("./tab-reveal").then((m) => m.startTabReveal(chatId, from));
+      });
       setBusy(false);
       if (out.error) setError(out.error);
       return out;
@@ -136,9 +152,11 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
     [store, router, chatId, messageId],
   );
   const openWith = useCallback(
-    (options: readonly ForkOption[]) =>
-      show(({ open, close }) => <ForkSheet open={open} onOpenChange={(o) => !o && close()} messageId={messageId} options={options} remaining={remaining} onFork={fork} />),
-    [show, messageId, remaining, fork],
+    (options: readonly ForkOption[]) => {
+      void import("./tab-reveal");
+      show(({ open, close }) => <ForkSheet open={open} onOpenChange={(o) => !o && close()} messageId={messageId} options={options} onFork={fork} />);
+    },
+    [show, messageId, fork],
   );
   // Whatever has arrived: the final list, else the options complete so far; none means an error instead of the sheet.
   const openCurrent = useCallback(() => {
@@ -177,14 +195,17 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
   const state: ExploreState = busy ? "busy" : awaiting ? "awaiting" : "ready";
   return (
     <>
-      <ExploreOptions
-        shown={busy || found}
-        count={shownCount}
-        requestedAt={message?.timings?.client?.sent ?? message?.createdAt ?? 0}
-        now={now}
-        state={state}
-        onOpen={onOpen}
-      />
+      {forks > 0 ? null : (
+        <ExploreOptions
+          ref={buttonRef}
+          shown={busy || found}
+          count={shownCount}
+          requestedAt={message?.timings?.client?.sent ?? message?.createdAt ?? 0}
+          now={now}
+          state={state}
+          onOpen={onOpen}
+        />
+      )}
       {error ? (
         <p role="alert" className="mb-2 text-caption text-destructive">
           {error}

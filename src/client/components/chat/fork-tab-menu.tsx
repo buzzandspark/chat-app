@@ -66,7 +66,8 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
       role="menu"
       aria-label={`Tab actions for ${title}`}
       className="fixed z-50 min-w-44 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
-      style={{ left, top: y }}
+      // Opens upward: the tabs sit just above the composer, at the bottom of the screen.
+      style={{ left, bottom: window.innerHeight - y }}
       onKeyDown={onKeyDown}
     >
       <button type="button" role="menuitem" className="flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-small hover:bg-muted focus-visible:bg-muted focus-visible:outline-none" onClick={isMain ? onDeleteForks : onDeclareWinner}>
