@@ -3,11 +3,12 @@ import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@db/client";
 import { DrainingError, ForbiddenError } from "@relay/engine";
-import { QuotaExceededError } from "@relay/quota";
+import { BudgetExceededError, PromptTooLongError, QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
 import { errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
+import { tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
 import { singleEventResponse, streamGeneration } from "@server/sse-response";
@@ -82,9 +83,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       if (!outcome.created && outcome.reason === "replace_gone") return jsonError(409, { error: "replace_gone" });
       created = outcome.created;
     } catch (err) {
+      if (err instanceof PromptTooLongError) return jsonError(413, { error: "context_full" });
       if (err instanceof QuotaExceededError) {
         return jsonError(402, { error: "quota_exceeded", spentUsd: err.spentUsd, capUsd: err.capUsd });
       }
+      if (err instanceof BudgetExceededError) return tooMany(err.retryAfterMs);
       if (err instanceof ForbiddenError) return jsonError(403, { error: "forbidden" });
       if (err instanceof DrainingError) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
       if (err instanceof Error && /retry without/.test(err.message)) return jsonError(409, { error: "missing_user_message" });

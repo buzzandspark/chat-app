@@ -1,6 +1,7 @@
 import "server-only";
 import { env } from "@shared/env";
-import { getDb } from "@db/client";
+import { getDb, type Db } from "@db/client";
+import { Budgets } from "@relay/budgets";
 import { Engine } from "@relay/engine";
 import { OptionsService } from "@relay/options/service";
 import { QuotaManager } from "@relay/quota";
@@ -17,6 +18,13 @@ interface RelaySingleton {
 
 const g = globalThis as unknown as { __chatRelay?: RelaySingleton };
 
+export function createQuota(db: Db): QuotaManager {
+  return new QuotaManager(db, {
+    maxPromptTokens: env.GUEST_MAX_PROMPT_TOKENS,
+    budgets: new Budgets(db, { ip: env.GUEST_IP_USD_PER_DAY, ip48: env.GUEST_IP48_USD_PER_DAY, all: env.GUEST_ALL_USD_PER_DAY }),
+  });
+}
+
 /** One engine per process, created lazily and cached across dev reloads. */
 export function getRelay(): RelaySingleton {
   if (g.__chatRelay) return g.__chatRelay;
@@ -24,8 +32,8 @@ export function getRelay(): RelaySingleton {
   // A finished buffer is kept a minute for late resumes; after that a resume gets the saved snapshot.
   const store = new EventStore({ evictAfterMs: 60_000 });
   store.startSweeper();
-  const quota = new QuotaManager(db);
-  const options = new OptionsService({ db, replayMode: env.replayMode });
+  const quota = createQuota(db);
+  const options = new OptionsService({ db, replayMode: env.replayMode, quota });
   const engine = new Engine({
     db,
     store,

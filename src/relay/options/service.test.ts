@@ -1,10 +1,12 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@db/client";
-import { chats, generations, messages, usageEvents, users } from "@db/schema";
+import { chats, generations, messages, spendBuckets, usageEvents, users } from "@db/schema";
 import { MAX_FORKS, type ForkOption } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
+import { Budgets } from "../budgets";
 import type { ReplyDoneInfo } from "../engine";
+import { QuotaManager } from "../quota";
 import { createTestDb, seedUser } from "../test-utils";
 import { OPTIONS_MODEL, SCRIPTED_OPTIONS, type MessengerResult, type OptionsMessenger } from "./messenger";
 import { OptionsService } from "./service";
@@ -77,6 +79,18 @@ describe("OptionsService", () => {
     expect(trace).toMatchObject(TRACE);
     expect(trace.totalMs).toBeGreaterThanOrEqual(0);
     expect(service.takeTrace(info.messageId)).toBeNull();
+  });
+
+  it("charges a guest's Explore call to its budgets", async () => {
+    db.update(users).set({ role: "guest", budgetKeys: ["ip:203.0.113.7"] }).where(eq(users.id, USER)).run();
+    const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 1, ip48: 3, all: 10 }, () => 0) });
+    const service = new OptionsService({ db, replayMode: false, quota, live: () => fakeLive() });
+    const info = seedReply(uuidv7());
+    service.onReplyDone(info);
+    await service.awaitOptions(info.messageId, 1000);
+    const cost = db.select().from(usageEvents).get()!.costUsd;
+    expect(cost).toBeGreaterThan(0);
+    expect(db.select().from(spendBuckets).all().map((b) => b.levelUsd)).toEqual([cost, cost]);
   });
 
   it("leaves the options spent when the chat was forked before Haiku answered", async () => {

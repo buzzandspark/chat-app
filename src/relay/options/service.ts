@@ -22,6 +22,7 @@ type Tracked = OptionsProgress & { listeners: Set<() => void> };
 export interface OptionsServiceOptions {
   db: Db;
   replayMode: boolean;
+  quota?: QuotaManager;
   live?: () => OptionsMessenger;
   now?: () => number;
 }
@@ -30,6 +31,7 @@ export interface OptionsServiceOptions {
 export class OptionsService {
   private db: Db;
   private replayMode: boolean;
+  private quota: QuotaManager;
   private makeLive: () => OptionsMessenger;
   private live: OptionsMessenger | null = null;
   private now: () => number;
@@ -40,6 +42,7 @@ export class OptionsService {
   constructor(options: OptionsServiceOptions) {
     this.db = options.db;
     this.replayMode = options.replayMode;
+    this.quota = options.quota ?? new QuotaManager(options.db);
     this.makeLive = options.live ?? (() => new LiveOptionsMessenger());
     this.now = options.now ?? Date.now;
   }
@@ -205,7 +208,7 @@ export class OptionsService {
       tx.insert(usageEvents)
         .values({ id: uuidv7(), generationId: linked, userId, model: OPTIONS_MODEL, iterationType, ...usage, costUsd, estimated: false, createdAt: now })
         .run();
-      QuotaManager.addSpend(tx as unknown as Db, userId, costUsd);
+      this.quota.spend(tx, userId, costUsd);
     });
   }
 }

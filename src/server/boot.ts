@@ -9,6 +9,7 @@ import { DEV_AUTH_SECRET } from "@auth/server";
 import { settleOrphan } from "@relay/orphans";
 import { redactInviteTokens } from "@shared/redact";
 import { startGuestPurge } from "./guests";
+import { createQuota } from "./relay";
 import { installSignalHandlers, onShutdown } from "./shutdown";
 
 const g = globalThis as unknown as { __chatBooted?: boolean };
@@ -93,8 +94,9 @@ function backstopInterruptedGenerations(): void {
     .all();
   if (running.length === 0) return;
   const now = new Date();
+  const quota = createQuota(db);
   db.transaction((tx) => {
-    for (const row of running) settleOrphan(tx as unknown as typeof db, row, now);
+    for (const row of running) settleOrphan(tx, row, now, quota);
   });
   console.warn(`[boot] marked ${running.length} orphaned generation(s) interrupted with estimated cost`);
 }

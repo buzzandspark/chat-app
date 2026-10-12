@@ -227,7 +227,7 @@ export class Engine {
         input.userId,
         input.generationId,
         input.model,
-        QuotaManager.estimateInputTokens(this.promptChars(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : chatText.length)),
+        QuotaManager.estimateInputTokens(this.promptBytes(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : Buffer.byteLength(chatText))),
       );
     }
 
@@ -425,7 +425,7 @@ export class Engine {
       // The process restarted mid-run: settle its estimated cost as the boot backstop does; the provider column keeps a crashed scenario run free.
       const now = new Date(this.now());
       this.db.transaction((tx) => {
-        settleOrphan(tx as unknown as Db, { id: row.id, messageId: row.messageId, chatId: row.chatId, userId: row.userId, requestedModel: row.requestedModel, provider: row.provider }, now);
+        settleOrphan(tx, { id: row.id, messageId: row.messageId, chatId: row.chatId, userId: row.userId, requestedModel: row.requestedModel, provider: row.provider }, now, this.quota);
       });
     }
     const message = this.db.select().from(messages).where(eq(messages.id, row.messageId)).get();
@@ -812,7 +812,7 @@ export class Engine {
     const now = new Date(this.now());
     const estimated = final.estimated ?? final.generationStatus !== "done";
     this.db.transaction((tx) => {
-      if (active.billable) QuotaManager.addSpend(tx as unknown as Db, active.userId, costUsd);
+      if (active.billable) this.quota.spend(tx, active.userId, costUsd);
       tx.update(messages)
         .set({
           content: final.content,
@@ -878,8 +878,8 @@ export class Engine {
     return rows.filter((r) => r.position < cutoff).map((r) => ({ role: r.role, content: r.content, status: r.status }));
   }
 
-  /** The text and thinking the request will carry: rows a replace is about to drop do not count. */
-  private promptChars(chatId: string, replaceFromMessageId: string | undefined): number {
+  /** The UTF-8 size of the text and thinking the request will carry: rows a replace is about to drop do not count. */
+  private promptBytes(chatId: string, replaceFromMessageId: string | undefined): number {
     const rows = this.db
       .select({ id: messages.id, position: messages.position, content: messages.content })
       .from(messages)
@@ -889,7 +889,7 @@ export class Engine {
     let n = 0;
     for (const r of rows) {
       if (r.position >= cutoff) continue;
-      for (const b of r.content) n += b.type === "text" ? b.text.length : b.type === "thinking" ? b.thinking.length : 0;
+      for (const b of r.content) n += b.type === "text" ? Buffer.byteLength(b.text) : b.type === "thinking" ? Buffer.byteLength(b.thinking) : 0;
     }
     return n;
   }

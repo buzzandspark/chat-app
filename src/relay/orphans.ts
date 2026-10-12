@@ -1,10 +1,9 @@
-import { eq, sql } from "drizzle-orm";
-import type { Db } from "@db/client";
-import { generations, messages, usageEvents, users } from "@db/schema";
+import { eq } from "drizzle-orm";
+import { generations, messages, usageEvents } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import { costOf } from "./anthropic/pricing";
 import { isBillableProvider } from "./providers/types";
-import { CHARS_PER_TOKEN } from "./quota";
+import { CHARS_PER_TOKEN, type QuotaManager, type SpendDb } from "./quota";
 
 export interface OrphanRow {
   id: string;
@@ -20,7 +19,7 @@ export interface OrphanRow {
  * Marks a generation whose process died as interrupted and settles a cost estimated from its saved text at CHARS_PER_TOKEN,
  * thinking counted as output. A non-billable run gets its usage row at cost zero and never touches spend, so a restart mid-scenario cannot eat a cap.
  */
-export function settleOrphan(tx: Db, row: OrphanRow, now: Date): number {
+export function settleOrphan(tx: SpendDb, row: OrphanRow, now: Date, quota: QuotaManager): number {
   tx.update(generations).set({ status: "interrupted", interruptedReason: "crash", endedAt: now }).where(eq(generations.id, row.id)).run();
   tx.update(messages).set({ status: "interrupted", updatedAt: now }).where(eq(messages.id, row.messageId)).run();
   const chatRows = tx
@@ -45,6 +44,6 @@ export function settleOrphan(tx: Db, row: OrphanRow, now: Date): number {
   tx.insert(usageEvents)
     .values({ id: uuidv7(), generationId: row.id, userId: row.userId, model, iterationType: "message", ...tokens, costUsd, estimated: true, createdAt: now })
     .run();
-  if (costUsd > 0) tx.update(users).set({ costSpentUsd: sql`${users.costSpentUsd} + ${costUsd}` }).where(eq(users.id, row.userId)).run();
+  quota.spend(tx, row.userId, costUsd);
   return costUsd;
 }

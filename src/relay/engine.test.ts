@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { generations, messages, usageEvents, users } from "@db/schema";
+import { generations, messages, spendBuckets, usageEvents, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
+import { Budgets } from "./budgets";
 import { Engine, ForbiddenError, type ReplyDoneInfo, type StartInput } from "./engine";
 import { ProviderStatusError } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
@@ -342,29 +343,30 @@ describe("Engine", () => {
     expect(db.select({ spent: users.costSpentUsd }).from(users).where(eq(users.id, USER)).get()?.spent).toBeLessThan(0.006);
   });
 
-  it("admits on the prompt's text and thinking, leaving out the turns a replace drops, then meters from message_start", async () => {
+  it("admits on the UTF-8 size of the prompt's text and thinking, leaving out the turns a replace drops, then meters from message_start", async () => {
     const quota = new QuotaManager(db);
     const admit = vi.spyOn(quota, "admit");
     const started = vi.spyOn(quota, "started");
     engine = makeEngine(0, { quota });
-    const first = input({ text: "x".repeat(250) });
+    // Three bytes a character: 250 of them are 300 tokens, not 100.
+    const first = input({ text: "字".repeat(250) });
     engine.start(first);
     await collectUntilTerminal(store, first.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, first.generationId, "claude-sonnet-5-5", 100 + 100);
+    expect(admit).toHaveBeenLastCalledWith(USER, first.generationId, "claude-sonnet-5-5", 300 + 100);
     expect(started).toHaveBeenCalledWith(first.generationId, "claude-sonnet-5-5", expect.objectContaining({ inputTokens: 800 }));
     const reply = db.select().from(messages).where(eq(messages.id, first.assistantMessageId)).get()!;
-    const replyChars = reply.content.reduce((n, b) => n + (b.type === "text" ? b.text.length : b.type === "thinking" ? b.thinking.length : 0), 0);
+    const replyBytes = reply.content.reduce((n, b) => n + (b.type === "text" ? Buffer.byteLength(b.text) : b.type === "thinking" ? Buffer.byteLength(b.thinking) : 0), 0);
     expect(reply.content.some((b) => b.type === "thinking")).toBe(true);
 
     const next = input({ chatId: first.chatId, text: "y".repeat(250) });
     engine.start(next);
     await collectUntilTerminal(store, next.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, next.generationId, "claude-sonnet-5-5", Math.ceil((500 + replyChars) / 2.5) + 100);
+    expect(admit).toHaveBeenLastCalledWith(USER, next.generationId, "claude-sonnet-5-5", Math.ceil((750 + 250 + replyBytes) / 2.5) + 100);
 
     const regenerate = input({ chatId: first.chatId, userMessageId: next.userMessageId, text: undefined, replaceFromMessageId: next.assistantMessageId });
     engine.start(regenerate);
     await collectUntilTerminal(store, regenerate.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, regenerate.generationId, "claude-sonnet-5-5", Math.ceil((500 + replyChars) / 2.5) + 100);
+    expect(admit).toHaveBeenLastCalledWith(USER, regenerate.generationId, "claude-sonnet-5-5", Math.ceil((750 + 250 + replyBytes) / 2.5) + 100);
   });
 
   it("builds history from earlier turns and keeps a retry's existing user message", async () => {
@@ -567,5 +569,61 @@ describe("Engine: gate, retry and afterDone (forks)", () => {
     engine.start(refused);
     await collectUntilTerminal(store, refused.generationId);
     expect(seen).toHaveLength(1);
+  });
+});
+
+describe("Engine: guest budgets", () => {
+  it("charges each way a guest's reply can end to its address and every guest's budget", async () => {
+    seedUser(db, "g1", { role: "guest", costCapUsd: 1, budgetKeys: ["ip:203.0.113.7"] });
+    const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 100, ip48: 100, all: 100 }, () => 0) });
+    const fast = makeEngine(0, { quota });
+    const slow = makeEngine(1, { quota });
+    const endingWith = (last: { kind: "disconnect" } | { kind: "error"; error: { type: string; message: string } }) => {
+      const scripted = new ScriptedProvider({ model: "claude-haiku-5-5", parts: [{ kind: "text", text: "partial" }, last] }, 0);
+      return new Engine({ db, store, quota, providers: () => ({ name: "anthropic", stream: scripted.stream.bind(scripted) }) });
+    };
+    const guest = (scenario: ScenarioName) => input({ userId: "g1", userRole: "guest", model: "claude-haiku-5-5", scenario });
+    const spent = () => db.select().from(users).where(eq(users.id, "g1")).get()!.costSpentUsd;
+    const levels = () => db.select().from(spendBuckets).all().map((b) => b.levelUsd);
+    const runOn = async (on: Engine, scenario: ScenarioName) => {
+      const inp = guest(scenario);
+      on.start(inp);
+      return { inp, end: (await collectUntilTerminal(store, inp.generationId)).at(-1) };
+    };
+
+    const endings: Record<string, () => Promise<unknown>> = {
+      done: async () => expect((await runOn(fast, "normal")).end).toMatchObject({ type: "done" }),
+      stopped: async () => {
+        const inp = guest("slow_tokens");
+        slow.start(inp);
+        await waitFor(() => store.get(inp.generationId)?.events.some((e) => e.type === "text_delta") ?? false);
+        await slow.stopAndWait(inp.generationId);
+        expect(store.get(inp.generationId)!.events.at(-1)).toMatchObject({ type: "stopped" });
+      },
+      interrupted: async () => expect((await runOn(endingWith({ kind: "disconnect" }), "normal")).end).toMatchObject({ type: "interrupted" }),
+      error: async () =>
+        expect((await runOn(endingWith({ kind: "error", error: { type: "api_error", message: "x" } }), "normal")).end).toMatchObject({ type: "error" }),
+      cap: async () => {
+        db.update(users).set({ costCapUsd: spent() + 0.0005 }).where(eq(users.id, "g1")).run();
+        expect((await runOn(fast, "long_reply")).end).toMatchObject({ type: "error", error: { kind: "quota_exceeded" } });
+        db.update(users).set({ costCapUsd: 1 }).where(eq(users.id, "g1")).run();
+      },
+      crash: async () => {
+        const { inp } = await runOn(fast, "normal");
+        db.update(generations).set({ status: "running" }).where(eq(generations.id, inp.generationId)).run();
+        store.evict(inp.generationId);
+        const before = spent();
+        fast.resume(inp.generationId, "g1");
+        expect(spent()).toBeGreaterThan(before);
+      },
+    };
+    for (const [ending, run] of Object.entries(endings)) {
+      const before = spent();
+      await run();
+      expect(spent(), ending).toBeGreaterThan(before);
+      const [ip, all] = levels();
+      expect(ip, ending).toBeCloseTo(spent(), 12);
+      expect(all, ending).toBeCloseTo(spent(), 12);
+    }
   });
 });
