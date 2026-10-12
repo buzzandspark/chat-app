@@ -4,6 +4,7 @@ All notable changes, newest first. Dates are the day the work landed.
 
 ## 2026-10-12
 
+- The out-of-budget message no longer links to the source repository.
 - The admin console's new-user cost cap takes any amount (the field stepped by 0.5, so the browser refused values in between).
 - A main chat with forks has Delete all chats in its sidebar menu: it removes the main chat and every fork in one transaction (`POST /api/chats/:id/delete-all`), after a confirmation that opens on Delete all.
 - The spending cap no longer reserves each reply's worst case up front (16k output tokens at the long-prompt rate, which let a guest start only four of ten forks). A reply starts while its estimated input fits under the cap and is metered as it streams; when spend plus the user's live replies reaches the cap, every running reply of theirs ends with "quota exceeded", keeping its text. The real usage is what is charged, so the cap can be overshot by about one streamed chunk per reply. D22 amended.

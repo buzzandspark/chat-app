@@ -152,7 +152,6 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
         break;
       case "quota_exceeded":
         text = "You have used the whole budget on this instance.";
-        offer = link("https://github.com/BZahory/claude-app/blob/main/docs/self-host.md", "Run your own");
         break;
       case "context_full":
         text = "This chat is too long to continue.";
