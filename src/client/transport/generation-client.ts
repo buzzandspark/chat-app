@@ -60,6 +60,8 @@ const DEFAULT_BACKOFF: BackoffOptions = { baseMs: 500, maxMs: 8000, maxAttempts:
  * blocking /api/chat) is not a flaky connection: after this many the reply ends as a network error.
  */
 const MAX_REPOSTS = 3;
+/** A replace refused because a turn it drops is still running is sent again this many times (#21). */
+const MAX_BUSY_REPOSTS = 5;
 /** D16 watchdog: the server writes a keepalive every 15 s, so longer silence is a half-open socket. */
 const DEFAULT_IDLE_MS = 25_000;
 /**
@@ -225,14 +227,15 @@ export class GenerationClient {
    * What a retry of this reply replaces from. A reply the server accepted is a row there (an error
    * mid-stream included), so the retry replaces from it. One whose POST was refused, or never got
    * through, changed nothing on the server: if it was an Edit or a Regenerate, the turns it was to
-   * replace are all still there, and the failed reply's own id matches nothing, so the retry would
-   * be appended after them. It carries that attempt's target instead, which a chain of refused
-   * retries passes along unchanged. A refused plain send had no target, and its own id is harmless.
+   * replace are all still there, and the failed reply's own id matches nothing there, so the retry
+   * would be refused. It carries that attempt's target instead, which a chain of refused
+   * retries passes along unchanged. A refused plain send had no target, so neither has its retry:
+   * the server refuses a target it does not have rather than append (#21).
    */
-  retryReplaceFrom(reply: Pick<MessageState, "id" | "generationId">): string {
+  retryReplaceFrom(reply: Pick<MessageState, "id" | "generationId">): string | undefined {
     const gid = reply.generationId;
     const unaccepted = gid && !this.acked.has(gid) ? this.bodies.get(gid) : undefined;
-    return unaccepted?.replaceFromMessageId ?? reply.id;
+    return unaccepted ? unaccepted.replaceFromMessageId : reply.id;
   }
 
   /**
@@ -311,19 +314,30 @@ export class GenerationClient {
     const entry: Inflight = { controller, nudge: null };
     this.inflight.set(body.generationId, entry);
     try {
-      const res = await this.fetchAttempt(entry, "/api/chat", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (typeof res === "string") return controller.signal.aborted ? "done" : "unsent";
-      if (!res.ok) {
-        this.failFromResponse(body.assistantMessageId, res, await safeJson(res));
+      for (let busy = 0; ; busy++) {
+        const res = await this.fetchAttempt(entry, "/api/chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (typeof res === "string") return controller.signal.aborted ? "done" : "unsent";
+        if (res.ok) {
+          this.accept(body.generationId);
+          const finished = await this.consume(res, entry, body.generationId, body.assistantMessageId);
+          return finished || controller.signal.aborted ? "done" : "cut";
+        }
+        const json = await safeJson(res);
+        // A turn this Edit or Regenerate drops was still running there (#21): the server changed
+        // nothing, so the same POST goes again in a moment, and that one stops it first.
+        if (json.error === "replace_running" && busy < MAX_BUSY_REPOSTS) {
+          const retryAfter = Number(res.headers.get("retry-after"));
+          await this.sleepImpl(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000, controller.signal);
+          if (controller.signal.aborted) return "done";
+          continue;
+        }
+        this.failFromResponse(body.assistantMessageId, res, json);
         return "done";
       }
-      this.accept(body.generationId);
-      const finished = await this.consume(res, entry, body.generationId, body.assistantMessageId);
-      return finished || controller.signal.aborted ? "done" : "cut";
     } finally {
       if (this.inflight.get(body.generationId) === entry) this.inflight.delete(body.generationId);
     }
@@ -559,31 +573,37 @@ export class GenerationClient {
         ? "quota_exceeded"
         : body.error === "rate_limited"
           ? "rate_limited"
-          : res.status === 401
-            ? "session"
-            : res.status === 403
-              ? "forbidden"
-              : res.status === 503
-                ? "unavailable"
-                : "bad_request";
+          : body.error === "replace_gone" || body.error === "replace_running"
+            ? "conflict"
+            : res.status === 401
+              ? "session"
+              : res.status === 403
+                ? "forbidden"
+                : res.status === 503
+                  ? "unavailable"
+                  : "bad_request";
     const message =
       kind === "quota_exceeded"
         ? "You have used your whole budget on this instance"
         : kind === "rate_limited"
           ? "Too many messages, slow down a little"
-          : kind === "session"
-            ? "Your session has ended"
-            : kind === "forbidden"
-              ? "This chat belongs to another account"
-              : kind === "unavailable"
-                ? "The server is restarting"
-                : tooLong(body)
-                  ? `This message is too long (the limit is ${MAX_MESSAGE_CHARS.toLocaleString()} characters)`
-                  : `Request failed (${res.status})`;
+          : body.error === "replace_gone"
+            ? "These turns were already replaced in another request"
+            : body.error === "replace_running"
+              ? "An earlier reply is still finishing"
+              : kind === "session"
+                ? "Your session has ended"
+                : kind === "forbidden"
+                  ? "This chat belongs to another account"
+                  : kind === "unavailable"
+                    ? "The server is restarting"
+                    : tooLong(body)
+                      ? `This message is too long (the limit is ${MAX_MESSAGE_CHARS.toLocaleString()} characters)`
+                      : `Request failed (${res.status})`;
     this.store.updateMessage(messageId, {
       status: "error",
       connection: "idle",
-      error: { kind, message, retryable: kind === "rate_limited" || kind === "unavailable", retryAfterMs: retryAfterMs ?? (kind === "unavailable" ? 5000 : undefined), status: res.status },
+      error: { kind, message, retryable: kind === "rate_limited" || kind === "unavailable" || body.error === "replace_running", retryAfterMs: retryAfterMs ?? (kind === "unavailable" ? 5000 : undefined), status: res.status },
     });
   }
 }

@@ -41,6 +41,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const scenario = body.scenario ? SCENARIOS[body.scenario] : undefined;
     if (!existing && body.replaceFromMessageId) {
       // Settle the replaced turns' generations first: deleting a running one's rows would strand its buffer.
+      // Advisory only: the start checks the turns again after this await.
       const db = getDb();
       const from = db
         .select({ position: schema.messages.position })
@@ -73,6 +74,10 @@ export async function POST(request: NextRequest): Promise<Response> {
         replaceFromMessageId: body.replaceFromMessageId,
         faults: scenario?.interruptAfterEvents ? { interruptAfterEvents: scenario.interruptAfterEvents } : undefined,
       });
+      // The start re-checks the turns this replace drops (#21): one still running is worth a retry in a
+      // moment (it stops that one too); a target already gone means another request replaced it.
+      if (!outcome.created && outcome.reason === "replace_running") return jsonError(409, { error: "replace_running" }, { "retry-after": "1" });
+      if (!outcome.created && outcome.reason === "replace_gone") return jsonError(409, { error: "replace_gone" });
       created = outcome.created;
     } catch (err) {
       if (err instanceof QuotaExceededError) {

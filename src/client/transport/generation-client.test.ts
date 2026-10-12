@@ -365,12 +365,33 @@ describe("GenerationClient", () => {
     expect(calls.map((c) => c.body!.replaceFromMessageId)).toEqual(["old-reply", "old-reply", "old-reply"]);
   });
 
-  it("a refused Edit's retry replaces from the edited message; a refused plain send's from the reply itself", async () => {
+  it("a refused Edit's retry replaces from the edited message; a refused plain send's replaces nothing", async () => {
     const client = makeClient(() => new Response(JSON.stringify({ error: "rate_limited", retryAfterMs: 1 }), { status: 429 }));
     const edit = client.send({ chatId: "c1", text: "edited", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "u-original" });
     expect(client.retryReplaceFrom(await settle(edit.assistantMessageId))).toBe("u-original");
+    // The server never had the failed reply, and refuses a replace from an id it does not have (#21).
     const plain = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
-    expect(client.retryReplaceFrom(await settle(plain.assistantMessageId))).toBe(plain.assistantMessageId);
+    expect(client.retryReplaceFrom(await settle(plain.assistantMessageId))).toBeUndefined();
+  });
+
+  it("a replace refused while a turn it drops is still running is sent again with the same ids (#21)", async () => {
+    let busy = 2;
+    const client = makeClient((_url, init) => {
+      if (busy-- > 0) return new Response(JSON.stringify({ error: "replace_running" }), { status: 409, headers: { "retry-after": "1" } });
+      return sseResponse(eventsFromPost(init, "ok"));
+    });
+    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "old-reply" });
+    expect((await settle(regen.assistantMessageId)).status).toBe("done");
+    expect(calls.map((c) => c.body!.generationId)).toEqual([regen.generationId, regen.generationId, regen.generationId]);
+    expect(calls.every((c) => c.body!.replaceFromMessageId === "old-reply")).toBe(true);
+  });
+
+  it("a replace whose target another request already replaced ends as a conflict, sent once", async () => {
+    const client = makeClient(() => new Response(JSON.stringify({ error: "replace_gone" }), { status: 409 }));
+    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "old-reply" });
+    const failed = await settle(regen.assistantMessageId);
+    expect(failed.error).toMatchObject({ kind: "conflict", retryable: false, status: 409 });
+    expect(calls).toHaveLength(1);
   });
 
   it("a reply the server accepted is replaced from itself, even when its own request was a Regenerate", async () => {
