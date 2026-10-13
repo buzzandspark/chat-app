@@ -131,7 +131,8 @@ describe("POST /api/chat for an existing generation", () => {
 describe("POST /api/chat effort", () => {
   it("passes the chosen effort on, reads a stale tab's harder flag, and defaults to low", async () => {
     const cases: [unknown, string][] = [
-      [{ effort: "xhigh" }, "xhigh"],
+      [{ effort: "medium" }, "medium"],
+      [{ effort: "max" }, "low"],
       [{ harder: true }, "high"],
       [{ harder: false }, "low"],
       [undefined, "low"],

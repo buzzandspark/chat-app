@@ -22,8 +22,6 @@ const EFFORT_BLURBS: Record<Effort, string> = {
   low: "Quick replies, least thinking",
   medium: "Balanced",
   high: "Thinks longer before replying",
-  xhigh: "Deep thinking for hard tasks",
-  max: "Thinks as long as it needs",
 };
 
 // Menu items are divs, so cursor-pointer/select-none give them the feel of the buttons the sheet uses.

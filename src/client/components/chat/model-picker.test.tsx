@@ -92,21 +92,19 @@ describe("ModelPicker", () => {
       "LowQuick replies, least thinking",
       "MediumBalanced",
       "HighThinks longer before replying",
-      "Extra highDeep thinking for hard tasks",
-      "MaxThinks as long as it needs",
     ]);
     expect(screen.getByRole("menuitemradio", { name: /^Low/ })).toHaveAttribute("aria-checked", "true");
     press("Enter");
     expect(onChange).toHaveBeenLastCalledWith({ thinking: { effort: "medium" } });
-    fireEvent.click(screen.getByRole("menuitemradio", { name: /^Extra high/ }));
-    expect(onChange).toHaveBeenLastCalledWith({ thinking: { effort: "xhigh" } });
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /^High/ }));
+    expect(onChange).toHaveBeenLastCalledWith({ thinking: { effort: "high" } });
     expect(screen.getByRole("menu")).toBeInTheDocument();
   });
 
   it("shows a non-default effort on the trigger", () => {
     layout(true);
-    const { rerender } = render(<ModelPicker model="claude-opus-5-5" thinking={{ effort: "xhigh" }} onChange={() => {}} />);
-    expect(screen.getByRole("button", { name: "Model: Opus 5.5, effort extra high" })).toHaveTextContent("Opus 5.5extra high");
+    const { rerender } = render(<ModelPicker model="claude-opus-5-5" thinking={{ effort: "medium" }} onChange={() => {}} />);
+    expect(screen.getByRole("button", { name: "Model: Opus 5.5, effort medium" })).toHaveTextContent("Opus 5.5medium");
     rerender(<ModelPicker model="claude-opus-5-5" thinking={{ effort: "low" }} onChange={() => {}} />);
     expect(screen.getByRole("button", { name: "Model: Opus 5.5" })).toHaveTextContent(/^Opus 5.5$/);
   });
@@ -133,19 +131,19 @@ describe("ModelPicker", () => {
   it("on phones, picking an effort in the sheet keeps it open; arrows move within the effort group", async () => {
     layout(false);
     const onChange = vi.fn();
-    render(<ModelPicker model="claude-sonnet-5-5" thinking={{ effort: "high" }} onChange={onChange} defaultOpen />);
+    render(<ModelPicker model="claude-sonnet-5-5" thinking={{ effort: "medium" }} onChange={onChange} defaultOpen />);
 
     const group = await screen.findByRole("radiogroup", { name: "Effort" });
     const radios = Array.from(group.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
-    expect(radios.map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "false", "true", "false", "false"]);
-    expect(radios.map((r) => r.tabIndex)).toEqual([-1, -1, 0, -1, -1]);
-    act(() => radios[2]!.focus());
+    expect(radios.map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "true", "false"]);
+    expect(radios.map((r) => r.tabIndex)).toEqual([-1, 0, -1]);
+    act(() => radios[1]!.focus());
     press("ArrowDown");
-    expect(radios[3]).toHaveFocus();
-    press("End");
-    expect(radios[4]).toHaveFocus();
-    fireEvent.click(screen.getByRole("radio", { name: /^Max/ }));
-    expect(onChange).toHaveBeenCalledWith({ thinking: { effort: "max" } });
+    expect(radios[2]).toHaveFocus();
+    press("Home");
+    expect(radios[0]).toHaveFocus();
+    fireEvent.click(screen.getByRole("radio", { name: /^High/ }));
+    expect(onChange).toHaveBeenCalledWith({ thinking: { effort: "high" } });
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });

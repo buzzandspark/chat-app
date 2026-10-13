@@ -58,7 +58,7 @@ The per-model request shape lives in `src/relay/anthropic/thinking-config.ts`.
 | | Sonnet 5.5 (default), Opus 5.5 | Haiku 5.5 |
 | --- | --- | --- |
 | Thinking | `adaptive`, `display: "summarized"` | same |
-| Effort | `output_config.effort`: `"low"` (default), `"medium"`, `"high"`, `"xhigh"` or `"max"`, picked per chat | same |
+| Effort | `output_config.effort`: `"low"` (default), `"medium"` or `"high"`, picked per chat (`"xhigh"` and `"max"` would spend `max_tokens` on thinking) | same |
 | Fallbacks | `fallbacks: "default"` (beta) | none |
 | Binding | `prefix_mismatch_behavior: "drop_block"` (beta) | same |
 | `max_tokens` | 16,000 | 16,000; 8,192 for guests |

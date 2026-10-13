@@ -39,11 +39,11 @@ export const MODELS: Record<ModelId, ModelInfo> = {
   },
 };
 
-/** The effort levels the API accepts in output_config.effort, lowest first. */
-export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+/** The effort levels offered, lowest first; xhigh and max are left out, since their thinking would fill `max_tokens`. */
+export const EFFORTS = ["low", "medium", "high"] as const;
 export type Effort = (typeof EFFORTS)[number];
 export const DEFAULT_EFFORT: Effort = "low";
-export const EFFORT_LABELS: Record<Effort, string> = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" };
+export const EFFORT_LABELS: Record<Effort, string> = { low: "Low", medium: "Medium", high: "High" };
 
 export function isEffort(value: unknown): value is Effort {
   return typeof value === "string" && (EFFORTS as readonly string[]).includes(value);

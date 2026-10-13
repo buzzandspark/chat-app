@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EFFORTS, normalizeThinking } from "./models";
 
 describe("normalizeThinking", () => {
-  it("keeps every effort the API supports", () => {
+  it("keeps every offered effort", () => {
     for (const effort of EFFORTS) expect(normalizeThinking({ effort })).toEqual({ effort });
   });
 
@@ -12,7 +12,7 @@ describe("normalizeThinking", () => {
   });
 
   it("falls back to low for anything else", () => {
-    for (const value of [undefined, null, "high", 3, [], {}, { effort: "extreme" }, { effort: 2 }, { harder: "yes" }]) {
+    for (const value of [undefined, null, "high", 3, [], {}, { effort: "extreme" }, { effort: "xhigh" }, { effort: "max" }, { effort: 2 }, { harder: "yes" }]) {
       expect(normalizeThinking(value)).toEqual({ effort: "low" });
     }
   });

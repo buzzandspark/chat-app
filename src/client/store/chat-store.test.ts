@@ -386,9 +386,9 @@ describe("ChatStore", () => {
     store.createChat("fresh");
     store.createChat("touched");
     store.setSettings("touched", { model: "claude-haiku-5-5" });
-    store.setDefaultSettings({ model: "claude-opus-5-5", thinking: { effort: "xhigh" } });
+    store.setDefaultSettings({ model: "claude-opus-5-5", thinking: { effort: "medium" } });
     expect(store.getChat("fresh").settings.model).toBe("claude-opus-5-5");
-    expect(store.getChat("fresh").settings.thinking.effort).toBe("xhigh");
+    expect(store.getChat("fresh").settings.thinking.effort).toBe("medium");
     expect(store.getChat("touched").settings.model).toBe("claude-haiku-5-5");
     store.createChat("later");
     expect(store.getChat("later").settings.model).toBe("claude-opus-5-5");
@@ -505,10 +505,10 @@ describe("forks in the store", () => {
 
   it("a seeded chat inherits the effort of its last reply along with the model", () => {
     const { store } = makeStore();
-    store.seedChat("c1", null, [row("u1", "user"), row("a1", "assistant", { thinking: { effort: "max" } })]);
-    expect(store.getChat("c1").settings).toMatchObject({ model: "claude-opus-5-5", thinking: { effort: "max" } });
+    store.seedChat("c1", null, [row("u1", "user"), row("a1", "assistant", { thinking: { effort: "high" } })]);
+    expect(store.getChat("c1").settings).toMatchObject({ model: "claude-opus-5-5", thinking: { effort: "high" } });
     store.setSettings("c1", { thinking: { effort: "medium" } });
-    store.seedChat("c1", null, [row("u1", "user"), row("a1", "assistant", { thinking: { effort: "max" } })]);
+    store.seedChat("c1", null, [row("u1", "user"), row("a1", "assistant", { thinking: { effort: "high" } })]);
     expect(store.getChat("c1").settings.thinking.effort).toBe("medium");
   });
 

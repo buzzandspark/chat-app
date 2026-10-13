@@ -5,8 +5,8 @@ afterEach(() => localStorage.clear());
 
 describe("readLastChoice", () => {
   it("reads back a saved model and effort", () => {
-    saveLastChoice("u1", { model: "claude-opus-5-5", thinking: { effort: "xhigh" } });
-    expect(readLastChoice("u1")).toEqual({ model: "claude-opus-5-5", thinking: { effort: "xhigh" } });
+    saveLastChoice("u1", { model: "claude-opus-5-5", thinking: { effort: "medium" } });
+    expect(readLastChoice("u1")).toEqual({ model: "claude-opus-5-5", thinking: { effort: "medium" } });
   });
 
   it("reads a choice saved with the older harder flag as an effort", () => {
