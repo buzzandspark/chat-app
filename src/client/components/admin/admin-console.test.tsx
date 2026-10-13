@@ -34,7 +34,7 @@ describe("AdminConsole on a dead network", () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "new@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Create and invite" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Create failed: you seem to be offline.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("You're offline. Try again when you're connected.");
     expect(screen.getByRole("button", { name: "Create and invite" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Issue invite" })).toBeEnabled();
   });
@@ -54,7 +54,7 @@ describe("AdminConsole on a dead network", () => {
     renderConsole();
     fireEvent.click(screen.getByRole("button", { name: "Issue invite" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Invite failed: you seem to be offline.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("You're offline. Try again when you're connected.");
     expect(screen.getByRole("button", { name: "Issue invite" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Disable" })).toBeEnabled();
   });

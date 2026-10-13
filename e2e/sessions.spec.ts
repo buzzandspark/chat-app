@@ -32,7 +32,7 @@ test.describe("sessions and errors", () => {
     await expect(retry).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("still here");
-    await expect(page.getByText("This chat could not be shown")).toHaveCount(0);
+    await expect(page.getByText("This page couldn't be shown")).toHaveCount(0);
     await expect(page.getByText("Something went wrong")).toHaveCount(0);
     // A sidebar row's ⋯ too: its intent lives in the row, outside the boundary, and Retry must clear it.
     await ensureSidebarOpen(page);
@@ -79,7 +79,7 @@ test.describe("sessions and errors", () => {
     const before = (await context.cookies()).filter((c) => /session_token/.test(c.name));
     expect(before.length).toBeGreaterThan(0);
     const aside = sidebar(page);
-    if ((await aside.getAttribute("data-open")) !== "true") await page.getByRole("button", { name: "Show sidebar" }).click();
+    if ((await aside.getAttribute("data-open")) !== "true") await page.getByRole("button", { name: "Open sidebar" }).click();
     await page.getByTestId("sign-out").click();
     await expect(page).toHaveURL(/\/login/);
     const after = (await context.cookies()).filter((c) => /session_token/.test(c.name) && c.value);

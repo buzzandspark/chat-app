@@ -3,7 +3,7 @@ import { MAX_FORKS, type OptionsEvent, type OptionsTrace } from "@shared/forks";
 import type { ChatStore, MessageState } from "./chat-store";
 import { getSidebarStore } from "./sidebar-store";
 
-export const CAP = "You have reached your usage cap.";
+export const CAP = "You've reached your spending cap.";
 
 /** A reply's options stream, one JSON object per line. */
 export async function streamOptions(messageId: string, onEvent: (event: OptionsEvent) => void): Promise<void> {

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { useNow } from "@client/hooks/use-now";
+import { errorText } from "@client/store/announcer";
 import type { MessageState } from "@client/store/chat-store";
 import { modelDisplayName } from "@shared/models";
 import { isLongWait, MAX_AUTO_RETRIES, rateLimitDelayMs, waitText } from "./rate-limit";
@@ -64,20 +65,21 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
       text = <span className="animate-pulse">Reconnecting{message.reconnectAttempt > 0 ? ` (attempt ${message.reconnectAttempt + 1})` : ""}…</span>;
     } else {
       offline = true;
-      text = "You're offline. The reply keeps generating on the server.";
-      offer = action("Retry now", onResume);
+      text = "Can't reach the server. The reply continues there.";
+      offer = action("Reconnect", onResume);
     }
   } else if (message.status === "stopped") {
     text = "Stopped.";
     offer = retry;
   } else if (message.status === "interrupted") {
+    // The reason isn't saved with the message, so a reloaded reply has none.
     const why =
       message.interruptedReason === "shutdown" || message.interruptedReason === "crash"
-        ? "the server restarted"
+        ? ": the server restarted"
         : message.interruptedReason === "upstream"
-          ? "the connection to the model dropped"
-          : "something interrupted it";
-    text = `Interrupted: ${why}. What arrived is kept.`;
+          ? ": Claude stopped responding"
+          : "";
+    text = `Interrupted${why}. What arrived is kept.`;
     offer = retry;
   } else if (message.status === "refused") {
     const r = message.refusal;
@@ -89,101 +91,70 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
           : "Claude declined to continue this response.";
   } else if (message.status === "error") {
     const e = message.error;
+    text = errorText(e);
     switch (e?.kind) {
       case "rate_limited": {
         // Inline, not a button: the row keeps the height of a line of text, so the footer appearing shifts nothing.
-        const tryAgain = onRetry ? (
+        const retryInline = onRetry ? (
           <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={onRetry}>
-            Try again
+            Retry
           </button>
         ) : null;
         if (isLongWait(e.retryAfterMs)) {
           text = (
             <>
               Busy right now. Try again in <WaitLeft until={message.createdAt + (e.retryAfterMs ?? 0)} />
-              {tryAgain ? <>, or {tryAgain} now</> : null}.
+              {retryInline ? <>, or {retryInline} now</> : null}.
             </>
           );
           break;
         }
         const exhausted = message.retryAttempt >= MAX_AUTO_RETRIES;
-        const headline = exhausted ? `Still rate limited after ${MAX_AUTO_RETRIES} tries.` : "Rate limited.";
-        // No retry offered means no countdown either: the automatic retry stops along with Try again.
-        const auto = tryAgain !== null && message.local && message.retryAttempt < MAX_AUTO_RETRIES;
-        text = auto ? (
-          <>
-            Rate limited. Retrying in <Countdown until={message.createdAt + rateLimitDelayMs(message.retryAttempt, e.retryAfterMs)} /> (try{" "}
-            {message.retryAttempt + 1} of {MAX_AUTO_RETRIES}), or {tryAgain} now.
-          </>
-        ) : tryAgain && !exhausted ? (
-          <>
-            {headline} {tryAgain}.
-          </>
-        ) : (
+        // No retry offered means no countdown either: the automatic retry stops along with Retry.
+        const auto = retryInline !== null && message.local && !exhausted;
+        if (auto) {
+          text = (
+            <>
+              Rate limited. Retrying in <Countdown until={message.createdAt + rateLimitDelayMs(message.retryAttempt, e.retryAfterMs)} />, or {retryInline} now.
+            </>
+          );
+        } else if (exhausted) {
           // After every automatic try, no more retries are offered: a new message is the way on.
-          headline
-        );
+          text = "Still rate limited. Try again later.";
+        } else if (retryInline) {
+          text = <>Rate limited. {retryInline}.</>;
+        }
         break;
       }
-      case "overloaded":
-        text = "Claude is overloaded right now.";
-        offer = retry;
-        break;
-      case "api_error":
-        text = "The model provider had an error.";
-        offer = retry;
-        break;
-      case "auth":
-        text = "The server's API key is not working. An admin needs to fix the deployment.";
-        break;
       case "session":
-        text = "Your session has ended.";
         offer = link("/login", "Sign in again");
         break;
       case "forbidden":
-        text = "This chat belongs to another account.";
+      case "gone":
+      case "context_full":
         offer = action("New chat", newChat);
         break;
       case "unavailable":
-        text = onRetry ? (
-          <>
-            The server is restarting. Try again in <Countdown until={message.createdAt + (e.retryAfterMs ?? 5_000)} />.
-          </>
-        ) : (
-          "The server was restarting."
-        );
+        text = onRetry ? "The server is restarting. Retry in a few seconds." : "The server was restarting.";
         offer = retry;
-        break;
-      case "gone":
-        text = "This chat was deleted.";
-        offer = action("New chat", newChat);
         break;
       case "conflict":
         // Nothing was added on the server. A retry would only be refused again once another
         // request has replaced these turns: show what the server has instead.
-        text = e.retryable ? "An earlier reply was still finishing." : "These turns were already replaced in another request.";
         offer = e.retryable ? retry : action("Reload", () => window.location.reload());
         break;
-      case "quota_exceeded":
-        text = "You have used the whole budget on this instance.";
-        break;
       case "guests_blocked":
-        text = "Guests can't send messages right now.";
         offer = link("/login", "Sign in");
         break;
-      case "context_full":
-        text = "This chat is too long to continue.";
-        offer = action("Start a new chat", newChat);
-        break;
-      case "network":
       case "offline":
         offline = true;
-        text = "Lost the connection.";
         offer = retry;
         break;
+      case "auth":
+      case "quota_exceeded":
+        break;
       default:
-        text = e?.message ?? "Something went wrong.";
-        offer = retry;
+        offer = e?.retryable ? retry : null;
     }
   } else if (message.status === "done" && message.stopReason === "max_tokens") {
     text = "Cut off at the output limit.";

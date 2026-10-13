@@ -114,6 +114,13 @@ export function ChatView({ children }: { children: ReactNode }) {
         listRef.current?.engage();
         return;
       }
+      // A queue a failed reply left behind goes first, so messages keep the order they were written in.
+      const held = edit ? undefined : store.takeQueued(chatId);
+      if (held) {
+        store.enqueueMessage(chatId, { id: uuidv7(), text: trimmed, scenario: scenario ?? store.getChat(chatId).settings.scenario?.name ?? null });
+        dispatch(held.text, held.scenario ?? undefined);
+        return;
+      }
       dispatch(trimmed, scenario, edit);
     },
     [chatId, store, dispatch],
@@ -243,7 +250,7 @@ function MissingChat() {
   const newChat = useNewChat();
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-gutter text-center">
-      <p className="text-body text-muted-foreground">This chat link is not valid.</p>
+      <p className="text-body text-muted-foreground">This chat link isn&apos;t valid.</p>
       <Button variant="outline" className="touch-target" onClick={newChat}>
         New chat
       </Button>

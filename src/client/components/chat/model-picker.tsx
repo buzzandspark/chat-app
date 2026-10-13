@@ -75,7 +75,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
   const info = MODELS[model];
 
   const trigger = (
-    <Button variant="ghost" size="sm" className="touch-target max-w-[55vw] gap-1 text-muted-foreground" aria-label="Choose model">
+    <Button variant="ghost" size="sm" className="touch-target max-w-[55vw] gap-1 text-muted-foreground" aria-label={`Model: ${info.short}${thinking.harder ? ", think harder" : ""}`}>
       <span className="truncate">{info.short}</span>
       {thinking.harder ? <span className="rounded-md bg-accent px-1.5 text-caption text-accent-foreground">harder</span> : null}
       <ChevronDown data-icon="inline-end" className="size-3.5" />
@@ -123,7 +123,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
             onSelect={(e) => e.preventDefault()}
             className={cn(ROW, "mt-1")}
           >
-            <RowText title={THINKING_LABEL} blurb="Effort high instead of low" />
+            <RowText title={THINKING_LABEL} blurb="Thinks longer before replying" />
             {/* The item is the menuitemcheckbox; the switch only draws its state. */}
             <Switch checked={thinking.harder} tabIndex={-1} aria-hidden className="pointer-events-none" />
           </MenuPrimitive.CheckboxItem>
@@ -165,7 +165,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
             })}
           </div>
           <label className="mt-1 flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2.5">
-            <RowText title={THINKING_LABEL} blurb="Effort high instead of low" />
+            <RowText title={THINKING_LABEL} blurb="Thinks longer before replying" />
             <Switch checked={thinking.harder} onCheckedChange={(harder) => onChange({ thinking: { harder } })} aria-label={THINKING_LABEL} />
           </label>
         </div>

@@ -279,7 +279,6 @@ function renderToken(token: Token, key: number, streamingTable = false, growth: 
           checked={t.checked}
           disabled
           readOnly
-          aria-label={t.checked ? "Done" : "Not done"}
           className="mr-2 align-middle"
         />
       );

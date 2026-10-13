@@ -1,5 +1,5 @@
 "use client";
-import { Check, Copy, CopyPlus, MoreHorizontal, RefreshCw } from "lucide-react";
+import { Check, Copy, GitFork, MoreHorizontal, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IconButton } from "../ui/icon-button";
@@ -27,10 +27,10 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
   const [error, setError] = useState<string | null>(null);
   const store = useChatStore();
   const router = useRouter();
-  // Duplicate makes another fork of the main chat, so it's offered while the main chat has room for one.
+  // Fork from here makes another fork of the main chat, so it's offered while the main chat has room for one.
   const parentId = useChat(message.chatId).forkedFrom ?? message.chatId;
   const roomForFork = useSidebarChats().filter((c) => c.forkedFrom === parentId).length < MAX_FORKS;
-  const onDuplicate = () => {
+  const onFork = () => {
     setError(null);
     void duplicateChat(store, router, message.chatId, message.id).then((out) => {
       if (out.error) setError(out.error);
@@ -74,9 +74,9 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
             </DropdownMenuItem>
           ) : null}
           {roomForFork ? (
-            <DropdownMenuItem onSelect={onDuplicate} className="min-h-11">
-              <CopyPlus />
-              Duplicate
+            <DropdownMenuItem onSelect={onFork} className="min-h-11">
+              <GitFork />
+              Fork from here
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>

@@ -36,7 +36,7 @@ export interface ExploreOptionsProps {
 /** Pops up from behind the composer's top border while the last reply has options, to where Jump to latest sits. */
 export function ExploreOptions({ shown, count, requestedAt, now, state, onOpen, ref }: ExploreOptionsProps) {
   const expired = state === "ready" && now > 0 && now - requestedAt > CACHE_WARM_MS;
-  const tip = expired ? "Cache expired: the first fork re-sends the whole chat" : null;
+  const tip = expired ? "Forks now start slower and cost more" : null;
   const label = state === "busy" ? "Forking…" : `Explore ${count} option${count === 1 ? "" : "s"}`;
   return (
     // Clipped only below, at the border's top edge, so the button rises out from behind it and the tooltip above stays whole.
@@ -170,11 +170,12 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
     [show, messageId, fork],
   );
   // Whatever has arrived: the final list, else the options complete so far; none means an error instead of the sheet.
+  // Only a stream still running can bring options to a later click; a failed one isn't fetched again.
   const openCurrent = useCallback(() => {
     const m = store.getMessage(messageId);
     const options = m?.optionsStream ? m.optionsStream.partial : (m?.options ?? []);
     if (options.length > 0) openWith(options);
-    else setError("Couldn't load the options. Try again in a moment.");
+    else setError(m?.optionsStream && !m.optionsStream.failed ? "Couldn't load the options. Try again in a moment." : "Couldn't load the options.");
   }, [store, messageId, openWith]);
   // A click before the options finish waits for them (at most OPTIONS_CLICK_WAIT_MS), then opens.
   const onOpen = useCallback(() => {

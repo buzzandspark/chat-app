@@ -34,7 +34,7 @@ export function ExploreToggle() {
             Explore options
           </label>
           <p id="explore-options-hint" className="text-caption text-muted-foreground">
-            Suggest alternatives to fork after a reply
+            Suggest alternatives to fork after a reply. Suggestions count toward your spending cap.
           </p>
         </div>
         <Switch id="explore-options" checked={exploreOptions} onCheckedChange={(on) => void change(on)} aria-describedby="explore-options-hint" />

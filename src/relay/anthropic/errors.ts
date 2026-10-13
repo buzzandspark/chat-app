@@ -31,7 +31,7 @@ export function toRelayError(err: unknown): RelayError {
   if (err instanceof Anthropic.RateLimitError) {
     return {
       kind: "rate_limited",
-      message: "Rate limited by the model provider",
+      message: "Rate limited by Claude",
       retryable: true,
       retryAfterMs: retryAfterMs(err.headers) ?? 15_000,
       status: 429,
@@ -52,10 +52,10 @@ export function toRelayError(err: unknown): RelayError {
     return { kind: "bad_request", message: err.message, retryable: false, status: 400 };
   }
   if (err instanceof Anthropic.APIConnectionTimeoutError) {
-    return { kind: "network", message: "The model provider timed out", retryable: true };
+    return { kind: "network", message: "Claude timed out", retryable: true };
   }
   if (err instanceof Anthropic.APIConnectionError) {
-    return { kind: "network", message: "Lost the connection to the model provider", retryable: true };
+    return { kind: "network", message: "Lost the connection to Claude", retryable: true };
   }
   if (err instanceof Anthropic.APIError) {
     // No status: the SDK threw an SSE `event: error` inside a 200 stream, `err.type` the inner type. Classify by it as a fixture's error event is,
@@ -74,20 +74,20 @@ export function toRelayError(err: unknown): RelayError {
     if (status === 529 || type === "overloaded_error") {
       return {
         kind: "overloaded",
-        message: "The model provider is overloaded",
+        message: "Claude is overloaded",
         retryable: true,
         retryAfterMs: retryAfterMs(err.headers) ?? 10_000,
         status,
       };
     }
     if (status !== undefined && status >= 500) {
-      return { kind: "api_error", message: "The model provider had an error", retryable: true, status };
+      return { kind: "api_error", message: "Claude returned an error", retryable: true, status };
     }
     return { kind: "api_error", message: err.message, retryable: false, status };
   }
   if (err instanceof Error) {
     if (/ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|terminated/i.test(err.message)) {
-      return { kind: "network", message: "Lost the connection to the model provider", retryable: true };
+      return { kind: "network", message: "Lost the connection to Claude", retryable: true };
     }
     return { kind: "unknown", message: err.message, retryable: false };
   }

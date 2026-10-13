@@ -42,4 +42,11 @@ describe("SearchDialog", () => {
     expect(skeletons()).toBe(0);
     expect(screen.getByText("No matches.")).toBeInTheDocument();
   });
+
+  it("asks for a second character instead of searching on one", () => {
+    render(<SearchDialog open onOpenChange={() => {}} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search chats" }), { target: { value: "p" } });
+    expect(screen.getByText("Type at least 2 characters.")).toBeInTheDocument();
+    expect(skeletons()).toBe(0);
+  });
 });

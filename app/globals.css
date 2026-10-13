@@ -347,6 +347,10 @@
   .tip:not(:hover, :focus-visible)::after {
     scale: 0;
   }
+  /* theme-script.tsx flags non-Mac platforms, whose shortcuts use Ctrl. */
+  :root[data-ctrl-keys] .tip[data-tip-ctrl]::after {
+    content: attr(data-tip-ctrl);
+  }
   .tip[data-tip-side="top"]::after {
     top: auto;
     bottom: calc(100% + 6px);

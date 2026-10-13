@@ -91,7 +91,7 @@ export function UsageSection({ usage }: { usage: UsageSummary }) {
       {capUsd !== null ? (
         <div className="space-y-1.5 border-t border-border pt-2.5" data-testid="usage-cap">
           <div className="flex items-baseline justify-between gap-3 text-small">
-            <span className="font-medium">Cap</span>
+            <span className="font-medium">Lifetime cap</span>
             <span className="tabular-nums">
               {usd(spentUsd)} of {usd(capUsd)}
             </span>

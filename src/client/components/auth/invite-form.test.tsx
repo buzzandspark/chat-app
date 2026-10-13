@@ -20,7 +20,7 @@ describe("InviteForm on a dead network", () => {
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "correct horse battery" } });
     fireEvent.click(screen.getByRole("button", { name: "Set password and sign in" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Setting the password failed: you seem to be offline.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("You're offline. Try again when you're connected.");
     expect(screen.getByRole("button", { name: "Set password and sign in" })).toBeEnabled();
     expect(push).not.toHaveBeenCalled();
   });

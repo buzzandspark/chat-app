@@ -136,7 +136,7 @@ const SidebarRow = memo(function SidebarRow({
           }}
           onBlur={hideRowTip}
           aria-current={active ? "page" : undefined}
-          aria-label={forked ? `Forked: ${chat.title}` : undefined}
+          aria-label={forked ? `${chat.title}, has forks` : undefined}
           className={cn("flex min-h-11 min-w-0 flex-1 items-center rounded-lg text-small", nested ? "pl-2" : "pl-3", active && "font-medium")}
         >
           {forked ? <GitFork aria-hidden className="mr-1.5 size-3.5 shrink-0 text-muted-foreground" /> : null}

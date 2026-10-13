@@ -17,14 +17,14 @@ export async function rewriteOptions(messageId: string, instruction: string, opt
       body: JSON.stringify({ instruction, options }),
     });
     if (res.status === 429) return { ok: false, error: busyText(Number(res.headers.get("retry-after")) * 1000) };
-    if (!res.ok) return { ok: false, error: res.status === 402 ? CAP : res.status === 403 ? "Guests can't use Explore right now. Sign in to continue." : `Could not apply the instruction (${res.status}).` };
+    if (!res.ok) return { ok: false, error: res.status === 402 ? CAP : res.status === 403 ? "Guests can't use Explore right now. Sign in to continue." : "Couldn't apply the instruction. Try again." };
     const data = await readJson<RewriteResponse>(res);
     // The server sends traces only in development; the check lets production builds drop the logging.
     if (process.env.NODE_ENV !== "production" && data.trace) logOptionsTrace("rewrite", data.trace, performance.now() - asked);
     // A cut-off or refused answer comes back as no options.
-    if (data.options.length === 0) return { ok: false, error: "Could not apply the instruction. Try again." };
+    if (data.options.length === 0) return { ok: false, error: "Couldn't apply the instruction. Try again." };
     return { ok: true, options: data.options };
   } catch {
-    return { ok: false, error: "You seem to be offline." };
+    return { ok: false, error: "You're offline. Try again when you're connected." };
   }
 }

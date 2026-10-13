@@ -8,13 +8,13 @@ test.describe("mobile", () => {
     await openNewChat(page);
     const url = page.url();
     const aside = sidebar(page);
-    await page.getByRole("button", { name: "Show sidebar" }).click();
+    await page.getByRole("button", { name: "Open sidebar" }).click();
     await expect(aside).toHaveAttribute("data-open", "true");
     await page.goBack();
     await expect(aside).toHaveAttribute("data-open", "false");
     expect(page.url()).toBe(url);
 
-    await page.getByRole("button", { name: "Show sidebar" }).click();
+    await page.getByRole("button", { name: "Open sidebar" }).click();
     await expect(aside).toHaveAttribute("data-open", "true");
     await page.getByRole("button", { name: "Search chats" }).first().click();
     await expect(page.getByRole("textbox", { name: "Search chats" })).toBeVisible();
@@ -27,7 +27,7 @@ test.describe("mobile", () => {
   test("the open sidebar is a modal dialog that takes focus and hands it back; closed it is inert", async ({ page }) => {
     await openNewChat(page);
     const aside = sidebar(page);
-    const menu = page.getByRole("button", { name: "Show sidebar" });
+    const menu = page.getByRole("button", { name: "Open sidebar" });
     await expect(aside).toHaveAttribute("inert");
     await menu.click();
     await expect(aside).toHaveAttribute("role", "dialog");

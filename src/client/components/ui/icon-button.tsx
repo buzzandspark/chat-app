@@ -5,14 +5,25 @@ import { cn } from "@/lib/utils";
 
 type TipAlign = "start" | "center" | "end";
 
+/** A keyboard shortcut as each platform writes it. */
+export interface Shortcut {
+  mac: string;
+  ctrl: string;
+}
+
+/** Tooltip text with the shortcut for each platform; CSS picks one (see `.tip[data-tip-ctrl]`). */
+export function shortcutTip(label: string, shortcut: Shortcut): { "data-tip": string; "data-tip-ctrl": string } {
+  return { "data-tip": `${label}  ${shortcut.mac}`, "data-tip-ctrl": `${label}  ${shortcut.ctrl}` };
+}
+
 type IconButtonProps = ComponentProps<typeof Button> & {
   /** Accessible name; also the hover tooltip on pointer devices (CSS, see `.tip`). */
   label: string;
   tipSide?: "top" | "bottom";
   /** Forces an alignment; by default the tooltip is centred and shifts to start or end only when centred it would leave its container. */
   tipAlign?: TipAlign;
-  /** A keyboard shortcut, shown after the label in the tooltip, e.g. "⌘K". */
-  shortcut?: string;
+  /** A keyboard shortcut, shown after the label in the tooltip. */
+  shortcut?: Shortcut;
   /** False where the tooltip would only repeat what the button shows (a row's ⋯). */
   tip?: boolean;
 };
@@ -63,7 +74,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       size={size}
       variant={variant}
       aria-label={label}
-      data-tip={tip ? (shortcut ? `${label}  ${shortcut}` : label) : undefined}
+      {...(!tip ? {} : shortcut ? shortcutTip(label, shortcut) : { "data-tip": label })}
       data-tip-side={tip ? tipSide : undefined}
       data-tip-align={tip ? (tipAlign ?? "center") : undefined}
       className={cn(tip && "tip", "touch-target", className)}

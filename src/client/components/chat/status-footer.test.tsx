@@ -19,24 +19,24 @@ const failed = (kind: "rate_limited" | "overloaded") =>
 describe("StatusFooter", () => {
   afterEach(cleanup);
 
-  it("counts down to the automatic retry of a rate-limited reply and offers Try again", () => {
+  it("counts down to the automatic retry of a rate-limited reply and offers Retry", () => {
     render(<StatusFooter message={failed("rate_limited")} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
     expect(screen.getByText(/Retrying in/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
-  it("shows a wait over two minutes with Try again and no countdown", () => {
+  it("shows a wait over two minutes with Retry and no countdown", () => {
     const message = failed("rate_limited");
     render(<StatusFooter message={{ ...message, error: { ...message.error!, retryAfterMs: 20 * 60_000 } }} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
     expect(screen.getByText(/Busy right now\. Try again in/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.queryByText(/Retrying in/)).toBeNull();
   });
 
-  it("after every automatic try, says so and offers no Try again", () => {
+  it("after every automatic try, says so and offers no Retry", () => {
     render(<StatusFooter message={{ ...failed("rate_limited"), retryAttempt: 4 }} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
-    expect(screen.getByText("Still rate limited after 4 tries.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.getByText("Still rate limited. Try again later.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 
   it("keeps the error but offers no retry when a newer turn follows the failed reply", () => {
@@ -45,7 +45,7 @@ describe("StatusFooter", () => {
     expect(screen.queryByText(/Retrying in/)).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
     rerender(<StatusFooter message={failed("overloaded")} onContinue={() => {}} onResume={() => {}} />);
-    expect(screen.getByText("Claude is overloaded right now.")).toBeInTheDocument();
+    expect(screen.getByText("Claude is overloaded.")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -59,8 +59,26 @@ describe("StatusFooter", () => {
       local: true,
     });
     render(<StatusFooter message={message} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
-    expect(screen.getByText("These turns were already replaced in another request.")).toBeInTheDocument();
+    expect(screen.getByText("This chat has changed since you opened it.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
+  });
+
+  it("shows plain text, never the server's, and offers Retry only when it can help", () => {
+    const failedWith = (error: { kind: "bad_request" | "network" | "offline"; message: string; retryable: boolean }) =>
+      createMessageState({ id: "a1", chatId: "c1", role: "assistant", status: "error", error, local: true });
+    const { rerender, container } = render(
+      <StatusFooter message={failedWith({ kind: "bad_request", message: "messages.0: raw upstream text", retryable: false })} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />,
+    );
+    expect(screen.getByText("Something went wrong.")).toBeInTheDocument();
+    expect(screen.queryByText(/raw upstream/)).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    rerender(<StatusFooter message={failedWith({ kind: "network", message: "", retryable: true })} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
+    expect(screen.getByText("Lost the connection to Claude.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(container.querySelector("svg.lucide-wifi-off")).toBeNull();
+    rerender(<StatusFooter message={failedWith({ kind: "offline", message: "", retryable: true })} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
+    expect(screen.getByText("Couldn't send this message.")).toBeInTheDocument();
+    expect(container.querySelector("svg.lucide-wifi-off")).not.toBeNull();
   });
 });

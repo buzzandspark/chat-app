@@ -59,6 +59,6 @@ export function sidebar(page: Page): Locator {
 export async function ensureSidebarOpen(page: Page): Promise<void> {
   const aside = sidebar(page);
   if ((await aside.getAttribute("data-open")) === "true") return;
-  await page.getByRole("button", { name: "Show sidebar" }).click();
+  await page.getByRole("button", { name: "Open sidebar" }).click();
   await expect(aside).toHaveAttribute("data-open", "true");
 }

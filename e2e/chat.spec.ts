@@ -138,14 +138,13 @@ test.describe("reliability", () => {
 });
 
 test.describe("terminal states", () => {
-  test("rate limited shows a countdown with an inline Try again, not a button row", async ({ page }) => {
+  test("rate limited shows a countdown with an inline Retry, not a button row", async ({ page }) => {
     await openNewChat(page);
     await runScenario(page, "rate_limited");
     const row = lastAssistant(page);
     await expect(row).toHaveAttribute("data-status", "error", { timeout: 15_000 });
-    await expect(row).toContainText(/Rate limited\. Retrying in \d+s \(try 1 of 4\)/);
-    await expect(row.getByRole("button", { name: "Try again" })).toBeVisible();
-    await expect(row.getByRole("button", { name: "Retry" })).toHaveCount(0);
+    await expect(row).toContainText(/Rate limited\. Retrying in \d+s, or Retry now\./);
+    await expect(row.getByRole("button", { name: "Retry" })).toHaveCount(1);
   });
 
   test("a no-fallback refusal discards painted text", async ({ page }) => {
@@ -154,7 +153,7 @@ test.describe("terminal states", () => {
     const row = lastAssistant(page);
     await expect(row).toHaveAttribute("data-status", "refused", { timeout: 30_000 });
     await expect(row).toContainText("Claude declined to continue this response.");
-    await expect(row).toContainText("Incomplete and not saved.");
+    await expect(row).toContainText("Incomplete. Claude won't see this part in later replies.");
   });
 
   test("a mid-stream fallback shows a model divider", async ({ page }) => {
@@ -162,7 +161,7 @@ test.describe("terminal states", () => {
     await runScenario(page, "fallback_mid_stream");
     const row = lastAssistant(page);
     await expect(row).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    await expect(row.getByRole("separator")).toContainText("Served by Claude Opus 4.8 after a safety fallback");
+    await expect(row.getByRole("separator")).toContainText(/Switched from .+ to Claude Opus 4\.8 for safety/);
   });
 
   test("cut off at max_tokens offers Continue", async ({ page }) => {

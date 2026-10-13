@@ -60,7 +60,7 @@ export function LoginForm() {
   );
 }
 
-/** better-auth's email sign-in over fetch: the cookie arrives on the response; errors carry a message. */
+/** better-auth's email sign-in over fetch: the cookie arrives on the response; failures come back as a message to show. */
 export async function signIn(email: string, password: string): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
     const res = await fetch("/api/auth/sign-in/email", {
@@ -69,9 +69,13 @@ export async function signIn(email: string, password: string): Promise<{ ok: tru
       body: JSON.stringify({ email, password }),
     });
     if (res.ok) return { ok: true };
+    if (res.status === 429) return { ok: false, message: "Too many attempts. Try again in a moment." };
     const body: AuthError = await readJson<AuthError>(res).catch(() => ({}));
-    return { ok: false, message: body.message ?? (res.status === 429 ? "Too many attempts. Try again in a moment." : "Sign-in failed") };
+    if (body.code === "INVALID_EMAIL_OR_PASSWORD") return { ok: false, message: "Wrong email or password." };
+    // A disabled account's message is set in src/auth/server.ts; better-auth's other messages aren't written for users.
+    if (body.code === "BANNED_USER" && body.message) return { ok: false, message: body.message };
+    return { ok: false, message: "Couldn't sign in. Try again." };
   } catch {
-    return { ok: false, message: "Sign-in failed: you seem to be offline." };
+    return { ok: false, message: "You're offline. Try again when you're connected." };
   }
 }

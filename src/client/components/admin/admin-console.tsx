@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { readJson, type AdminUsersResponse, type ApiError, type CreateUserResponse, type InviteResponse } from "@shared/api";
-import { NO_CAP, parseCapText } from "@shared/cost-cap";
+import { MAX_COST_CAP_USD, NO_CAP, parseCapText } from "@shared/cost-cap";
 import type { AdminUserRow } from "@server/admin";
 
 function fmtDate(ms: number | null): string {
@@ -18,6 +18,9 @@ function fmtDate(ms: number | null): string {
 function money(n: number | null): string {
   return n === null ? "no cap" : `$${n.toFixed(2)}`;
 }
+
+const OFFLINE = "You're offline. Try again when you're connected.";
+const CAP_RANGE = `a dollar amount up to $${MAX_COST_CAP_USD.toLocaleString("en")}`;
 
 /** Phone-first (cards) and a table at md; every action is a 44 px target. */
 export function AdminConsole({
@@ -56,7 +59,7 @@ export function AdminConsole({
     // is only ever the box, so clearing the field cannot uncap anyone.
     const parsed = noCap ? ({ ok: true, cap: NO_CAP } as const) : parseCapText(cap);
     if (!parsed.ok) {
-      setNotice(`"${cap.trim()}" is not a cap. Enter a number of dollars, or leave it blank for the default.`);
+      setNotice(`"${cap.trim()}" isn't a cap. Enter ${CAP_RANGE}, or leave it blank for the default.`);
       return;
     }
     setBusy(true);
@@ -71,13 +74,13 @@ export function AdminConsole({
       });
       body = await readJson<CreateUserResponse & ApiError>(res).catch(() => ({}));
     } catch {
-      setNotice("Create failed: you seem to be offline.");
+      setNotice(OFFLINE);
       return;
     } finally {
       setBusy(false);
     }
     if (!res.ok) {
-      setNotice(body.error === "email_taken" ? "That email already has an account." : "Could not create the user.");
+      setNotice(body.error === "email_taken" ? "That email already has an account." : "Couldn't create the user. Try again.");
       return;
     }
     setInviteUrl(body.inviteUrl ?? null);
@@ -87,19 +90,20 @@ export function AdminConsole({
     await refresh();
   };
 
-  const act = async (label: string, run: () => Promise<Response>) => {
+  /** `failure` is the notice for a refused action. */
+  const act = async (failure: string, run: () => Promise<Response>) => {
     setBusy(true);
     setNotice(null);
     let res: Response;
     try {
       res = await run();
     } catch {
-      setNotice(`${label} failed: you seem to be offline.`);
+      setNotice(OFFLINE);
       return;
     } finally {
       setBusy(false);
     }
-    if (!res.ok) setNotice(`${label} failed (${res.status}).`);
+    if (!res.ok) setNotice(failure);
     else {
       const body: Partial<InviteResponse> = await readJson<InviteResponse>(res).catch(() => ({}));
       if (body.inviteUrl) setInviteUrl(body.inviteUrl);
@@ -123,8 +127,8 @@ export function AdminConsole({
     }
   };
 
-  const patch = (id: string, data: Record<string, unknown>, label: string) =>
-    act(label, () => fetch(`/api/admin/users/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(data) }));
+  const patch = (id: string, data: Record<string, unknown>, failure: string) =>
+    act(failure, () => fetch(`/api/admin/users/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(data) }));
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 safe-x safe-top safe-bottom py-6">
@@ -138,7 +142,7 @@ export function AdminConsole({
             Block guests
           </label>
           <p id="block-guests-hint" className="text-caption text-muted-foreground">
-            No new guests; current guests can read their chats but not send, fork or Explore
+            No new guests. Current guests can read their chats but can&apos;t send, fork or use Explore.
           </p>
         </div>
         <Switch id="block-guests" checked={guestsBlocked} disabled={busy} onCheckedChange={(on) => void blockGuests(on)} aria-describedby="block-guests-hint" />
@@ -150,7 +154,7 @@ export function AdminConsole({
           <Input id="new-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 text-body" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="new-cap">Cost cap (USD)</Label>
+          <Label htmlFor="new-cap">Spending cap (USD)</Label>
           <Input
             id="new-cap"
             type="number"
@@ -176,7 +180,7 @@ export function AdminConsole({
 
       {inviteUrl ? (
         <div className="space-y-2 rounded-xl border border-border bg-accent/40 p-4" role="status">
-          <p className="text-small font-medium">Invite link (valid 7 days, single use)</p>
+          <p className="text-small font-medium">Link valid for 7 days, single use</p>
           <code className="block break-all rounded-md bg-code px-2 py-1.5 text-small text-code-foreground" data-testid="invite-url">
             {inviteUrl}
           </code>
@@ -206,6 +210,8 @@ export function AdminConsole({
         {users.map((u) => {
           const self = u.id === selfId;
           const inviteState = !u.invite ? null : u.invite.usedAt ? "used" : u.invite.revokedAt ? "revoked" : u.invite.expiresAt < now ? "expired" : "open";
+          // Signing in needs a password, so an active user has one and a new link resets it (src/auth/invites.ts).
+          const hasPassword = u.lastActiveAt !== null || inviteState === "used";
           return (
             <li key={u.id} className="space-y-3 rounded-xl border border-border bg-card p-4" data-testid={`user-${u.email}`}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -226,12 +232,18 @@ export function AdminConsole({
                 <dd>{inviteState ?? "–"}</dd>
               </dl>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void act("Invite", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "POST" }))}>
-                  {inviteState === "open" ? "Regenerate invite" : "Issue invite"}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="touch-target"
+                  disabled={busy}
+                  onClick={() => void act("Couldn't create the link. Try again.", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "POST" }))}
+                >
+                  {hasPassword ? "Password reset link" : inviteState === "open" ? "Regenerate invite" : "Issue invite"}
                 </Button>
                 {inviteState === "open" ? (
-                  <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void act("Revoke", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "DELETE" }))}>
-                    Revoke
+                  <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void act("Couldn't revoke the link. Try again.", () => fetch(`/api/admin/users/${u.id}/invite`, { method: "DELETE" }))}>
+                    {hasPassword ? "Revoke reset link" : "Revoke invite"}
                   </Button>
                 ) : null}
                 <Button
@@ -240,22 +252,23 @@ export function AdminConsole({
                   className="touch-target"
                   disabled={busy}
                   onClick={() => {
-                    const next = window.prompt(`Cost cap in USD, or "${NO_CAP}" for no cap`, u.costCapUsd === null ? NO_CAP : String(u.costCapUsd));
+                    const next = window.prompt(`Spending cap: ${CAP_RANGE}, or "${NO_CAP}" for no cap`, u.costCapUsd === null ? NO_CAP : String(u.costCapUsd));
                     if (next === null) return;
                     // Neither a typo nor an emptied answer becomes "no cap": only the word removes the cap.
                     const parsed = parseCapText(next);
                     if (!parsed.ok || parsed.cap === undefined) {
-                      setNotice(`"${next.trim()}" is not a cap. Enter a number of dollars, or ${NO_CAP} for no cap.`);
+                      const hint = `Enter ${CAP_RANGE}, or "${NO_CAP}" for no cap.`;
+                      setNotice(next.trim() ? `"${next.trim()}" isn't a cap. ${hint}` : hint);
                       return;
                     }
-                    void patch(u.id, { costCapUsd: parsed.cap }, "Cap");
+                    void patch(u.id, { costCapUsd: parsed.cap }, "Couldn't update the cap. Try again.");
                   }}
                 >
                   Edit cap
                 </Button>
                 {!self ? (
                   <>
-                    <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void patch(u.id, { banned: !u.banned }, u.banned ? "Enable" : "Disable")}>
+                    <Button size="sm" variant="outline" className="touch-target" disabled={busy} onClick={() => void patch(u.id, { banned: !u.banned }, `Couldn't ${u.banned ? "enable" : "disable"} the account. Try again.`)}>
                       {u.banned ? "Enable" : "Disable"}
                     </Button>
                     <Button
@@ -264,8 +277,8 @@ export function AdminConsole({
                       className="touch-target"
                       disabled={busy}
                       onClick={() => {
-                        if (window.confirm(`Delete ${u.email} and all their chats?`)) {
-                          void act("Delete", () => fetch(`/api/admin/users/${u.id}`, { method: "DELETE" }));
+                        if (window.confirm(`Delete ${u.email} and all their chats? This can't be undone.`)) {
+                          void act("Couldn't delete the user. Try again.", () => fetch(`/api/admin/users/${u.id}`, { method: "DELETE" }));
                         }
                       }}
                     >

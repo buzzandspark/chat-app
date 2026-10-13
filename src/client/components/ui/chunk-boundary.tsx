@@ -51,7 +51,7 @@ export class ChunkBoundary extends Component<Props, { failed: boolean }> {
     if (this.props.fallback !== undefined) return this.props.fallback;
     return (
       <button type="button" className="touch-target px-2 text-caption text-muted-foreground underline" onClick={this.retry}>
-        Couldn&apos;t load. Retry
+        Menu didn&apos;t load. Retry
       </button>
     );
   }

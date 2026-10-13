@@ -84,7 +84,7 @@ function PickerStandIn({
       variant="ghost"
       size="sm"
       className="touch-target max-w-[55vw] gap-1 text-muted-foreground"
-      aria-label="Choose model"
+      aria-label={known ? `Model: ${info.short}${thinking.harder ? ", think harder" : ""}` : "Model"}
       aria-haspopup={desktop ? "menu" : "dialog"}
       aria-disabled={!onPress || undefined}
       {...(intent ? intentProps(intent) : {})}

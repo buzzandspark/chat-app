@@ -23,7 +23,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: { default: "Chat", template: "%s · Chat" },
-  description: "A streaming chat client built for phones first.",
+  description: "Chat with Claude.",
   applicationName: "Chat",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Chat" },
   formatDetection: { telephone: false },

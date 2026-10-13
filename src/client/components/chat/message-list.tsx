@@ -1,7 +1,7 @@
 "use client";
 import { ArrowDown } from "lucide-react";
 import Link from "next/link";
-import { Fragment, forwardRef, useCallback, useImperativeHandle, useRef, useState, type KeyboardEvent, type TouchEvent, type WheelEvent } from "react";
+import { Fragment, forwardRef, useCallback, useImperativeHandle, useRef, useState, useSyncExternalStore, type KeyboardEvent, type TouchEvent, type WheelEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useChat, useChatStore } from "@client/store/hooks";
 import type { QueuedMessage } from "@client/store/chat-store";
@@ -13,15 +13,22 @@ import { clearSearchHit, onSearchHit, searchHitFor } from "./search-reveal";
 import { NewChatPrompt } from "./thread-skeleton";
 
 /** A message waiting for the streaming reply to end: shown where it will land, editable, removable. */
-function QueuedRow({ item }: { item: QueuedMessage }) {
+function QueuedRow({ item, lastId }: { item: QueuedMessage; lastId: string | undefined }) {
   const { editQueued, removeQueued } = useChatActions();
+  const store = useChatStore();
+  // A failed reply leaves the queue to the user (GenerationClient.sendQueued); a boolean, so deltas don't re-render.
+  const held = useSyncExternalStore(
+    (cb) => (lastId ? store.subscribeMessage(lastId, cb) : () => {}),
+    () => (lastId ? store.getMessage(lastId)?.status === "error" : false),
+    () => false,
+  );
   return (
     <div className="flex flex-col items-end gap-1" data-testid="queued-message">
       <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-bubble border border-dashed border-border bg-bubble/50 px-4 py-2.5 text-body text-bubble-foreground/80 md:max-w-[75%]">
         {item.text}
       </div>
       <div className="flex items-center gap-3 text-caption text-muted-foreground">
-        <span>Queued, sends when the reply finishes</span>
+        <span>{held ? "Not sent: the reply failed." : "Queued, sends when the reply finishes"}</span>
         <button type="button" className="touch-target underline underline-offset-2 hover:text-foreground" onClick={() => editQueued(item.id)}>
           Edit
         </button>
@@ -223,7 +230,7 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
               ))
             )}
             {chat.queue.map((item) => (
-              <QueuedRow key={item.id} item={item} />
+              <QueuedRow key={item.id} item={item} lastId={chat.messageIds.at(-1)} />
             ))}
             {/* Taller while Explore options floats over the thread's end, so the last reply's actions stay clear. */}
             <div className="h-px group-has-[[data-explore=shown]]/chat:h-8" />
@@ -237,7 +244,6 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
               variant="outline"
               className="pointer-events-auto touch-target rounded-full bg-sidebar-accent shadow-md hover:bg-sidebar-accent hover:brightness-95 dark:bg-sidebar-accent dark:hover:bg-sidebar-accent"
               onClick={engage}
-              aria-label="Jump to latest"
             >
               <ArrowDown data-icon="inline-start" />
               Jump to latest

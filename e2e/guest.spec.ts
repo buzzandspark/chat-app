@@ -14,9 +14,9 @@ test.describe("guest mode", () => {
     if (isMobile) await page.keyboard.press("Escape");
 
     // Haiku is the model; the others are greyed out.
-    await expect(page.getByRole("button", { name: "Choose model" })).toHaveText(/Haiku/);
+    await expect(page.getByRole("button", { name: /^Model\b/ })).toHaveText(/Haiku/);
     if (!isMobile) {
-      await page.getByRole("button", { name: "Choose model" }).click();
+      await page.getByRole("button", { name: /^Model\b/ }).click();
       await expect(page.getByRole("menuitemradio", { name: /Opus/ })).toHaveAttribute("data-disabled", "");
       await expect(page.getByRole("menuitemradio", { name: /Sonnet/ })).toHaveAttribute("data-disabled", "");
       await expect(page.getByRole("menuitemradio", { name: /Haiku/ })).not.toHaveAttribute("data-disabled", "");

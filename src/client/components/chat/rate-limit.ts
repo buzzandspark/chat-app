@@ -1,6 +1,6 @@
 /**
  * Automatic retries after a 429: the server's retry-after is the base (15 s default, min 2 s), doubled per attempt,
- * capped at two minutes, four tries in all. The manual "Try again" never waits.
+ * capped at two minutes, four tries in all. The manual Retry never waits.
  */
 export const MAX_AUTO_RETRIES = 4;
 
@@ -9,7 +9,7 @@ export function rateLimitDelayMs(attempt: number, retryAfterMs: number | undefin
   return Math.min(120_000, base * 2 ** Math.max(0, attempt));
 }
 
-/** A wait over two minutes (a spent budget) is shown with Try again but never retried automatically. */
+/** A wait over two minutes (a spent budget) is shown with Retry but never retried automatically. */
 export function isLongWait(retryAfterMs: number | undefined): boolean {
   return (retryAfterMs ?? 0) > 120_000;
 }

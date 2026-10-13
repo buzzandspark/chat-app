@@ -40,7 +40,11 @@ async function adoptGuest(guestId: string, userId: string): Promise<void> {
  * guest for every visitor without a session (created only by /api/guest).
  */
 function createAuth() {
-  const adminPlugin = admin({ defaultRole: "user", adminRoles: ["admin"] });
+  const adminPlugin = admin({
+    defaultRole: "user",
+    adminRoles: ["admin"],
+    bannedUserMessage: "This account is disabled. Ask the admin to re-enable it.",
+  });
   return betterAuth({
     appName: "Chat",
     baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",

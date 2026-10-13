@@ -1,6 +1,6 @@
 "use client";
 import { busyText } from "@client/components/chat/rate-limit";
-import { readJson, type DuplicateResponse, type ForkResponse } from "@shared/api";
+import { readJson, type ApiError, type DuplicateResponse, type ForkResponse } from "@shared/api";
 import { MAX_FORKS, type ForkOption } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import type { ChatStore } from "./chat-store";
@@ -15,13 +15,22 @@ export interface ForkOutcome {
   error?: string;
 }
 
-const MESSAGES: Record<number, string> = {
-  402: CAP,
-  403: "Guests can't fork chats right now. Sign in to continue.",
-  404: "This chat no longer exists.",
-  409: "This chat cannot be forked.",
-  503: "The server is restarting; try again in a moment.",
-};
+const OFFLINE = "You're offline. Try again when you're connected.";
+
+/** A refused fork, in words: the route's 409 carries why in its error code. */
+async function refusal(res: Response): Promise<string> {
+  if (res.status === 402) return CAP;
+  if (res.status === 429) return busyText(Number(res.headers.get("retry-after")) * 1000);
+  if (res.status === 403) return "Guests can't fork chats right now. Sign in to continue.";
+  if (res.status === 404) return "This chat no longer exists.";
+  if (res.status === 503) return "The server is restarting. Try again in a moment.";
+  if (res.status === 409) {
+    const body: Partial<ApiError> = await readJson<ApiError>(res).catch(() => ({}));
+    if (body.error === "too_many") return `This chat already has ${MAX_FORKS} forks.`;
+    if (body.error === "is_fork") return "A fork can't be forked again.";
+  }
+  return "Couldn't fork this chat. Try again.";
+}
 
 /** Forks the chat once per option, lists the forks, seeds them (attaching to their replies) and opens the first. */
 export async function forkChat(
@@ -45,13 +54,12 @@ export async function forkChat(
   try {
     res = await fetch(`/api/chats/${chatId}/fork`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ forks }) });
   } catch {
-    return { ok: false, error: "You seem to be offline." };
+    return { ok: false, error: OFFLINE };
   }
-  if (res.status === 429) return { ok: false, error: busyText(Number(res.headers.get("retry-after")) * 1000) };
-  if (!res.ok) return { ok: false, error: MESSAGES[res.status] ?? `Forking failed (${res.status}). Try again.` };
+  if (!res.ok) return { ok: false, error: await refusal(res) };
   const data = await readJson<ForkResponse>(res);
   const first = data.forks[0];
-  if (!first) return { ok: false, error: "No fork could be started." };
+  if (!first) return { ok: false, error: "Couldn't start the forks. Try again." };
   store.updateMessage(messageId, { options: [], optionsStream: null });
   onListed?.();
   const sidebar = getSidebarStore();
@@ -65,11 +73,11 @@ export async function forkChat(
   for (const f of data.forks.slice(1)) void prefetchChat(store, f.chatId);
   setPendingChat(first.chatId);
   router.push(`/c/${first.chatId}`);
-  if (data.failed) return { ok: true, error: data.failed.error === "quota_exceeded" ? CAP : data.failed.error === "rate_limited" ? busyText(data.failed.retryAfterMs ?? 0) : "Some forks could not start." };
+  if (data.failed) return { ok: true, error: data.failed.error === "quota_exceeded" ? CAP : data.failed.error === "rate_limited" ? busyText(data.failed.retryAfterMs ?? 0) : "Some forks couldn't start." };
   return { ok: true };
 }
 
-/** A reply's "Duplicate": a new fork tab holding the chat up to that reply, listed and opened. */
+/** A reply's "Fork from here": a new fork tab holding the chat up to that reply, listed and opened. */
 export async function duplicateChat(store: ChatStore, router: { push: (href: string) => void }, chatId: string, messageId: string): Promise<ForkOutcome> {
   let res: Response;
   try {
@@ -79,10 +87,9 @@ export async function duplicateChat(store: ChatStore, router: { push: (href: str
       body: JSON.stringify({ chatId: uuidv7(), messageId }),
     });
   } catch {
-    return { ok: false, error: "You seem to be offline." };
+    return { ok: false, error: OFFLINE };
   }
-  if (res.status === 409) return { ok: false, error: `This chat already has ${MAX_FORKS} forks.` };
-  if (!res.ok) return { ok: false, error: MESSAGES[res.status] ?? `Duplicating failed (${res.status}). Try again.` };
+  if (!res.ok) return { ok: false, error: await refusal(res) };
   const dup = await readJson<DuplicateResponse>(res);
   getSidebarStore().upsert({ id: dup.chatId, title: dup.title, updatedAt: Date.now(), forkedFrom: dup.parentId, forkOrder: dup.forkOrder });
   await prefetchChat(store, dup.chatId);

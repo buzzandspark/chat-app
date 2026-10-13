@@ -34,13 +34,13 @@ describe("rewriteOptions", () => {
     expect(await rewriteOptions("m1", "shorter", options)).toEqual({ ok: true, options });
     expect(group.mock.calls[0]![0]).toMatch(/^\[options\] rewrite: [\d.]+ s in the page, Haiku 1\.52 s$/);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 402 }));
-    expect(await rewriteOptions("m1", "shorter", options)).toEqual({ ok: false, error: "You have reached your usage cap." });
+    expect(await rewriteOptions("m1", "shorter", options)).toEqual({ ok: false, error: "You've reached your spending cap." });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 429, headers: { "retry-after": "600" } })));
     expect(await rewriteOptions("m1", "shorter", options)).toEqual({ ok: false, error: "Busy right now. Try again in 10 min." });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ options: [] }) }));
-    expect(await rewriteOptions("m1", "shorter", options)).toEqual({ ok: false, error: "Could not apply the instruction. Try again." });
+    expect(await rewriteOptions("m1", "shorter", options)).toEqual({ ok: false, error: "Couldn't apply the instruction. Try again." });
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    expect(await rewriteOptions("m1", "shorter", options)).toEqual({ ok: false, error: "You seem to be offline." });
+    expect(await rewriteOptions("m1", "shorter", options)).toEqual({ ok: false, error: "You're offline. Try again when you're connected." });
     vi.unstubAllGlobals();
   });
 });

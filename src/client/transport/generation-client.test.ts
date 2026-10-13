@@ -193,7 +193,7 @@ describe("GenerationClient", () => {
       expect(gaps).toEqual([0, 500, 1000]);
       expect(m.status).toBe("error");
       expect(m.connection).toBe("idle");
-      expect(m.error).toMatchObject({ kind: "network", retryable: true });
+      expect(m.error).toMatchObject({ kind: "offline", retryable: true });
     } finally {
       vi.useRealTimers();
     }

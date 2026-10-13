@@ -19,16 +19,16 @@ test.describe("phone layout", () => {
 
   test("composer controls are at least 44 px tall", async ({ page }) => {
     await openNewChat(page);
-    for (const name of ["Send message", "Choose model", "Show sidebar"]) {
+    for (const name of ["Send message", /^Model\b/, "Open sidebar"]) {
       const box = await page.getByRole("button", { name }).boundingBox();
-      expect(box, name).not.toBeNull();
-      expect(box!.height, name).toBeGreaterThanOrEqual(44);
+      expect(box, String(name)).not.toBeNull();
+      expect(box!.height, String(name)).toBeGreaterThanOrEqual(44);
     }
   });
 
   test("the sidebar opens from the menu button and closes with Escape", async ({ page }) => {
     await openNewChat(page);
-    await page.getByRole("button", { name: "Show sidebar" }).click();
+    await page.getByRole("button", { name: "Open sidebar" }).click();
     const aside = sidebar(page);
     await expect(aside).toHaveAttribute("data-open", "true");
     await page.keyboard.press("Escape");

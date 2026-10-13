@@ -156,7 +156,7 @@ function ChatShellInner({ sidebarList, userLabel, account, usage, children }: Ch
         inert={!desktop && phoneOpen ? true : undefined}
         className="safe-top absolute top-0 left-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] items-center border-b border-transparent pl-[max(0.5rem,env(safe-area-inset-left,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] dock:z-50"
       >
-        <IconButton ref={menuButtonRef} label={desktop && desktopOpen ? "Hide sidebar" : "Show sidebar"} aria-expanded={open} onClick={toggle}>
+        <IconButton ref={menuButtonRef} label={desktop && desktopOpen ? "Close sidebar" : "Open sidebar"} aria-expanded={open} onClick={toggle}>
           <Menu className="dock:hidden" />
           <PanelLeft className="hidden dock:block" />
         </IconButton>
@@ -279,7 +279,7 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
       )}
       {failedId !== null && failedId === currentChatId ? (
         <span role="alert" className="shrink-0 px-2 text-caption text-destructive">
-          Rename failed
+          Couldn&apos;t rename the chat.
         </span>
       ) : null}
     </>

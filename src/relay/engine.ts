@@ -802,7 +802,7 @@ export class Engine {
 
   private finishAborted(active: Active, reason: AbortReason, timings: ServerTimings): void {
     if (reason === "cap") {
-      this.finishError(active, { kind: "quota_exceeded", message: "Spending cap reached", retryable: false }, timings);
+      this.finishError(active, { kind: "quota_exceeded", message: "You've reached your spending cap", retryable: false }, timings);
       return;
     }
     if (reason === "too_long") {

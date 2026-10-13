@@ -68,7 +68,7 @@ describe("ExploreOptions", () => {
     expect(fresh.button).not.toHaveAttribute("data-tip");
     cleanup();
     const stale = setup({ now: 1_000_000 + CACHE_WARM_MS + 1 });
-    expect(stale.button).toHaveAttribute("data-tip", expect.stringContaining("Cache expired"));
+    expect(stale.button).toHaveAttribute("data-tip", expect.stringContaining("start slower"));
   });
 });
 

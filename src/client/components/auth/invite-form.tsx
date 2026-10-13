@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { inviteProblem } from "./invite-problem";
 import { formText, signIn } from "./login-form";
 import { newChatHref } from "@client/hooks/use-new-chat";
 import { readJson, type ApiError } from "@shared/api";
@@ -22,11 +23,12 @@ export function InviteForm({ token, email }: { token: string; email: string }) {
       });
     } catch {
       // Returned, not thrown: a throw inside an action would replace the page with the error boundary.
-      return "Setting the password failed: you seem to be offline.";
+      return "You're offline. Try again when you're connected.";
     }
     if (!res.ok) {
       const body: Partial<ApiError> = await readJson<ApiError>(res).catch(() => ({}));
-      return body.error === "weak_password" ? "Use at least 10 characters." : "This invite could not be used.";
+      if (body.error === "weak_password") return "Use at least 10 characters.";
+      return res.status === 410 && body.error ? inviteProblem(body.error) : "Couldn't set the password. Try again.";
     }
     const result = await signIn(email, password);
     if (!result.ok) return result.message;

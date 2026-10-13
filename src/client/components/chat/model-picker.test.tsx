@@ -35,7 +35,7 @@ describe("ModelPicker", () => {
     layout(true);
     const onChange = vi.fn();
     render(<ModelPicker model="claude-sonnet-5-5" thinking={{ harder: false }} onChange={onChange} />);
-    const trigger = screen.getByRole("button", { name: "Choose model" });
+    const trigger = screen.getByRole("button", { name: "Model: Sonnet 5.5" });
     act(() => trigger.focus());
     press("Enter");
 
@@ -57,7 +57,7 @@ describe("ModelPicker", () => {
     const input = document.body.appendChild(document.createElement("textarea"));
     const focusInput = () => input.focus();
     render(<ModelPicker model="claude-sonnet-5-5" thinking={{ harder: false }} onChange={() => {}} onPicked={focusInput} />);
-    const trigger = screen.getByRole("button", { name: "Choose model" });
+    const trigger = screen.getByRole("button", { name: "Model: Sonnet 5.5" });
     act(() => trigger.focus());
     press("Enter");
     const opus = await screen.findByRole("menuitemradio", { name: /Claude Opus 5.5/ });
@@ -76,7 +76,7 @@ describe("ModelPicker", () => {
     layout(true);
     const onChange = vi.fn();
     render(<ModelPicker model="claude-haiku-5-5" thinking={{ harder: false }} onChange={onChange} />);
-    act(() => screen.getByRole("button", { name: "Choose model" }).focus());
+    act(() => screen.getByRole("button", { name: "Model: Haiku 5.5" }).focus());
     press("ArrowDown");
 
     const haiku = await screen.findByRole("menuitemradio", { name: /Claude Haiku 5.5/ });

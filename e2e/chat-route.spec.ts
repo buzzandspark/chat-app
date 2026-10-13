@@ -19,7 +19,7 @@ test.describe("chat route", () => {
       const seen: string[] = [];
       (window as unknown as { pickerSeen: string[] }).pickerSeen = seen;
       const tick = () => {
-        const span = document.querySelector('[aria-label="Choose model"] span.truncate');
+        const span = document.querySelector('[aria-label^="Model"] span.truncate');
         if (span && getComputedStyle(span).visibility !== "hidden" && !seen.includes(span.textContent ?? "")) seen.push(span.textContent ?? "");
         requestAnimationFrame(tick);
       };
@@ -28,25 +28,25 @@ test.describe("chat route", () => {
     await openNewChat(page);
     await sendText(page, "on sonnet");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    await page.getByRole("button", { name: "Choose model" }).click();
+    await page.getByRole("button", { name: /^Model\b/ }).click();
     const opus = { name: /Claude Opus 5.5/ };
     await page.getByRole("menuitemradio", opus).or(page.getByRole("radio", opus)).click();
-    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Opus 5.5");
+    await expect(page.getByRole("button", { name: /^Model\b/ })).toContainText("Opus 5.5");
     await sendText(page, "on opus");
     await expect(page.locator('[data-role="assistant"]:visible')).toHaveCount(2, { timeout: 30_000 });
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     await page.reload();
-    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Opus 5.5", { timeout: 15_000 });
-    await page.getByRole("button", { name: "Choose model" }).hover();
+    await expect(page.getByRole("button", { name: /^Model\b/ })).toContainText("Opus 5.5", { timeout: 15_000 });
+    await page.getByRole("button", { name: /^Model\b/ }).hover();
     await page.waitForTimeout(1000);
     expect(await page.evaluate(() => (window as unknown as { pickerSeen: string[] }).pickerSeen)).toEqual(["Opus 5.5"]);
   });
 
-  test("the sidebar toggle stays in the same spot whether the sidebar is open or closed", async ({ page, isMobile }) => {
+  test("the sidebar toggle stays in the same spot whether the sidebar is open or closed", async ({ page }) => {
     await openNewChat(page);
     const aside = sidebar(page);
-    const closedName = "Show sidebar";
-    const openName = isMobile ? "Close sidebar" : "Hide sidebar";
+    const closedName = "Open sidebar";
+    const openName = "Close sidebar";
     if ((await aside.getAttribute("data-open")) !== "true") await page.getByRole("button", { name: closedName }).click();
     await expect(aside).toHaveAttribute("data-open", "true");
     // The phone sidebar slides in; measure once it has settled.
@@ -63,21 +63,21 @@ test.describe("chat route", () => {
     await openNewChat(page);
     await sendText(page, title);
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
-    await page.getByRole("button", { name: "Choose model" }).click();
+    await page.getByRole("button", { name: /^Model\b/ }).click();
     // The picker is a menu at `md` and a sheet's radio group on phones.
     const haiku = { name: /Claude Haiku 5.5/ };
     await page.getByRole("menuitemradio", haiku).or(page.getByRole("radio", haiku)).click();
-    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 5.5");
+    await expect(page.getByRole("button", { name: /^Model\b/ })).toContainText("Haiku 5.5");
     const settingsUrl = page.url();
     await ensureSidebarOpen(page);
     await page.getByRole("link", { name: "New chat" }).click();
     await expect(page).not.toHaveURL(settingsUrl);
     await waitForComposer(page);
-    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Sonnet 5.5");
+    await expect(page.getByRole("button", { name: /^Model\b/ })).toContainText("Sonnet 5.5");
     await ensureSidebarOpen(page);
     await sidebar(page).getByRole("link", { name: title }).click();
     await expect(page).toHaveURL(settingsUrl);
-    await expect(page.getByRole("button", { name: "Choose model" })).toContainText("Haiku 5.5");
+    await expect(page.getByRole("button", { name: /^Model\b/ })).toContainText("Haiku 5.5");
   });
 
   test("a refused first send keeps the typed message and the page usable", async ({ page }, info) => {
@@ -101,7 +101,7 @@ test.describe("chat route", () => {
     const closeSidebar = page.getByRole("button", { name: "Close sidebar" });
     if (await closeSidebar.isVisible()) await closeSidebar.click();
     await page.unroute("**/api/chat");
-    await row.getByRole("button", { name: "Try again" }).click();
+    await row.getByRole("button", { name: "Retry" }).click();
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     expect(new URL(page.url()).pathname).toBe(path);
     await ensureSidebarOpen(page);
@@ -121,10 +121,9 @@ test.describe("chat route", () => {
     await sendText(page, "please retry me");
     const row = lastAssistant(page);
     await expect(row).toHaveAttribute("data-status", "error", { timeout: 15_000 });
-    await expect(row).toContainText(/Retrying in \d+s \(try 1 of 4\)/);
-    // The second automatic try (2 s, then 4 s) is also refused and the footer counts the streak.
-    await expect(lastAssistant(page)).toContainText(/try 2 of 4/, { timeout: 15_000 });
-    expect(refused).toBeGreaterThanOrEqual(2);
+    await expect(row).toContainText(/Retrying in \d+s/);
+    // The second automatic try (2 s, then 4 s) is also refused.
+    await expect.poll(() => refused, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
     await page.unroute("**/api/chat");
     // Nobody clicks: the next scheduled try goes through.
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });

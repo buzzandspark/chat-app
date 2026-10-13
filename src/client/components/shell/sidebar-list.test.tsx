@@ -121,7 +121,7 @@ describe("SidebarList forks", () => {
         <SidebarList initialChats={withForks} />
       </ModalProvider>,
     );
-    expect(screen.getByRole("link", { name: "Forked: Databases" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Databases, has forks" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "SQLite" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Postgres" })).toBeNull();
   });
@@ -137,6 +137,6 @@ describe("SidebarList forks", () => {
     const links = Array.from(nested.querySelectorAll("a")).map((a) => a.textContent);
     expect(links).toEqual(["SQLite", "Postgres"]);
     expect(screen.getByRole("link", { name: "Postgres" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Forked: Databases" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Databases, has forks" })).not.toHaveAttribute("aria-current");
   });
 });

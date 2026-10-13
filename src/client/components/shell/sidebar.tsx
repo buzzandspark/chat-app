@@ -3,7 +3,7 @@ import { Plus, Search, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, type ReactNode, type RefObject } from "react";
 import { buttonVariants } from "@/components/ui/button";
-import { IconButton } from "../ui/icon-button";
+import { IconButton, shortcutTip } from "../ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { sidebarAria } from "./sidebar-aria";
@@ -89,7 +89,7 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               !desktopOpen && "dock:translate-x-[calc(1.25rem+2*var(--spacing-touch))] dock:opacity-0",
             )}
           >
-            <IconButton label="Search chats" shortcut="⌘K" aria-keyshortcuts="Meta+K Control+K" onClick={onSearch}>
+            <IconButton label="Search chats" shortcut={{ mac: "⌘K", ctrl: "Ctrl K" }} aria-keyshortcuts="Meta+K Control+K" onClick={onSearch}>
               <Search />
             </IconButton>
             {/* href keeps open-in-new-tab working; a plain click opens a fresh view (useNewChat). */}
@@ -97,7 +97,7 @@ export function Sidebar({ list, desktop, phoneOpen, desktopOpen, open, onClose, 
               href="/c"
               prefetch={false}
               aria-label="New chat"
-              data-tip="New chat  ⌘⇧O"
+              {...shortcutTip("New chat", { mac: "⌘⇧O", ctrl: "Ctrl Shift O" })}
               aria-keyshortcuts="Meta+Shift+O Control+Shift+O"
               data-tip-side="bottom"
               // At the sidebar's right edge: the tip opens leftward instead of spilling past it.

@@ -48,7 +48,7 @@ test.describe("accounts", () => {
 
     const second = await freshPage(browser);
     await second.goto(inviteUrl);
-    await expect(second.locator('p[role="alert"]')).toContainText("already been used");
+    await expect(second.getByRole("heading", { name: "This invite has already been used." })).toBeVisible();
   });
 
   test("admin disables a user and their sign-in stops working", async ({ page, browser }) => {

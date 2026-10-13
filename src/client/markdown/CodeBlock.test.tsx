@@ -35,8 +35,8 @@ describe("CodeBlock", () => {
   it("renders plain code immediately with a language label and a copy button", () => {
     const { container } = render(<CodeBlock code={"const a = 1;"} lang="ts" closed={false} />);
     expect(container.querySelector("pre")).toHaveTextContent("const a = 1;");
-    expect(screen.getByLabelText("Language")).toHaveTextContent("ts");
-    const button = screen.getByRole("button", { name: "Copy" });
+    expect(container).toHaveTextContent("ts");
+    const button = screen.getByRole("button", { name: "Copy ts code" });
     expect(button).toHaveClass("touch-target");
     expect(container.querySelector("[data-shiki]")).toBeNull();
   });
@@ -46,7 +46,7 @@ describe("CodeBlock", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     render(<CodeBlock code={"hello"} lang={null} closed={false} />);
     await act(async () => {
-      screen.getByRole("button", { name: "Copy" }).click();
+      screen.getByRole("button", { name: "Copy code" }).click();
       await Promise.resolve();
     });
     expect(writeText).toHaveBeenCalledWith("hello");
@@ -54,7 +54,7 @@ describe("CodeBlock", () => {
     act(() => {
       vi.advanceTimersByTime(1600);
     });
-    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy code" })).toBeInTheDocument();
   });
 
   it("highlights closed code in an idle callback without changing the text", async () => {

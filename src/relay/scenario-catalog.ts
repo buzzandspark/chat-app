@@ -57,8 +57,8 @@ export const SCENARIOS: Record<ScenarioName, ScenarioInfo> = {
     blurb: "The SSE response goes silent after 30 events without closing; the watchdog resumes it.",
     stallAfterEvents: 30,
   },
-  rate_limited: { name: "rate_limited", title: "Rate limited (429)", blurb: "Upstream returns 429 with retry-after." },
-  overloaded: { name: "overloaded", title: "Overloaded (529)", blurb: "Upstream is overloaded." },
+  rate_limited: { name: "rate_limited", title: "Rate limited (429)", blurb: "Claude rate-limits the reply." },
+  overloaded: { name: "overloaded", title: "Overloaded (529)", blurb: "Claude is overloaded." },
   producer_restart: {
     name: "producer_restart",
     title: "Producer restart",

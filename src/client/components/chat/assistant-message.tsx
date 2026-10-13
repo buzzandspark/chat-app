@@ -55,12 +55,12 @@ function AssistantActionsOnIntent(props: { message: MessageState; text: string; 
   return <ActionsStandIn message={props.message} intent={intent} onPress={intent.press} />;
 }
 
-function ModelDivider({ from, to, category }: { from: string; to: string; category: string | null }) {
+function ModelDivider({ from, to }: { from: string; to: string }) {
   return (
     <div className="my-3 flex items-center gap-3 text-caption text-muted-foreground" role="separator">
       <span className="h-px flex-1 bg-border" />
       <span>
-        Served by {modelDisplayName(to)} after a safety fallback{category ? ` (${category})` : ""} from {modelDisplayName(from)}
+        Switched from {modelDisplayName(from)} to {modelDisplayName(to)} for safety
       </span>
       <span className="h-px flex-1 bg-border" />
     </div>
@@ -101,7 +101,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
   };
 
   // A 429 retries itself with exponential backoff, four times at most, only for a reply this client asked for.
-  // The timer dies with the row, so hiding the chat, a manual Try again, or a later send all cancel it.
+  // The timer dies with the row, so hiding the chat, a manual Retry, or a later send all cancel it.
   const rateLimited = message.status === "error" && message.error?.kind === "rate_limited" && message.local && retryable && !isLongWait(message.error.retryAfterMs);
   const attempt = message.retryAttempt;
   const retryAfterMs = message.error?.retryAfterMs;
@@ -139,7 +139,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
               />
             );
           }
-          if (block.type === "divider") return <ModelDivider key={i} from={block.from} to={block.to} category={block.category} />;
+          if (block.type === "divider") return <ModelDivider key={i} from={block.from} to={block.to} />;
           const isLast = i === message.blocks.length - 1;
           return (
             <Markdown
@@ -151,12 +151,12 @@ export function AssistantMessage({ message }: { message: MessageState }) {
           );
         })}
         {streaming && !hasTextBlock && !hasThinkingBlock ? (
-          <div className="flex h-7 items-center" aria-label="Waiting for the first token">
+          <div className="flex h-7 items-center">
             <span className="size-2 animate-pulse rounded-full bg-muted-foreground" />
           </div>
         ) : null}
       </div>
-      {discarded ? <span className="text-caption text-muted-foreground">Incomplete and not saved.</span> : null}
+      {discarded ? <span className="text-caption text-muted-foreground">Incomplete. Claude won&apos;t see this part in later replies.</span> : null}
       <StatusFooter
         message={message}
         onRetry={retryable ? onRetry : undefined}

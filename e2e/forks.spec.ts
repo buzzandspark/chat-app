@@ -22,7 +22,7 @@ async function forkAll(page: Page) {
   await visible(page, "explore-options").click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: /^Fork \d+ chats?$/ }).click();
+  await dialog.getByRole("button", { name: /^Start \d+ chats?$/ }).click();
   // Its exit animation would catch raw mouse events meant for the tabs.
   await expect(dialog).toBeHidden();
 }
@@ -35,7 +35,7 @@ test.describe("explore options", () => {
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
     const parentUrl = page.url();
     await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
-    const item = page.getByRole("menuitem", { name: "Duplicate" });
+    const item = page.getByRole("menuitem", { name: "Fork from here" });
     expect(await item.evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
     await item.click();
     await expect(page).not.toHaveURL(parentUrl, { timeout: 15_000 });
@@ -65,7 +65,7 @@ test.describe("explore options", () => {
     // Rows are found by href: the database is shared across projects.
     const parentPath = new URL(parentUrl).pathname;
     const aside = page.locator('aside[aria-label="Chats"]');
-    await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveAttribute("aria-label", /^Forked: /);
+    await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveAttribute("aria-label", /, has forks$/);
     await expect(aside.locator(`a[href="${forkPath}"]`)).toHaveText("Keep SQLite");
     await tabs(page).nth(2).click();
     await expect(tabs(page).nth(2)).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
@@ -90,7 +90,7 @@ test.describe("explore options", () => {
     await button.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    const instruction = dialog.getByLabel("Instruction for all prompts");
+    const instruction = dialog.getByLabel("Change every first message");
     await expect(instruction).toBeFocused();
     const checks = dialog.getByRole("checkbox");
     await expect(checks).toHaveCount(3);
@@ -107,7 +107,7 @@ test.describe("explore options", () => {
     await instruction.press("Enter");
     await expect(dialog.getByLabel("First message").first()).toHaveValue(/^Assess performance/);
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Fork 2 chats" })).toBeEnabled();
+    await expect(dialog.getByRole("button", { name: "Start 2 chats" })).toBeEnabled();
     await instruction.press("Shift+Enter");
     await expect(tabs(page)).toHaveCount(3, { timeout: 15_000 });
     await expect(tabs(page).nth(1)).toHaveText("SQLite forever");

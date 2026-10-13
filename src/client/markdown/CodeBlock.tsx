@@ -108,12 +108,13 @@ function CodeBlockImpl({ code, lang, closed, className }: CodeBlockProps) {
       data-committed={lines ? (committed >= groups ? "all" : String(committed)) : undefined}
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 text-caption text-muted-foreground">
-        <span className="truncate font-mono" aria-label="Language">
+        <span className="truncate font-mono">
           {lang ?? "text"}
         </span>
         <button
           type="button"
           onClick={onCopy}
+          aria-label={copied ? undefined : lang ? `Copy ${lang} code` : "Copy code"}
           aria-live="polite"
           className="touch-target -mr-2 inline-flex items-center justify-center rounded-md px-2 text-caption font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
         >

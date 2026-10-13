@@ -22,7 +22,7 @@ export function UsageBar({ initial }: { initial: CapUsage }) {
       <div
         tabIndex={0}
         role="meter"
-        aria-label="Usage"
+        aria-label="Spending cap"
         aria-valuemin={0}
         aria-valuemax={usage.capUsd}
         aria-valuenow={Math.min(usage.spentUsd, usage.capUsd)}

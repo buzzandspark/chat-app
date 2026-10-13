@@ -42,7 +42,7 @@ async function start(request: Request, mayCreate: boolean): Promise<Response> {
   if (current && !current.banned) return back;
   // The browser discards a refused prefetch or prerender, so the visit itself comes back here and makes the guest.
   if (request.headers.has("sec-purpose")) return new Response(null, { status: 503, headers: { "cache-control": "no-store" } });
-  const login = `/login?next=${encodeURIComponent(next)}`;
+  const login = `/login?next=${encodeURIComponent(next)}&guest=unavailable`;
   const { guestStart, guestStartAll } = getLimiters();
   const keys = clientKeys(request);
   if (!mayCreate || isDraining() || guestsBlocked() || !guestStart.check(keys.ip, false).ok || !guestStartAll.check("all", false).ok) return redirectTo(login);

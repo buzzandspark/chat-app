@@ -66,7 +66,7 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
     );
     setBusy(false);
     if (!out.ok) {
-      setError(out.error ?? "Forking failed.");
+      setError(out.error ?? "Couldn't start the chats. Try again.");
       return;
     }
     close();
@@ -130,8 +130,8 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
             ref={instructionRef}
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
-            placeholder="Instruction for every prompt, e.g. assess performance"
-            aria-label="Instruction for all prompts"
+            placeholder="Change every first message, e.g. ask for code examples"
+            aria-label="Change every first message"
             maxLength={500}
             className="h-9"
           />
@@ -149,7 +149,7 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
             Cancel
           </Button>
           <Button type="submit" className="touch-target" disabled={selected.length === 0 || busy || selected.some((it) => !it.title.trim() || !it.prompt.trim())}>
-            {busy ? "Forking…" : `Fork ${selected.length} chat${selected.length === 1 ? "" : "s"}`}
+            {busy ? "Starting…" : `Start ${selected.length} chat${selected.length === 1 ? "" : "s"}`}
           </Button>
         </div>
       </form>

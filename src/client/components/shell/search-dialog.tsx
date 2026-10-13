@@ -102,7 +102,7 @@ export function SearchDialog({
             search(e.target.value);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Titles and messages"
+          placeholder="Search titles and messages"
           aria-label="Search chats"
           aria-autocomplete="list"
           aria-controls="search-hits"
@@ -132,6 +132,7 @@ export function SearchDialog({
             </Link>
           </li>
         ))}
+        {open && query.trim().length === 1 ? <li className="px-3 py-3 text-small text-muted-foreground">Type at least 2 characters.</li> : null}
         {active && !searching && visibleHits.length === 0 ? (
           <li className="px-3 py-3 text-small text-muted-foreground">No matches.</li>
         ) : null}

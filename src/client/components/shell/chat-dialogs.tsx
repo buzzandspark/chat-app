@@ -12,6 +12,8 @@ import { readJson, type DeclareWinnerResponse, type DeleteForksResponse } from "
 import { forkTabs } from "../chat/fork-tabs";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
+const OFFLINE = "You're offline. Try again when you're connected.";
+
 interface DialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,9 +39,9 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
         getSidebarStore().patch(chat.id, { title: value.trim() });
         store.setChatTitle(chat.id, value.trim());
         onOpenChange(false);
-      } else setError(res.status === 404 ? "This chat no longer exists." : `Rename failed (${res.status}). Try again.`);
+      } else setError(res.status === 404 ? "This chat no longer exists." : "Couldn't rename the chat. Try again.");
     } catch {
-      setError("Rename failed: you seem to be offline.");
+      setError(OFFLINE);
     } finally {
       setBusy(false);
     }
@@ -98,7 +100,7 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
     setError(null);
     try {
       const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) setError(`Delete failed (${res.status}). Try again.`);
+      if (!res.ok && res.status !== 404) setError("Couldn't delete the chat. Try again.");
       if (res.ok || res.status === 404) {
         const sidebar = getSidebarStore();
         // Deleting the open chat moves to the next tab over, as closing it does; a new chat when it has no tabs.
@@ -119,7 +121,7 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
         }
       }
     } catch {
-      setError("Delete failed: you seem to be offline.");
+      setError(OFFLINE);
     } finally {
       setBusy(false);
     }
@@ -131,8 +133,8 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
       title="Delete chat?"
       description={
         forkCount > 0
-          ? `"${chat.title}" and its messages will be removed. This cannot be undone. Its ${forkCount === 1 ? "fork stays as a normal chat" : `${forkCount} forks stay as normal chats`}.`
-          : `"${chat.title}" and its messages will be removed. This cannot be undone.`
+          ? `"${chat.title}" and its messages will be deleted. This can't be undone. Its ${forkCount === 1 ? "fork stays as a normal chat" : `${forkCount} forks stay as normal chats`}.`
+          : `"${chat.title}" and its messages will be deleted. This can't be undone.`
       }
       // Opens on Delete, so Enter confirms.
       onOpenAutoFocus={(e) => {
@@ -172,7 +174,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
     try {
       const res = await fetch(`/api/chats/${chat.id}/declare-winner`, { method: "POST" });
       if (!res.ok) {
-        setError(res.status === 404 ? "This chat is no longer a fork." : `Could not declare the winner (${res.status}).`);
+        setError(res.status === 404 ? "This chat is no longer a fork." : "Couldn't declare the winner. Try again.");
         return;
       }
       const winner = await readJson<DeclareWinnerResponse>(res);
@@ -193,7 +195,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
         router.push(`/c/${chat.id}`);
       }
     } catch {
-      setError("You seem to be offline.");
+      setError(OFFLINE);
     } finally {
       setBusy(false);
     }
@@ -203,7 +205,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
       open={open}
       onOpenChange={onOpenChange}
       title="Declare the winner?"
-      description={`"${chat.title}" stays, with its history, and can be forked again from here. The main chat and the other forks will be deleted. This cannot be undone.`}
+      description={`"${chat.title}" stays, with its history, and can be forked again from here. The main chat and the other forks will be deleted. This can't be undone.`}
       // Opens on Declare winner, so Enter confirms.
       onOpenAutoFocus={(e) => {
         e.preventDefault();
@@ -242,7 +244,7 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
     try {
       const res = await fetch(`/api/chats/${chat.id}/delete-forks`, { method: "POST" });
       if (!res.ok) {
-        setError(res.status === 404 ? "This chat no longer exists." : `Could not delete the forks (${res.status}).`);
+        setError(res.status === 404 ? "This chat no longer exists." : "Couldn't delete the forks. Try again.");
         return;
       }
       const { deleted } = await readJson<DeleteForksResponse>(res);
@@ -259,7 +261,7 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
         router.push(`/c/${chat.id}`);
       }
     } catch {
-      setError("You seem to be offline.");
+      setError(OFFLINE);
     } finally {
       setBusy(false);
     }
@@ -269,7 +271,7 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
       open={open}
       onOpenChange={onOpenChange}
       title="Delete all forks?"
-      description={`Every fork of "${chat.title}" will be deleted; the main chat stays. This cannot be undone.`}
+      description={`Every fork of "${chat.title}" will be deleted; the main chat stays. This can't be undone.`}
       // Opens on Delete, so Enter confirms.
       onOpenAutoFocus={(e) => {
         e.preventDefault();
@@ -293,7 +295,7 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
   );
 }
 
-/** The sidebar's Delete group on a main chat with forks: the main chat and every fork go. */
+/** The sidebar's Delete chat and forks on a main chat with forks: the main chat and every fork go. */
 export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
   const store = useChatStore();
   const newChat = useNewChat();
@@ -307,7 +309,7 @@ export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: Dia
     try {
       const res = await fetch(`/api/chats/${chat.id}/delete-all`, { method: "POST" });
       if (!res.ok && res.status !== 404) {
-        setError(`Could not delete the chats (${res.status}).`);
+        setError("Couldn't delete the chat and its forks. Try again.");
         return;
       }
       const deleted = res.ok ? (await readJson<DeleteForksResponse>(res)).deleted : [chat.id];
@@ -321,7 +323,7 @@ export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: Dia
       onOpenChange(false);
       if (leaving) newChat();
     } catch {
-      setError("You seem to be offline.");
+      setError(OFFLINE);
     } finally {
       setBusy(false);
     }
@@ -330,8 +332,8 @@ export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: Dia
     <ResponsiveDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Delete group?"
-      description={`"${chat.title}" and every fork of it will be removed, with their messages. This cannot be undone.`}
+      title="Delete chat and forks?"
+      description={`"${chat.title}" and every fork of it will be deleted, with their messages. This can't be undone.`}
       // Opens on Delete, so Enter confirms.
       onOpenAutoFocus={(e) => {
         e.preventDefault();
@@ -348,7 +350,7 @@ export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: Dia
           Cancel
         </Button>
         <Button ref={deleteRef} type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
-          Delete group
+          Delete chat and forks
         </Button>
       </div>
     </ResponsiveDialog>

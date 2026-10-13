@@ -17,6 +17,7 @@ export interface ApiError {
 
 /** better-auth answers its own endpoints (`/api/auth/*`); a failed sign-in carries a message to show. */
 export interface AuthError {
+  code?: string;
   message?: string;
 }
 

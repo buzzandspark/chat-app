@@ -52,7 +52,7 @@ export function ResponsiveDialog({ open, onOpenChange, title, description, child
       >
         <DialogHeader className="text-left">
           <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : <DialogDescription className="sr-only">{title}</DialogDescription>}
+          {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
         {children}
       </DialogContent>

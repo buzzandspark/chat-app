@@ -2,7 +2,7 @@ import { isTerminal, type RelayEvent } from "@relay/events";
 import { createSseParser, parseRelayEvent } from "@relay/sse";
 import { readJson, type ApiError, type StopResponse } from "@shared/api";
 import { uuidv7 } from "@shared/id";
-import { MAX_MESSAGE_CHARS, type ModelId, type ThinkingOptions } from "@shared/types";
+import type { ModelId, ThinkingOptions } from "@shared/types";
 import { createMessageState, type ChatStore, type MessageState } from "../store/chat-store";
 import { followReply } from "../store/announcer";
 import { getSidebarStore } from "../store/sidebar-store";
@@ -331,7 +331,7 @@ export class GenerationClient {
         this.store.updateMessage(messageId, {
           status: "error",
           connection: "idle",
-          error: { kind: "network", message: "Could not send this message", retryable: true },
+          error: { kind: "offline", message: "Couldn't send this message", retryable: true },
         });
         return;
       }
@@ -543,11 +543,11 @@ export class GenerationClient {
                     : "bad_request";
     const message =
       kind === "quota_exceeded"
-        ? "You have used your whole budget on this instance"
+        ? "You've reached your spending cap"
         : kind === "rate_limited"
-          ? "Too many messages, slow down a little"
+          ? "Rate limited"
           : body.error === "replace_gone"
-            ? "These turns were already replaced in another request"
+            ? "This chat has changed since you opened it"
             : body.error === "replace_running"
               ? "An earlier reply is still finishing"
               : kind === "session"
@@ -558,20 +558,13 @@ export class GenerationClient {
                     ? "This chat belongs to another account"
                     : kind === "unavailable"
                       ? "The server is restarting"
-                      : tooLong(body)
-                        ? `This message is too long (the limit is ${MAX_MESSAGE_CHARS.toLocaleString()} characters)`
-                        : `Request failed (${res.status})`;
+                      : "Couldn't send this message";
     this.store.updateMessage(messageId, {
       status: "error",
       connection: "idle",
       error: { kind, message, retryable: kind === "rate_limited" || kind === "unavailable" || body.error === "replace_running", retryAfterMs: retryAfterMs ?? (kind === "unavailable" ? 5000 : undefined), status: res.status },
     });
   }
-}
-
-/** The route's 400 for a message over the limit (zod's `too_big` on `text`). */
-function tooLong(body: Partial<ApiError>): boolean {
-  return body.issues?.some((i) => i.code === "too_big" && i.path[0] === "text") ?? false;
 }
 
 function anySignal(...signals: AbortSignal[]): AbortSignal {

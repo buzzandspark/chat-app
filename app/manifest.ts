@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Chat",
     short_name: "Chat",
-    description: "A streaming chat client built for phones first.",
+    description: "Chat with Claude.",
     start_url: "/c",
     display: "standalone",
     background_color: "#faf9f6",

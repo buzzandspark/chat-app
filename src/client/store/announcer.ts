@@ -1,5 +1,6 @@
 "use client";
 import { useSyncExternalStore } from "react";
+import type { RelayError } from "@shared/types";
 import { textOf, type ChatStore, type MessageState } from "./chat-store";
 
 const SENTENCE_END = /[.!?](\s|$)/g;
@@ -20,6 +21,42 @@ function speakable(markdown: string): string {
     .trim();
 }
 
+/** One plain sentence per failure, shared by the reply's footer and the live region; never the server's own text. */
+export function errorText(error: RelayError | null | undefined): string {
+  switch (error?.kind) {
+    case "rate_limited":
+      return "Rate limited.";
+    case "overloaded":
+      return "Claude is overloaded.";
+    case "api_error":
+      return "Claude returned an error.";
+    case "auth":
+      return "The server's API key was rejected. Contact the admin.";
+    case "session":
+      return "Your session has ended.";
+    case "forbidden":
+      return "This chat belongs to another account.";
+    case "guests_blocked":
+      return "Guests can't send messages right now.";
+    case "quota_exceeded":
+      return "You've reached your spending cap.";
+    case "context_full":
+      return "This chat is too long to continue.";
+    case "network":
+      return "Lost the connection to Claude.";
+    case "offline":
+      return "Couldn't send this message.";
+    case "unavailable":
+      return "The server is restarting.";
+    case "gone":
+      return "This chat was deleted.";
+    case "conflict":
+      return error.retryable ? "An earlier reply was still finishing." : "This chat has changed since you opened it.";
+    default:
+      return "Something went wrong.";
+  }
+}
+
 function ending(m: MessageState): string | null {
   switch (m.status) {
     case "done":
@@ -31,7 +68,7 @@ function ending(m: MessageState): string | null {
     case "refused":
       return "Claude declined to continue.";
     case "error":
-      return `Reply failed: ${m.error?.message ?? "something went wrong"}.`;
+      return `Reply failed: ${errorText(m.error)}`;
     default:
       return null;
   }
