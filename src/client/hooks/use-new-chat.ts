@@ -15,7 +15,7 @@ export function useNewChat(): () => void {
   return useCallback(() => {
     const id = uuidv7();
     store.createChat(id);
-    // `n` gives each New chat a view of its own (the router keeps views per address); /c drops it on mount.
+    // `n` tells the kept /c view which chat to show; /c drops it once the view has it.
     router.push(`/c?n=${id}`);
   }, [router, store]);
 }

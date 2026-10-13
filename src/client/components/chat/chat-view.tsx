@@ -24,12 +24,13 @@ import { ThreadSkeleton } from "./thread-skeleton";
 export function ChatView({ children }: { children: ReactNode }) {
   const params = useParams<{ id?: string }>();
   const search = useSearchParams();
-  // One instance per URL; a hidden instance must not follow the active chat's params. At /c (a new chat
-  // with no id in its address yet) the id is in-app New chat's `n`, or a fresh one.
-  const [chatId] = useState(() => {
-    const fromNew = search.get("n");
-    return params.id ?? (fromNew && isUuid(fromNew) ? fromNew : uuidv7());
-  });
+  // At /c the id is in-app New chat's `n`, or a fresh one. The router keeps a single /c view across search
+  // params and restores it for every New chat, so a new `n` moves that view to the new chat. Hidden views
+  // read the active route's params, so which route this view belongs to is fixed at mount.
+  const fromNew = search.get("n");
+  const [atNewChat] = useState(() => params.id === undefined);
+  const [chatId, setChatId] = useState(() => params.id ?? (fromNew && isUuid(fromNew) ? fromNew : uuidv7()));
+  if (atNewChat && fromNew && isUuid(fromNew) && fromNew !== chatId) setChatId(fromNew);
   const newChatRoute = params.id === undefined;
   const { userId, guest, scenarioPanel } = useShellUser();
   const store = useChatStore();
@@ -197,7 +198,7 @@ export function ChatView({ children }: { children: ReactNode }) {
   return (
     <ChatActionsContext.Provider value={actions}>
       <ChatLiveStateContext.Provider value={live}>
-        <div className="group/chat flex min-h-0 flex-1 flex-col">
+        <div key={chatId} className="group/chat flex min-h-0 flex-1 flex-col">
           {children}
           <ForkTabs chatId={chatId} />
           <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />

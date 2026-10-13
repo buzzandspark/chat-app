@@ -41,7 +41,8 @@ export default function ChatLayout({ children }: LayoutProps<"/">) {
         </Suspense>
       }
       account={
-        <Suspense fallback={null}>
+        // Holds the button's width so the footer icons don't slide left when the session streams in.
+        <Suspense fallback={<span aria-hidden className="touch-target" />}>
           <Account />
         </Suspense>
       }

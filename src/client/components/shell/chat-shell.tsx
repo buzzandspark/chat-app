@@ -154,7 +154,7 @@ function ChatShellInner({ sidebarList, userLabel, account, usage, children }: Ch
       {/* Docked, the sidebar slides in and out beneath this pinned toggle and the title makes room for it. */}
       <div
         inert={!desktop && phoneOpen ? true : undefined}
-        className="safe-top absolute top-0 left-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] items-center pl-[max(0.5rem,env(safe-area-inset-left,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] dock:z-50"
+        className="safe-top absolute top-0 left-0 z-20 flex h-[calc(3.5rem+env(safe-area-inset-top,0px))] items-center border-b border-transparent pl-[max(0.5rem,env(safe-area-inset-left,0px))] md:pl-[max(0.75rem,env(safe-area-inset-left,0px))] dock:z-50"
       >
         <IconButton ref={menuButtonRef} label={desktop && desktopOpen ? "Hide sidebar" : "Show sidebar"} aria-expanded={open} onClick={toggle}>
           <Menu className="dock:hidden" />
@@ -202,8 +202,13 @@ function HeaderRoute({ onPathnameChange }: { onPathnameChange: () => void }) {
   // Chats only prefetched for the sidebar are small and stay.
   const visitedRef = useRef<string[]>([]);
   // Each committed navigation puts the phone sidebar away, whatever started it, and releases the pending chat.
+  // Mounting is not a navigation: this boundary can hydrate after the sidebar was already opened.
+  const pathnameRef = useRef(pathname);
   useEffect(() => {
-    onPathnameChange();
+    if (pathnameRef.current !== pathname) {
+      pathnameRef.current = pathname;
+      onPathnameChange();
+    }
     setPendingChat(null);
     if (!currentChatId) return;
     const visited = visitedRef.current.filter((id) => id !== currentChatId);
