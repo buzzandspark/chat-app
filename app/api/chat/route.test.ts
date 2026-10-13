@@ -22,6 +22,7 @@ vi.mock("@server/current-user", async (importOriginal) => ({
 }));
 const start = vi.hoisted(() => vi.fn(() => ({ created: true })));
 vi.mock("@server/relay", () => ({ getRelay: vi.fn(() => ({ engine: { owner: () => null, start, resume: () => ({ kind: "gone" }) }, store: { has: () => false } })) }));
+vi.mock("@server/instance-settings", () => ({ guestsBlocked: () => false }));
 
 function send(role: UserRole, extra: Record<string, unknown>): Promise<Response> {
   vi.mocked(requireUser).mockResolvedValue({ id: "u1", role, email: "u1@example.com", name: "u1" });

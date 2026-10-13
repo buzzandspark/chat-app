@@ -10,6 +10,7 @@ import { POST } from "./route";
 vi.mock("server-only", () => ({}));
 vi.mock("@db/client", () => ({ getDb: () => null }));
 vi.mock("@server/relay", () => ({ getRelay: () => ({ engine: null, store: null }) }));
+vi.mock("@server/instance-settings", () => ({ guestsBlocked: () => false }));
 vi.mock("@relay/forks", async (importOriginal) => ({ ...(await importOriginal<typeof import("@relay/forks")>()), createForks: vi.fn() }));
 vi.mock("@server/current-user", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@server/current-user")>()),

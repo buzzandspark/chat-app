@@ -42,10 +42,12 @@ async function start(request: Request, mayCreate: boolean): Promise<Response> {
   if (current && !current.banned) return back;
   // The browser discards a refused prefetch or prerender, so the visit itself comes back here and makes the guest.
   if (request.headers.has("sec-purpose")) return new Response(null, { status: 503, headers: { "cache-control": "no-store" } });
-  const login = `/login?next=${encodeURIComponent(next)}&guest=unavailable`;
+  const login = `/login?next=${encodeURIComponent(next)}`;
+  if (!mayCreate) return redirectTo(login);
+  const unavailable = `${login}&guest=unavailable`;
   const { guestStart, guestStartAll } = getLimiters();
   const keys = clientKeys(request);
-  if (!mayCreate || isDraining() || guestsBlocked() || !guestStart.check(keys.ip, false).ok || !guestStartAll.check("all", false).ok) return redirectTo(login);
+  if (isDraining() || guestsBlocked() || !guestStart.check(keys.ip, false).ok || !guestStartAll.check("all", false).ok) return redirectTo(unavailable);
   // Counted only when both allow it, and before the sign-in's await, so a burst of visits cannot all pass the check.
   guestStart.check(keys.ip);
   guestStartAll.check("all");
@@ -54,7 +56,7 @@ async function start(request: Request, mayCreate: boolean): Promise<Response> {
   fresh.delete("cookie");
   const result = await auth.api.signInAnonymous({ headers: fresh, returnHeaders: true }).catch(() => null);
   const user = result?.response?.user;
-  if (!result || !user) return redirectTo(login);
+  if (!result || !user) return redirectTo(unavailable);
   getDb().update(schema.users).set({ lastActiveAt: new Date(), budgetKeys: keys.budgetKeys }).where(eq(schema.users.id, user.id)).run();
   result.headers.forEach((value, key) => {
     if (key.toLowerCase() === "set-cookie") back.headers.append("set-cookie", value);
