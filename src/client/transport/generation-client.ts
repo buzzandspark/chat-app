@@ -1,5 +1,6 @@
 import { isTerminal, type RelayEvent } from "@relay/events";
 import { createSseParser, parseRelayEvent } from "@relay/sse";
+import { readJson, type ApiError, type StopResponse } from "@shared/api";
 import { uuidv7 } from "@shared/id";
 import { MAX_MESSAGE_CHARS, type ModelId, type ThinkingOptions } from "@shared/types";
 import { createMessageState, type ChatStore, type MessageState } from "../store/chat-store";
@@ -231,7 +232,7 @@ export class GenerationClient {
     try {
       const res = await this.fetchImpl(`/api/generations/${generationId}/stop`, { method: "POST", signal: controller.signal });
       if (!res.ok) return false;
-      return (await safeJson(res)).stopped === true;
+      return (await safeJson<StopResponse>(res)).stopped === true;
     } catch {
       return false;
     } finally {
@@ -300,7 +301,7 @@ export class GenerationClient {
           const finished = await this.consume(res, entry, body.generationId, body.assistantMessageId);
           return finished || controller.signal.aborted ? "done" : "cut";
         }
-        const json = await safeJson(res);
+        const json = await safeJson<ApiError>(res);
         // A turn this replace drops was still running; the server changed nothing, and the next POST stops it first.
         if (json.error === "replace_running" && busy < MAX_BUSY_REPOSTS) {
           const retryAfter = Number(res.headers.get("retry-after"));
@@ -403,7 +404,7 @@ export class GenerationClient {
             waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 0;
             continue;
           }
-          this.failFromResponse(messageId, res, await safeJson(res));
+          this.failFromResponse(messageId, res, await safeJson<ApiError>(res));
           return null;
         }
         this.accept(generationId);
@@ -521,7 +522,7 @@ export class GenerationClient {
     this.store.enqueue(event);
   }
 
-  private failFromResponse(messageId: string, res: Response, body: Record<string, unknown>): void {
+  private failFromResponse(messageId: string, res: Response, body: Partial<ApiError>): void {
     const retryAfterHeader = Number(res.headers.get("retry-after"));
     const retryAfterMs = typeof body.retryAfterMs === "number" ? body.retryAfterMs : Number.isFinite(retryAfterHeader) ? retryAfterHeader * 1000 : undefined;
     const kind =
@@ -565,9 +566,8 @@ export class GenerationClient {
 }
 
 /** The route's 400 for a message over the limit (zod's `too_big` on `text`). */
-function tooLong(body: Record<string, unknown>): boolean {
-  const issues = body.issues;
-  return Array.isArray(issues) && issues.some((i) => (i as { code?: string; path?: unknown[] }).code === "too_big" && (i as { path?: unknown[] }).path?.[0] === "text");
+function tooLong(body: Partial<ApiError>): boolean {
+  return body.issues?.some((i) => i.code === "too_big" && i.path[0] === "text") ?? false;
 }
 
 function anySignal(...signals: AbortSignal[]): AbortSignal {
@@ -581,9 +581,9 @@ function anySignal(...signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-async function safeJson(res: Response): Promise<Record<string, unknown>> {
+async function safeJson<T>(res: Response): Promise<Partial<T>> {
   try {
-    return (await res.json()) as Record<string, unknown>;
+    return await readJson<T>(res);
   } catch {
     return {};
   }

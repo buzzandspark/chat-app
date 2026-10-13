@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@db/schema";
 import type { Db } from "@db/client";
 import { applyMigrations } from "@db/migrator";
-import type { RelayEvent } from "./events";
+import { isTerminal, type RelayEvent } from "./events";
 import type { EventStore } from "./store";
 
 export function createTestDb(): Db {
@@ -23,18 +23,18 @@ export function collectUntilTerminal(store: EventStore, generationId: string, ti
   return new Promise((resolve, reject) => {
     const events: RelayEvent[] = [];
     const timer = setTimeout(() => reject(new Error(`timed out waiting for ${generationId}; got ${events.map((e) => e.type).join(",")}`)), timeoutMs);
-    const unsubscribe = store.subscribe(generationId, -1, (e) => {
-      events.push(e);
-      if (store.get(generationId)?.terminal) {
-        clearTimeout(timer);
-        unsubscribe();
-        resolve(events);
-      }
-    });
-    if (store.get(generationId)?.terminal) {
+    // A finished generation replays inside subscribe(), before `unsubscribe` is assigned.
+    let unsubscribe: (() => void) | null = null;
+    const finish = () => {
       clearTimeout(timer);
+      unsubscribe?.();
       resolve(events);
-    }
+    };
+    unsubscribe = store.subscribe(generationId, -1, (e) => {
+      events.push(e);
+      if (isTerminal(e)) finish();
+    });
+    if (store.get(generationId)?.terminal) finish();
   });
 }
 

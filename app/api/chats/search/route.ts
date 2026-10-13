@@ -2,15 +2,7 @@ import type { NextRequest } from "next/server";
 import { sql } from "drizzle-orm";
 import { getDb } from "@db/client";
 import { errorResponse, requireUser } from "@server/current-user";
-
-export interface SearchHit {
-  chatId: string;
-  title: string;
-  snippet: string | null;
-  /** The first message that matched, which opening the hit scrolls to; null for a title match. */
-  messageId: string | null;
-  updatedAt: number;
-}
+import type { SearchHit, SearchResponse } from "@shared/api";
 
 /** The user's words as an FTS5 query: each token quoted (no operators leak in) and prefix-matched. */
 export function ftsQuery(q: string): string {
@@ -30,7 +22,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireUser();
     const q = (request.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 100);
-    if (q.length < 2) return Response.json({ hits: [] }, { headers: { "cache-control": "no-store" } });
+    if (q.length < 2) return Response.json({ hits: [] } satisfies SearchResponse, { headers: { "cache-control": "no-store" } });
     const db = getDb();
     const match = ftsQuery(q);
     const rows = match
@@ -57,7 +49,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       if (!byChat.has(r.chatId)) byChat.set(r.chatId, { chatId: r.chatId, title: r.title, snippet: null, messageId: null, updatedAt: r.updatedAt });
     }
     const hits = [...byChat.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 20);
-    return Response.json({ hits }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ hits } satisfies SearchResponse, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

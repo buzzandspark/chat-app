@@ -5,6 +5,7 @@ import { BusyError, DrainingError, ForbiddenError } from "@relay/engine";
 import { createForks, ForkError, ForkStartError } from "@relay/forks";
 import { ForkOptionBody } from "@relay/options/schema";
 import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
+import { readJson, type ApiError, type ForkResponse } from "@shared/api";
 import { MAX_FORKS } from "@shared/forks";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { refuseGuestSend, tooMany } from "@server/ratelimit";
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[
     const { engine, store } = getRelay();
     try {
       const forks = createForks({ db: getDb(), engine, store }, { userId: user.id, userRole: user.role, parentId: id, forks: parsed.data.forks });
-      return Response.json({ forks }, { headers: { "cache-control": "no-store" } });
+      return Response.json({ forks } satisfies ForkResponse, { headers: { "cache-control": "no-store" } });
     } catch (err) {
       if (err instanceof ForkError) {
         if (err.code === "not_found") return jsonError(404, { error: "not_found" });
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[
       if (err instanceof ForkStartError) {
         const refused = failure(err.reason);
         if (err.started.length === 0) return refused;
-        return Response.json({ forks: err.started, failed: await refused.json() }, { headers: { "cache-control": "no-store" } });
+        return Response.json({ forks: err.started, failed: await readJson<ApiError>(refused) } satisfies ForkResponse, { headers: { "cache-control": "no-store" } });
       }
       throw err;
     }

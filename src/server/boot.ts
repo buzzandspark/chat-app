@@ -49,6 +49,17 @@ export async function boot(): Promise<void> {
     Sentry.init({
       dsn: env.SENTRY_DSN,
       tracesSampleRate: 0,
+      // Sentry's defaults send request bodies (passwords, messages), cookies (the session), headers and the client IP.
+      dataCollection: {
+        userInfo: false,
+        cookies: false,
+        httpHeaders: false,
+        httpBodies: [],
+        urlQueryParams: false,
+        stackFrameVariables: false,
+        genAI: { inputs: false, outputs: false },
+        databaseQueryData: false,
+      },
       environment: env.NODE_ENV,
       beforeSend: redactInviteTokens,
       beforeSendTransaction: redactInviteTokens,
@@ -67,6 +78,9 @@ const PUBLIC_SECRETS = new Set(["change-me-to-a-long-random-string", DEV_AUTH_SE
 
 function deployProblem(): string | null {
   if (!env.BETTER_AUTH_URL) return "BETTER_AUTH_URL is not set. Set it to the URL users reach the app at";
+  if (!env.ANTHROPIC_API_KEY && !env.replayRequested) {
+    return "ANTHROPIC_API_KEY is not set. Set it, or set REPLAY_MODE=1 to serve recorded replies";
+  }
   if (env.BETTER_AUTH_SECRET && PUBLIC_SECRETS.has(env.BETTER_AUTH_SECRET)) {
     return "BETTER_AUTH_SECRET is a published placeholder. Generate one with openssl rand -base64 32";
   }

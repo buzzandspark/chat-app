@@ -45,8 +45,9 @@ export const env = {
   ...parsed,
   isProd: parsed.NODE_ENV === "production",
   isDev: parsed.NODE_ENV === "development",
-  /** A missing key or REPLAY_MODE=1 boots the whole app in replay mode. */
+  /** A missing key or REPLAY_MODE=1 boots the whole app in replay mode; production refuses the former. */
   replayMode: flag(parsed.REPLAY_MODE) || !parsed.ANTHROPIC_API_KEY,
+  replayRequested: flag(parsed.REPLAY_MODE),
   record: flag(parsed.RECORD),
   e2e: flag(parsed.E2E),
   /** The e2e harness runs the standalone (production) server with E2E set; nothing else should. */

@@ -4,6 +4,7 @@ import { declareWinner } from "@relay/forks";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { refuseGuestSend } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
+import type { DeclareWinnerResponse } from "@shared/api";
 
 /** The fork wins: it stays, with its history; the main chat and the other forks are deleted. */
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[id]/declare-winner">): Promise<Response> {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[
     if (!winner) return jsonError(404, { error: "not_found" });
     // Its last reply was skipped while it was a fork: read it now, so the winner can be forked at once.
     const lastMessageId = options.detectLastReply(winner.id, user.id);
-    return Response.json({ ...winner, lastMessageId }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ ...winner, lastMessageId } satisfies DeclareWinnerResponse, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

@@ -1,6 +1,7 @@
 "use client";
 import { SCENARIO_NAMES, SCENARIOS, type ScenarioName } from "@relay/scenario-catalog";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
+import { readJson, type SeedLongChatResponse } from "@shared/api";
 import type { ModalRender } from "../ui/modal-manager";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
@@ -69,7 +70,7 @@ export function openScenarioPanel(show: (render: ModalRender) => () => void, sen
   const seedLongChat = async () => {
     const res = await fetch("/api/scenarios/seed-long-chat", { method: "POST" });
     if (!res.ok) return;
-    const body = (await res.json()) as { chatId: string };
+    const body = await readJson<SeedLongChatResponse>(res);
     push(`/c/${body.chatId}`);
   };
   show(({ open, close }) => (

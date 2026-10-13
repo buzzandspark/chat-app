@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { useLiveUsage, type CapUsage } from "@client/store/usage";
+import { useLiveUsage } from "@client/store/usage";
+import type { CapUsage } from "@shared/api";
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 

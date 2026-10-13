@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
+import type { StopResponse } from "@shared/api";
 
 /** Stop is explicit: aborts upstream and appends `stopped`. */
 export async function POST(_request: NextRequest, ctx: RouteContext<"/api/generations/[id]/stop">): Promise<Response> {
@@ -12,7 +13,7 @@ export async function POST(_request: NextRequest, ctx: RouteContext<"/api/genera
     if (owner === null) return jsonError(404, { error: "not_found" });
     if (owner !== user.id) return jsonError(403, { error: "forbidden" });
     const stopped = engine.stop(id);
-    return Response.json({ stopped }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ stopped } satisfies StopResponse, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

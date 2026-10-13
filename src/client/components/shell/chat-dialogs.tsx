@@ -8,6 +8,7 @@ import { useNewChat } from "@client/hooks/use-new-chat";
 import { useChatStore } from "@client/store/hooks";
 import { getSidebarStore, setPendingChat, type ChatSummary } from "@client/store/sidebar-store";
 import { watchOptions } from "@client/store/forks";
+import { readJson, type DeclareWinnerResponse, type DeleteForksResponse } from "@shared/api";
 import { forkTabs } from "../chat/fork-tabs";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
 
@@ -174,7 +175,7 @@ export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }:
         setError(res.status === 404 ? "This chat is no longer a fork." : `Could not declare the winner (${res.status}).`);
         return;
       }
-      const winner = (await res.json()) as { id: string; deleted: string[]; lastMessageId: string | null };
+      const winner = await readJson<DeclareWinnerResponse>(res);
       const sidebar = getSidebarStore();
       for (const id of winner.deleted) {
         sidebar.remove(id);
@@ -244,7 +245,7 @@ export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: D
         setError(res.status === 404 ? "This chat no longer exists." : `Could not delete the forks (${res.status}).`);
         return;
       }
-      const { deleted } = (await res.json()) as { deleted: string[] };
+      const { deleted } = await readJson<DeleteForksResponse>(res);
       const sidebar = getSidebarStore();
       for (const id of deleted) {
         sidebar.remove(id);
@@ -309,7 +310,7 @@ export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: Dia
         setError(`Could not delete the chats (${res.status}).`);
         return;
       }
-      const deleted = res.ok ? ((await res.json()) as { deleted: string[] }).deleted : [chat.id];
+      const deleted = res.ok ? (await readJson<DeleteForksResponse>(res)).deleted : [chat.id];
       const sidebar = getSidebarStore();
       for (const id of deleted) {
         sidebar.remove(id);

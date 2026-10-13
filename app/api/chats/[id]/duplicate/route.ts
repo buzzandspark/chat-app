@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb } from "@db/client";
 import { duplicateChat, ForkError } from "@relay/forks";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import type { DuplicateResponse } from "@shared/api";
 
 const Body = z.object({ chatId: z.string().uuid(), messageId: z.string().uuid() });
 
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[
     if (!parsed.success) return jsonError(400, { error: "bad_request" });
     try {
       const duplicate = duplicateChat(getDb(), { userId: user.id, chatId: id, messageId: parsed.data.messageId, newChatId: parsed.data.chatId });
-      return Response.json(duplicate, { status: 201, headers: { "cache-control": "no-store" } });
+      return Response.json(duplicate satisfies DuplicateResponse, { status: 201, headers: { "cache-control": "no-store" } });
     } catch (err) {
       if (err instanceof ForkError) return err.code === "not_found" ? jsonError(404, { error: "not_found" }) : jsonError(409, { error: err.code });
       throw err;

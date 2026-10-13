@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { issueInvite } from "@auth/invites";
 import { getDb, schema } from "@db/client";
+import type { AdminUsersResponse, CreateUserResponse } from "@shared/api";
 import { uuidv7 } from "@shared/id";
 import { env } from "@shared/env";
 import { newUserCap } from "@shared/cost-cap";
@@ -20,7 +21,7 @@ const Body = z.object({
 export async function GET(): Promise<Response> {
   try {
     await requireAdmin();
-    return Response.json({ users: listUsersForAdmin() }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ users: listUsersForAdmin() } satisfies AdminUsersResponse, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     const invite = issueInvite(id);
     const base = env.BETTER_AUTH_URL ?? new URL(request.url).origin;
     return Response.json(
-      { id, inviteUrl: `${base}/invite/${invite.token}`, expiresAt: invite.expiresAt.getTime() },
+      { id, inviteUrl: `${base}/invite/${invite.token}`, expiresAt: invite.expiresAt.getTime() } satisfies CreateUserResponse,
       { status: 201, headers: { "cache-control": "no-store" } },
     );
   } catch (err) {

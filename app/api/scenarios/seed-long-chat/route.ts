@@ -1,4 +1,5 @@
 import { getDb, schema } from "@db/client";
+import type { SeedLongChatResponse } from "@shared/api";
 import { uuidv7 } from "@shared/id";
 import { GUEST_MODEL } from "@shared/models";
 import { errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
@@ -58,7 +59,7 @@ export async function POST(): Promise<Response> {
           .run();
       }
     });
-    return Response.json({ chatId, messages: turns * 2 }, { status: 201, headers: { "cache-control": "no-store" } });
+    return Response.json({ chatId, messages: turns * 2 } satisfies SeedLongChatResponse, { status: 201, headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

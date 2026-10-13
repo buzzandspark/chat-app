@@ -4,6 +4,14 @@ import { ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, s
 // Regression: send in a new chat, click New chat, send again; the second thread went blank and the
 // URL stayed /c/new while the reply streamed out of view.
 test.describe("new chat", () => {
+  test("the first reply in a new chat is announced to screen readers", async ({ page }, info) => {
+    // From /c: the first send gives the chat its id in the address.
+    await page.goto("/c");
+    await waitForComposer(page);
+    await sendText(page, `announced chat ${info.project.name}`);
+    await expect(page.locator('[aria-live="polite"].sr-only', { hasText: "Reply finished." })).toHaveCount(1, { timeout: 30_000 });
+  });
+
   test("a second New chat in the same session gets its own thread and URL", async ({ page }, info) => {
     // Titles are unique per project: the projects share one database within a run.
     const first = `first chat ${info.project.name}`;

@@ -112,7 +112,8 @@ export function getSidebarStore(): SidebarStore {
 export function useSidebarChats(initial?: ChatSummary[]): ChatSummary[] {
   const store = getSidebarStore();
   const [seededWith, setSeededWith] = useState<ChatSummary[] | null>(null);
-  if (initial && seededWith !== initial) {
+  // On the server the singleton is shared by every request, so only the snapshot below may carry the rows.
+  if (initial && seededWith !== initial && typeof window !== "undefined") {
     store.hydrate(initial);
     setSeededWith(initial);
   }

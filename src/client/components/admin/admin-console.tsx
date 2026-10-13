@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useNow } from "@client/hooks/use-now";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { readJson, type AdminUsersResponse, type ApiError, type CreateUserResponse, type InviteResponse } from "@shared/api";
 import { NO_CAP, parseCapText } from "@shared/cost-cap";
 import type { AdminUserRow } from "@server/admin";
 
@@ -31,7 +32,7 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
   const refresh = async () => {
     try {
       const res = await fetch("/api/admin/users");
-      if (res.ok) setUsers(((await res.json()) as { users: AdminUserRow[] }).users);
+      if (res.ok) setUsers((await readJson<AdminUsersResponse>(res)).users);
     } catch {
       // Offline: keep the list we have; the next action refreshes it.
     }
@@ -49,14 +50,14 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
     setBusy(true);
     setNotice(null);
     let res: Response;
-    let body: { inviteUrl?: string; error?: string };
+    let body: Partial<CreateUserResponse & ApiError>;
     try {
       res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, costCapUsd: parsed.cap }),
       });
-      body = (await res.json().catch(() => ({}))) as { inviteUrl?: string; error?: string };
+      body = await readJson<CreateUserResponse & ApiError>(res).catch(() => ({}));
     } catch {
       setNotice("Create failed: you seem to be offline.");
       return;
@@ -88,7 +89,7 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
     }
     if (!res.ok) setNotice(`${label} failed (${res.status}).`);
     else {
-      const body = (await res.json().catch(() => ({}))) as { inviteUrl?: string };
+      const body: Partial<InviteResponse> = await readJson<InviteResponse>(res).catch(() => ({}));
       if (body.inviteUrl) setInviteUrl(body.inviteUrl);
     }
     await refresh();

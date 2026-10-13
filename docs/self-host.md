@@ -17,6 +17,7 @@ In production the server refuses to start, and exits with code 1, when:
 
 - `BETTER_AUTH_SECRET` is unset or is the `.env.example` placeholder. Generate one with `openssl rand -base64 32`.
 - `BETTER_AUTH_URL` is unset. Set it to the URL users reach the app at.
+- `ANTHROPIC_API_KEY` is unset and `REPLAY_MODE` is not `1`. Replay mode serves recorded replies, so a deployment asks for it explicitly.
 - `ADMIN_PASSWORD` is `change-me` or shorter than 10 characters.
 - any other variable is invalid, or boot fails, for example on a migration.
 
@@ -28,13 +29,13 @@ The server runs as the unprivileged `node` user (uid 1000). The container starts
 
 ## Railway
 
-`railway.json` points at the Dockerfile and `/api/health`, with 30 s of draining and up to 5 restarts on failure; confirm them in the service's settings. Add a volume mounted at `/data`, generate a domain, and set the environment variables from `.env.example`:
+Railway builds the Dockerfile. New Railway services don't read `railway.json`, so set its values in the service's settings: health check path `/api/health`, 30 s of draining, and restart on failure up to 5 times. Add a volume mounted at `/data`, generate a domain, and set the environment variables from `.env.example`:
 
 - `BETTER_AUTH_URL`: the generated domain, `https://<name>.up.railway.app`.
 - `TRUSTED_IP_HEADER=x-real-ip`: Railway's edge sets it to the client's address.
 - not `DATABASE_PATH`: the image already points it at `/data/app.db`.
 
-Run one replica: the app is one process with SQLite. Railway mounts volumes owned by root; the entrypoint hands `/data` to `node` at boot, so you don't need `RAILWAY_RUN_UID=0`.
+The database is the only copy of every chat; see [Backups](#backups). Run one replica: the app is one process with SQLite. Railway mounts volumes owned by root; the entrypoint hands `/data` to `node` at boot, so you don't need `RAILWAY_RUN_UID=0`.
 
 After the first deploy, check that a client can't choose its own address. Make a guest with forged headers:
 
@@ -53,6 +54,17 @@ node -e "const { DatabaseSync } = require('node:sqlite'); const db = new Databas
 ```
 
 Both must show your own address, not `203.0.113.7`. If they show the forged one, unset `TRUSTED_IP_HEADER`, so the address comes from `X-Forwarded-For`, `TRUST_PROXY_HOPS` entries from the right (default 1), and run the check again.
+
+## Backups
+
+Copying `app.db` while the server runs can miss recent writes, which sit in `app.db-wal` until a checkpoint. Use SQLite's online backup instead, then copy the file off the host:
+
+```sh
+docker exec -u node <container> node -e "const s = require('node:sqlite'); s.backup(new s.DatabaseSync('/data/app.db'), '/data/backup.db').then(() => console.log('ok'))"
+docker cp <container>:/data/backup.db ./app-$(date +%F).db
+```
+
+On Railway, volume backups (the volume's Backups tab) need the Pro plan, and wiping the volume deletes them. The `node -e` command also runs in `railway ssh`; keep the copy somewhere other than the volume.
 
 ## Environment variables
 

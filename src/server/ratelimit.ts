@@ -1,6 +1,7 @@
 import "server-only";
 import { isIP } from "node:net";
 import { RateLimiter } from "@relay/ratelimit";
+import type { ApiError } from "@shared/api";
 import { env } from "@shared/env";
 import { forwardedAddress, trustedIpHeader, trustProxyHops } from "./client-address";
 
@@ -108,7 +109,7 @@ function refuse(perGuest: RateLimiter, perIp: RateLimiter, request: Request, use
 export function tooMany(retryAfterMs: number): Response {
   const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
   return Response.json(
-    { error: "rate_limited", retryAfterMs },
+    { error: "rate_limited", retryAfterMs } satisfies ApiError,
     { status: 429, headers: { "retry-after": String(seconds), "cache-control": "no-store" } },
   );
 }

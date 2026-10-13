@@ -1,10 +1,6 @@
 "use client";
 import { useSyncExternalStore } from "react";
-
-export interface CapUsage {
-  spentUsd: number;
-  capUsd: number | null;
-}
+import { readJson, type CapUsage } from "@shared/api";
 
 // The spend counter as the client last read it; `seq` orders it against the server-rendered figures.
 let snapshot: { seq: number; usage: CapUsage | null } = { seq: 0, usage: null };
@@ -13,7 +9,7 @@ const listeners = new Set<() => void>();
 /** A reply's cost is settled by the time its end reaches the page. */
 export function refreshUsage(): void {
   fetch("/api/usage")
-    .then((res) => (res.ok ? (res.json() as Promise<CapUsage>) : null))
+    .then((res) => (res.ok ? readJson<CapUsage>(res) : null))
     .then((usage) => {
       if (!usage) return;
       snapshot = { seq: snapshot.seq + 1, usage };
