@@ -114,23 +114,6 @@ test.describe("explore options", () => {
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("Assess performance");
   });
 
-  test("tabs reorder by dragging and the order survives a reload", async ({ page, isMobile }) => {
-    test.skip(isMobile, "reordering is a mouse or pen gesture; on touch the strip pans");
-    await replyWithOptions(page);
-    await forkAll(page);
-    await expect(tabs(page)).toHaveCount(4, { timeout: 15_000 });
-    const third = (await tabs(page).nth(3).boundingBox())!;
-    const first = (await tabs(page).nth(1).boundingBox())!;
-    await page.mouse.move(third.x + third.width / 2, third.y + third.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2, { steps: 12 });
-    await page.mouse.up();
-    const reordered = ["Main chat", "Embedded then managed", "Keep SQLite", "Move to Postgres"];
-    await expect(tabs(page)).toHaveText(reordered);
-    await page.reload();
-    await expect(tabs(page)).toHaveText(reordered, { timeout: 15_000 });
-  });
-
   test("tabs close and reopen from the sidebar, cycle with Ctrl+Shift+brackets, and a right-click menu deletes or declares a winner", async ({ page, isMobile }) => {
     test.skip(isMobile, "keyboard and right-click are desktop gestures");
     await replyWithOptions(page);

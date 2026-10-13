@@ -7,7 +7,7 @@ import { uuidv7 } from "@shared/id";
 import type { HistoryMessage } from "./anthropic/history";
 import { buildRequest } from "./anthropic/request";
 import { BusyError, Engine, type StartInput } from "./engine";
-import { createForks, declareWinner, deleteForks, duplicateChat, ForkError, setForkOrder, type ForkRequest } from "./forks";
+import { createForks, declareWinner, deleteForks, duplicateChat, ForkError, type ForkRequest } from "./forks";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { scenarioScript, type ScenarioName } from "./scenarios";
@@ -238,16 +238,6 @@ describe("createForks", () => {
     expect(db.select().from(messages).where(eq(messages.chatId, parentId)).all()).toHaveLength(0);
   });
 
-  it("setForkOrder stores the given order and keeps unnamed forks after it", async () => {
-    const parentId = await parentChat();
-    const forks = [fork("A"), fork("B"), fork("C")];
-    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
-    await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
-    expect(setForkOrder(db, USER, parentId, [forks[2]!.chatId, forks[0]!.chatId, uuidv7()])).toBe(true);
-    const order = db.select({ id: chats.id, forkOrder: chats.forkOrder }).from(chats).where(eq(chats.forkedFrom, parentId)).orderBy(asc(chats.forkOrder)).all();
-    expect(order.map((o) => o.id)).toEqual([forks[2]!.chatId, forks[0]!.chatId, forks[1]!.chatId]);
-    expect(setForkOrder(db, "nobody", parentId, [])).toBe(false);
-  });
 });
 
 describe("duplicateChat", () => {

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatStoreProvider } from "@client/store/context";
 import { ModalProvider, useModals } from "../ui/modal-manager";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
-import { ForkTabs, forkTabs, moveBefore } from "./fork-tabs";
+import { ForkTabs, forkTabs } from "./fork-tabs";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, prefetch: vi.fn() }) }));
@@ -54,24 +54,15 @@ describe("forkTabs", () => {
     expect(forkTabs(chats, "other")).toBeNull();
     expect(forkTabs([...chats.slice(0, 1), { ...chats[1]!, tabHidden: true }, chats[2]!], "p")!.tabs[2]!.hidden).toBe(true);
   });
-
-  it("moveBefore puts the dragged tab where the target was", () => {
-    expect(moveBefore(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
-    expect(moveBefore(["a", "b", "c"], "a", "c")).toEqual(["b", "c", "a"]);
-    expect(moveBefore(["a", "b", "c"], "x", "c")).toEqual(["a", "b", "c"]);
-  });
 });
 
 describe("ForkTabs", () => {
-  it("marks the open chat and navigates on a click, as the pointer sequence delivers it", () => {
+  it("marks the open chat and navigates on a click", () => {
     getSidebarStore().hydrate(chats);
     renderTabs("f1");
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((t) => t.textContent)).toEqual(["Main chat", "SQLite", "Postgres"]);
     expect(tabs[1]).toHaveAttribute("aria-selected", "true");
-    // A fork tab is draggable; a plain press must still be a click, with no pointer capture taken.
-    fireEvent.pointerDown(tabs[2]!, { button: 0, pointerType: "mouse", clientX: 10 });
-    fireEvent.pointerUp(tabs[2]!, { pointerType: "mouse", clientX: 10 });
     fireEvent.click(tabs[2]!);
     expect(push).toHaveBeenCalledWith("/c/f2");
     fireEvent.click(tabs[0]!);

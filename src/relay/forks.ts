@@ -223,24 +223,6 @@ function upstreamBegun(store: EventStore, generationId: string, ms: number): Pro
   });
 }
 
-/** Reorders a parent's forks; ids outside the parent are ignored, forks left out keep their place after the named ones. */
-export function setForkOrder(db: Db, userId: string, parentId: string, ids: string[]): boolean {
-  const owned = db.select({ id: chats.id }).from(chats).where(and(eq(chats.id, parentId), eq(chats.userId, userId))).get();
-  if (!owned) return false;
-  const forks = db
-    .select({ id: chats.id, forkOrder: chats.forkOrder })
-    .from(chats)
-    .where(eq(chats.forkedFrom, parentId))
-    .orderBy(asc(chats.forkOrder))
-    .all();
-  const known = new Set(forks.map((f) => f.id));
-  const ordered = [...ids.filter((id) => known.has(id)), ...forks.map((f) => f.id).filter((id) => !ids.includes(id))];
-  db.transaction((tx) => {
-    ordered.forEach((id, index) => tx.update(chats).set({ forkOrder: index }).where(eq(chats.id, id)).run());
-  });
-  return true;
-}
-
 export interface Winner {
   id: string;
   deleted: string[];

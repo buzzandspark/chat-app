@@ -1,7 +1,7 @@
 "use client";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@client/store/hooks";
 import { prefetchChat } from "@client/store/prefetch";
@@ -32,34 +32,17 @@ export function forkTabs(chats: readonly ChatSummary[], chatId: string): { paren
   };
 }
 
-/** `id` takes `target`'s place; everything between shifts one step. */
-export function moveBefore(ids: readonly string[], id: string, target: string): string[] {
-  const from = ids.indexOf(id);
-  const to = ids.indexOf(target);
-  if (from === -1 || to === -1 || from === to) return [...ids];
-  const out = ids.filter((x) => x !== id);
-  out.splice(to, 0, id);
-  return out;
-}
-
-const DRAG_PX = 6;
 // The open tab scrolls into view, clear of the fade at the strip's end, so its × can be reached.
 const scrollOpenTabIntoView = (slot: HTMLDivElement | null) => slot?.scrollIntoView({ block: "nearest", inline: "nearest" });
 
-/**
- * The main chat and its forks as tabs. A closed tab stays closed until the chat is opened again from the sidebar;
- * forks reorder by dragging with a mouse or pen.
- */
+/** The main chat and its forks as tabs. A closed tab stays closed until the chat is opened again from the sidebar. */
 export function ForkTabs({ chatId }: { chatId: string }) {
   const chats = useSidebarChats();
   const model = forkTabs(chats, chatId);
   const router = useRouter();
   const store = useChatStore();
   const { openCount } = useModals();
-  const [dragging, setDragging] = useState<{ id: string; ids: string[] } | null>(null);
   const [menu, setMenu] = useState<{ tab: ForkTab; x: number; y: number; Menu: typeof ForkTabMenu } | null>(null);
-  const drag = useRef<{ id: string; startX: number; moved: boolean } | null>(null);
-  const suppressClick = useRef(false);
   const stripRef = useRef<HTMLDivElement>(null);
 
   const warm = useCallback(
@@ -126,14 +109,7 @@ export function ForkTabs({ chatId }: { chatId: string }) {
   };
 
   if (!model || !shown) return null;
-  const forkIds = dragging?.ids ?? model.tabs.slice(1).map((t) => t.id);
-  const tabs = [model.tabs[0]!, ...forkIds.map((id) => model.tabs.find((t) => t.id === id)!)].filter((t) => !t.hidden || t.id === chatId);
 
-  const persist = (ids: string[]) => {
-    const sidebar = getSidebarStore();
-    ids.forEach((id, i) => sidebar.patch(id, { forkOrder: i }));
-    void fetch(`/api/chats/${model.parentId}/fork-order`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }) }).catch(() => {});
-  };
   const dismiss = (tab: ForkTab) => {
     if (tab.id === chatId) {
       closing.current = chatId;
@@ -142,29 +118,6 @@ export function ForkTabs({ chatId }: { chatId: string }) {
       if (next) open(next);
     }
     void setTabHidden(getSidebarStore(), tab.id, true);
-  };
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>, id: string) => {
-    if (e.button !== 0 || e.pointerType === "touch" || (e.target as HTMLElement).closest("[data-tab-close]")) return;
-    drag.current = { id, startX: e.clientX, moved: false };
-  };
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d) return;
-    if (!d.moved && Math.abs(e.clientX - d.startX) < DRAG_PX) return;
-    // Capture only once this is a drag: a captured pointer sends the click to the wrapper, not the tab.
-    if (!d.moved) e.currentTarget.setPointerCapture(e.pointerId);
-    d.moved = true;
-    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-fork-tab]")?.dataset.forkTab;
-    const ids = over && over !== d.id && forkIds.includes(over) ? moveBefore(forkIds, d.id, over) : forkIds;
-    setDragging({ id: d.id, ids });
-  };
-  const onPointerUp = () => {
-    const d = drag.current;
-    drag.current = null;
-    if (!d?.moved) return;
-    suppressClick.current = true;
-    if (dragging) persist(dragging.ids);
-    setDragging(null);
   };
 
   return (
@@ -180,40 +133,29 @@ export function ForkTabs({ chatId }: { chatId: string }) {
           className="flex scroll-pr-6 gap-1 overflow-x-auto pr-6 pl-3 [mask-image:linear-gradient(to_right,#000_calc(100%-1.5rem),transparent)] [touch-action:pan-x] dock:px-2 dock:pt-1.5"
           data-testid="fork-tabs"
         >
-          {tabs.map((tab) => {
+          {visible.map((tab) => {
             const active = tab.id === chatId;
-            const isMain = tab.id === model.parentId;
             return (
               <div
                 key={tab.id}
                 ref={active ? scrollOpenTabIntoView : undefined}
                 data-tab-slot
-                data-fork-tab={isMain ? undefined : tab.id}
                 className={cn(
                   "group/tab flex h-9 max-w-56 shrink-0 items-center rounded-t-lg border border-b-0 pr-1 select-none",
                   // The open tab joins what it sits on: the input (phone) or the thread below the strip (docked).
                   active
                     ? "border-input bg-card group-has-[textarea:focus]/chat:border-ring dock:border-border dock:bg-background dock:group-has-[textarea:focus]/chat:border-border"
                     : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10",
-                  dragging?.id === tab.id && "opacity-60",
                 )}
                 onPointerEnter={() => warm(tab.id)}
-                onPointerDown={isMain ? undefined : (e) => onPointerDown(e, tab.id)}
-                onPointerMove={isMain ? undefined : onPointerMove}
-                onPointerUp={isMain ? undefined : onPointerUp}
-                onPointerCancel={isMain ? undefined : onPointerUp}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   const at = { tab, x: e.clientX, y: e.clientY };
                   loadTabMenu().then((Menu) => setMenu({ ...at, Menu }), () => {});
                 }}
-                // On the wrapper: a drag's pointer capture delivers the click here, and a keyboard press on the tab bubbles up.
+                // On the wrapper, so a keyboard press on the tab bubbles up.
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest("[data-tab-close]")) return;
-                  if (suppressClick.current) {
-                    suppressClick.current = false;
-                    return;
-                  }
                   if (!active) return open(tab.id);
                   if (performance.now() - menuClosedAt.current < 300) return;
                   // The open tab's menu drops from the docked strip and rises from the phone's tabs on the input.
