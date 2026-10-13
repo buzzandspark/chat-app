@@ -13,7 +13,7 @@ export function ThreadSkeleton() {
 export function NewChatPrompt() {
   return (
     <div className="flex flex-1 items-center justify-center py-16 text-center text-small text-muted-foreground">
-      Ask anything. Replies keep streaming even if you switch apps.
+      Ask anything.
     </div>
   );
 }
