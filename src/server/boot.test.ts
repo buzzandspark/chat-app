@@ -32,6 +32,8 @@ async function bootWith(vars: Record<string, string | undefined>): Promise<void>
   vi.stubEnv("SENTRY_DSN", "");
   vi.stubEnv("E2E", "");
   vi.stubEnv("E2E_ALLOW_PRODUCTION", "");
+  vi.stubEnv("TRUSTED_IP_HEADER", undefined);
+  vi.stubEnv("TRUST_PROXY_HOPS", undefined);
   for (const [k, v] of Object.entries(vars)) vi.stubEnv(k, v);
   vi.resetModules();
   const { boot } = await import("./boot");
@@ -144,6 +146,18 @@ describe("boot: a deployment's configuration", () => {
         dataCollection: expect.objectContaining({ userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false }),
       }),
     );
+  });
+
+  it("warns when nothing says which proxy sets the client address", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await bootWith({ NODE_ENV: "production", TRUST_PROXY_HOPS: "" });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("TRUST_PROXY_HOPS"));
+    for (const vars of [{ TRUST_PROXY_HOPS: "1" }, { TRUSTED_IP_HEADER: "x-real-ip" }, { NODE_ENV: "development" }]) {
+      warn.mockClear();
+      delete g.__chatBooted;
+      await bootWith({ NODE_ENV: "production", ...vars });
+      expect(warn).not.toHaveBeenCalled();
+    }
   });
 
   it("leaves development and the e2e harness alone", async () => {

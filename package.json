@@ -20,7 +20,7 @@
     "db:seed": "tsx --conditions=react-server src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "docker:build": "docker build -t chat:local .",
-    "docker:run": "docker run --rm -p 3000:3000 -v chat-data:/data --env-file .env chat:local",
+    "docker:run": "docker run --rm -p 127.0.0.1:3000:3000 -v chat-data:/data --env-file .env chat:local",
     "fixtures": "tsx scripts/make-fixtures.ts",
     "screenshots": "node scripts/dev-lock-guard.mjs screenshots && tsx scripts/screenshots.ts",
     "test:shutdown": "node scripts/dev-lock-guard.mjs test:shutdown && sh scripts/shutdown-test.sh",

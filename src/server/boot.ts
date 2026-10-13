@@ -35,6 +35,12 @@ export async function boot(): Promise<void> {
     console.error(`[boot] ${misconfigured}; refusing to start.`);
     process.exit(1);
   }
+  if (env.isProd && !env.e2e && env.TRUSTED_IP_HEADER === undefined && env.TRUST_PROXY_HOPS === undefined) {
+    // Reached without a proxy, a client writes its own X-Forwarded-For and so picks its address for every limit.
+    console.warn(
+      "[boot] Neither TRUSTED_IP_HEADER nor TRUST_PROXY_HOPS is set, so the client address is the last X-Forwarded-For entry. Run behind a reverse proxy that sets it and set TRUST_PROXY_HOPS=1 (docs/self-host.md).",
+    );
+  }
   runMigrations(env.DATABASE_PATH);
   if (!env.isProd || env.e2e) seedDevUser(env.DEV_USER_ID);
   await seedAdmin(env.ADMIN_EMAIL, env.ADMIN_PASSWORD);

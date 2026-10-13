@@ -8,8 +8,10 @@ For local development see the README.
 
 ```sh
 docker build -t chat:local .                                                # pnpm docker:build
-docker run --rm -p 3000:3000 -v chat-data:/data --env-file .env chat:local  # pnpm docker:run
+docker run --rm -p 127.0.0.1:3000:3000 -v chat-data:/data --env-file .env chat:local  # pnpm docker:run
 ```
+
+Serve it to users through a reverse proxy on the same host, such as Caddy (`reverse_proxy 127.0.0.1:3000`) or nginx (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`), and set `TRUST_PROXY_HOPS=1`. The proxy is required, not just for TLS: rate limits, guest budgets and the sign-in limiter key on the client address, which is the `X-Forwarded-For` entry the proxy adds. Reached directly, the app sees whatever `X-Forwarded-For` the client sent, so a client picks its own address for every limit. That is why the port is published on `127.0.0.1` only; keep it that way.
 
 `NEXT_PUBLIC_*` values are baked in at build time, so pass them as build args (`docker build --build-arg NEXT_PUBLIC_SENTRY_DSN=… -t chat:local .`); `--env-file` doesn't reach them.
 
@@ -24,6 +26,8 @@ In production the server refuses to start, and exits with code 1, when:
 - `ANTHROPIC_API_KEY` is unset and `REPLAY_MODE` is not `1`. Replay mode serves recorded replies, so a deployment asks for it explicitly.
 - `ADMIN_PASSWORD` is `change-me` or shorter than 10 characters.
 - any other variable is invalid, or boot fails, for example on a migration.
+
+It starts but logs a warning when neither `TRUSTED_IP_HEADER` nor `TRUST_PROXY_HOPS` is set.
 
 `ADMIN_PASSWORD` applies only when the admin account is created, so replace the placeholder before first boot.
 
@@ -76,7 +80,7 @@ On Railway, volume backups (the volume's Backups tab) need the Pro plan, and wip
 
 See `.env.example`. `ADMIN_PATH_SLUG` chooses where the admin console lives; non-admins get a 404 there.
 
-The client address keys rate limits and guest budgets. With `TRUSTED_IP_HEADER` set, it is that header's single address. Otherwise it is the `X-Forwarded-For` entry `TRUST_PROXY_HOPS` from the right, where `TRUST_PROXY_HOPS` (default 1 in production) is how many proxies sit in front of the app. The proxy passes the same address to better-auth's sessions and sign-in limiter. An IPv6 client is keyed by its /64. A request without a readable address shares one `unknown` key with every other such request rather than going unlimited.
+The client address keys rate limits and guest budgets. With `TRUSTED_IP_HEADER` set, it is that header's single address. Otherwise it is the `X-Forwarded-For` entry `TRUST_PROXY_HOPS` from the right, where `TRUST_PROXY_HOPS` (default 1 in production) is how many proxies sit in front of the app. Production needs at least one: with `TRUST_PROXY_HOPS=0` every client shares one key. The proxy passes the same address to better-auth's sessions and sign-in limiter. An IPv6 client is keyed by its /64. A request without a readable address shares one `unknown` key with every other such request rather than going unlimited.
 
 ## Cost caps
 
