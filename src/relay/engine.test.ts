@@ -689,6 +689,23 @@ describe("Engine: guest prompts", () => {
     expect(() => engine.start(guestInput("hello"))).toThrow(BudgetExceededError);
   });
 
+  it("keeps nothing of a guest send refused as too long, while its buffer still serves the refusal", async () => {
+    counted = 100;
+    const first = guestInput("hello");
+    engine.start(first);
+    expect((await collectUntilTerminal(store, first.generationId)).at(-1)).toMatchObject({ type: "done" });
+    const kept = { messages: db.select().from(messages).all(), generations: db.select().from(generations).all() };
+    counted = 60_001;
+    const refused = input({ userId: "g1", userRole: "guest", model: "claude-haiku-5-5", chatId: first.chatId, text: "A long conversation in plain words. ".repeat(6_000) });
+    engine.start(refused);
+    expect((await collectUntilTerminal(store, refused.generationId)).at(-1)).toMatchObject({ type: "error", error: { kind: "context_full" } });
+    expect({ messages: db.select().from(messages).all(), generations: db.select().from(generations).all() }).toEqual(kept);
+    expect(db.select().from(usageEvents).where(eq(usageEvents.generationId, refused.generationId)).all()).toEqual([]);
+    expect(engine.owner(refused.generationId)).toBe("g1");
+    expect(engine.resume(refused.generationId, "g1")).toEqual({ kind: "live" });
+    expect(() => engine.resume(refused.generationId, USER)).toThrow(ForbiddenError);
+  });
+
   it("stops a guest reply whose message_start bills a prompt over the limit, charging what it billed", async () => {
     quota = new QuotaManager(db, { maxPromptTokens: 500, budgets: new Budgets(db, { ip: 1, ip48: 3, all: 10 }, () => 0) });
     engine = new Engine({ db, store, quota, providers: () => ({ name: "anthropic", stream: (req, opts) => new ScriptedProvider(scenarioScript("normal", req), 0).stream(req, opts), countTokens: async () => 100 }) });
@@ -714,6 +731,8 @@ describe("Engine: guest prompts", () => {
     count = (signal) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
     expect(await send("x".repeat(60_000))).toMatchObject(retry);
     expect(streamed).toHaveLength(1);
+    // A retry replaces from the refused reply, so its rows stay.
+    expect(db.select().from(generations).all().map((g) => g.status)).toEqual(["done", "error", "error"]);
     quiet.mockRestore();
   });
 });

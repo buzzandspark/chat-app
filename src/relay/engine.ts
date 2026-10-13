@@ -185,6 +185,8 @@ interface Active {
   billable: boolean;
   guest: boolean;
   maxTokens: number;
+  /** The user message this start wrote, which a refused guest send removes again. */
+  insertedUserMessageId: string | null;
   /** Half slots a billable guest run takes: two for a reply, one for a fork. Zero for everyone else. */
   units: number;
   /** False while a guest's fork waits for a slot; `slot` settles once it holds one or is aborted. */
@@ -209,6 +211,8 @@ export class Engine {
   private afterDone: ((info: ReplyDoneInfo) => void) | null;
   private guestRunning: { perGuest: number; total: number };
   private active = new Map<string, Active>();
+  /** Owners of refused guest sends whose rows are gone, while their buffers last. */
+  private discarded = new Map<string, string>();
   private waiting: { active: Active; resolve: () => void }[] = [];
 
   constructor(options: EngineOptions) {
@@ -269,6 +273,7 @@ export class Engine {
 
     const now = new Date(this.now());
     let conflict: ReplaceConflict | null;
+    let insertedUserMessageId: string | null = null;
     try {
       conflict = this.db.transaction((tx): ReplaceConflict | null => {
         const chat = tx.select().from(chats).where(eq(chats.id, input.chatId)).get();
@@ -342,6 +347,7 @@ export class Engine {
               updatedAt: now,
             })
             .run();
+          insertedUserMessageId = input.userMessageId;
         }
         tx.insert(messages)
           .values({
@@ -408,6 +414,7 @@ export class Engine {
       billable,
       guest,
       maxTokens: guest ? GUEST_MAX_TOKENS : MAX_TOKENS,
+      insertedUserMessageId,
       units,
       holding,
       slot: null,
@@ -562,6 +569,8 @@ export class Engine {
   owner(generationId: string): string | null {
     const active = this.active.get(generationId);
     if (active) return active.userId;
+    const discarded = this.discarded.get(generationId);
+    if (discarded !== undefined && this.store.has(generationId)) return discarded;
     const row = this.db
       .select({ userId: generations.userId })
       .from(generations)
@@ -615,6 +624,11 @@ export class Engine {
       };
       if (active.guest && active.billable) {
         const refused = await this.fitGuestPrompt(active, provider, request);
+        // A send refused for good spent nothing, so it keeps nothing either; a retryable one keeps its rows for the retry to replace.
+        if (refused && !refused.retryable) {
+          this.discard(active, refused, timings);
+          return;
+        }
         if (refused) {
           this.finishError(active, refused, timings);
           return;
@@ -859,6 +873,29 @@ export class Engine {
       { content: toContentBlocks(active.acc), status: "error", generationStatus: "error", servingModel, stopReason: null, timings, rows, error },
       { type: "error", error },
     );
+  }
+
+  /** Ends a refused guest send with its error and removes the rows its start wrote; nothing was spent. */
+  private discard(active: Active, error: RelayError, timings: ServerTimings): void {
+    timings.done = this.now();
+    const ids = active.insertedUserMessageId ? [active.messageId, active.insertedUserMessageId] : [active.messageId];
+    try {
+      this.db.transaction((tx) => {
+        tx.delete(generations).where(eq(generations.id, active.id)).run();
+        tx.delete(messages).where(inArray(messages.id, ids)).run();
+      });
+    } catch (err) {
+      console.error(`[engine] discarding ${active.id} failed`, err);
+    }
+    this.quota.release(active.userId, active.id);
+    this.discarded.set(active.id, active.userId);
+    for (const id of this.discarded.keys()) if (!this.store.has(id)) this.discarded.delete(id);
+    try {
+      this.append(active, { type: "error", error });
+    } catch (err) {
+      console.error(`[engine] terminal event failed for ${active.id}`, err);
+    }
+    this.cleanup(active);
   }
 
   /** The terminal event, cost settlement and cleanup happen whatever the database says: a chat deleted mid-stream must not
