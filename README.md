@@ -14,13 +14,13 @@ cp .env.example .env
 In `.env`, set:
 
 - `ANTHROPIC_API_KEY`: your key from console.anthropic.com. Leave it empty to run in replay mode (recorded fixtures, no spend).
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` (8+ chars): the admin account seeded on first boot.
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` (8+ chars; production needs 10+ and refuses `change-me`): the admin account seeded on first boot.
 
 ```sh
 pnpm dev    # http://localhost:3000
 ```
 
-Migrations run at boot; the database is `data/app.db`. A first visit makes you a guest (Haiku only, small cost cap). Sign in with the admin credentials for every model with no cap. Invite other users from the admin console at `/admin`.
+Migrations run at boot; the database is `data/app.db`. A first visit makes you a guest (Haiku only, a small cost cap and shared daily budgets). Sign in with the admin credentials for every model with no cap. Invite other users from the admin console at `/admin`.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ browser ── POST /api/chat ──▶ route ──▶ relay engine ──▶ A
 - **Explore options** (ADR-0006): Haiku detects alternatives in a reply; forks copy the chat and share its prompt cache.
 - **Replay harness**: scripted scenarios and recorded fixtures exercise disconnects, fallbacks, refusals and errors without spending.
 
-Details: `docs/design-doc.md`, `docs/adr/`. Deployment: `docs/self-host.md`.
+Details: `docs/design-doc.md`, `docs/adr/`. Deployment and guest limits: `docs/self-host.md`.
 
 ## Check
 

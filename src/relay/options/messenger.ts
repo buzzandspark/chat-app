@@ -3,6 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 import { MAX_FORKS, MAX_OPTION_PROMPT, MAX_OPTION_TITLE, type ForkOption, type OptionsTrace } from "@shared/forks";
 import type { TokenCounts } from "../anthropic/pricing";
+import { CHARS_PER_TOKEN } from "../quota";
 import { DetectOutput, RewriteOutput } from "./schema";
 
 export const OPTIONS_MODEL = "claude-haiku-5-5";
@@ -42,27 +43,26 @@ const REWRITE_EFFORT: Effort = { thinking: { type: "disabled" }, effort: "low" }
 
 const REWRITE_SYSTEM = `You revise a list of chat prompts under one instruction from the user. Each prompt is the user's next message in a conversation that already contains the reply the prompts explore, so it keeps the user's first-person voice and keeps naming its alternative. Apply the instruction to each prompt on its own, as if it were the only one: a prompt never mentions, compares with or depends on the other prompts unless the instruction explicitly asks for that. Return exactly one item per input item, in the same order. Leave titles as they are unless the instruction is about titles.`;
 
+/** Haiku failed after it started answering; `usage` is the estimated cost so far. */
+export class OptionsCallError extends Error {
+  constructor(
+    public usage: TokenCounts,
+    options: ErrorOptions,
+  ) {
+    super("options_call_failed", options);
+    this.name = "OptionsCallError";
+  }
+}
+
 export class LiveOptionsMessenger implements OptionsMessenger {
   readonly name = "haiku" as const;
-  constructor(private client: Anthropic = new Anthropic({ maxRetries: 2, timeout: 60_000 })) {}
+  constructor(private client: Anthropic = new Anthropic({ maxRetries: 1, timeout: 60_000 })) {}
 
   /** Streamed: the count and each completed option are reported as they arrive. */
   async detect(reply: string, onProgress?: (progress: DetectProgress) => void): Promise<MessengerResult> {
-    const content = `<reply>\n${reply}\n</reply>`;
-    const started = performance.now();
-    const stream = this.client.messages.stream({
-      model: OPTIONS_MODEL,
-      max_tokens: 8192,
-      system: DETECT_SYSTEM,
-      messages: [{ role: "user", content }],
-      thinking: DETECT_EFFORT.thinking,
-      output_config: { effort: DETECT_EFFORT.effort, format: zodOutputFormat(DetectOutput) },
-    });
-    let text = "";
     let count: number | null = null;
     let seen = 0;
-    stream.on("text", (delta) => {
-      text += delta;
+    const { parsed, usage, trace } = await this.call(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`, DetectOutput, DETECT_EFFORT, (text, delta) => {
       if (count === null) {
         const match = /"count"\s*:\s*(\d+)\s*[,}]/.exec(text);
         if (match) {
@@ -78,40 +78,59 @@ export class LiveOptionsMessenger implements OptionsMessenger {
         }
       }
     });
-    const message = await stream.finalMessage();
-    const usage = toUsage(message.usage);
-    let parsed: z.infer<typeof DetectOutput> | null = null;
-    try {
-      const result = DetectOutput.safeParse(JSON.parse(text));
-      if (result.success) parsed = result.data;
-    } catch {
-      // A refusal or a truncated answer: no options, and the raw text in the trace.
-    }
-    const trace = toTrace(DETECT_SYSTEM, content, parsed ?? text, message.stop_reason ?? null, usage, Math.round(performance.now() - started));
     return { options: clampOptions(parsed?.options ?? []), usage, trace };
   }
 
   async rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult> {
-    const { parsed, usage, trace } = await this.ask(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput, REWRITE_EFFORT);
+    const { parsed, usage, trace } = await this.call(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput, REWRITE_EFFORT);
     return { options: clampOptions(parsed?.options ?? []), usage, trace };
   }
 
-  private async ask<T extends z.ZodType>(system: string, content: string, output: T, mode: Effort): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts; trace: OptionsTrace }> {
+  private async call<T extends z.ZodType>(
+    system: string,
+    content: string,
+    output: T,
+    mode: Effort,
+    onText?: (text: string, delta: string) => void,
+  ): Promise<{ parsed: z.infer<T> | null; usage: TokenCounts; trace: OptionsTrace }> {
     const started = performance.now();
-    const message = await this.client.messages.parse({
+    // Without the SDK's own parse, which throws on a cut-off answer and loses its usage.
+    const { type, schema } = zodOutputFormat(output);
+    const stream = this.client.messages.stream({
       model: OPTIONS_MODEL,
       max_tokens: 8192,
       system,
       messages: [{ role: "user", content }],
       thinking: mode.thinking,
-      output_config: { effort: mode.effort, format: zodOutputFormat(output) },
+      output_config: { effort: mode.effort, format: { type, schema } },
     });
-    const apiMs = Math.round(performance.now() - started);
+    let text = "";
+    let thoughtChars = 0;
+    stream.on("text", (delta) => {
+      text += delta;
+      onText?.(text, delta);
+    });
+    stream.on("thinking", (delta) => {
+      thoughtChars += delta.length;
+    });
+    let message: Anthropic.Message;
+    try {
+      message = await stream.finalMessage();
+    } catch (err) {
+      const snapshot = stream.currentMessage;
+      if (!snapshot) throw err;
+      const outputTokens = Math.max(snapshot.usage.output_tokens, Math.ceil((text.length + thoughtChars) / CHARS_PER_TOKEN));
+      throw new OptionsCallError({ ...toUsage(snapshot.usage), outputTokens }, { cause: err });
+    }
     const usage = toUsage(message.usage);
-    const parsed = message.parsed_output as z.infer<T> | null;
-    // Unparsed (a refusal, a truncated answer): the raw text instead.
-    const response = parsed ?? (message.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
-    return { parsed, usage, trace: toTrace(system, content, response, message.stop_reason ?? null, usage, apiMs) };
+    let parsed: z.infer<T> | null = null;
+    try {
+      const result = output.safeParse(JSON.parse(text));
+      if (result.success) parsed = result.data;
+    } catch {
+      // A refusal or a cut-off answer: no options, and the raw text in the trace.
+    }
+    return { parsed, usage, trace: toTrace(system, content, parsed ?? text, message.stop_reason ?? null, usage, Math.round(performance.now() - started)) };
   }
 }
 

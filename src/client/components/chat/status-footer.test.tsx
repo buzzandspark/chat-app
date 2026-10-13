@@ -25,6 +25,14 @@ describe("StatusFooter", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
+  it("shows a wait over two minutes with Try again and no countdown", () => {
+    const message = failed("rate_limited");
+    render(<StatusFooter message={{ ...message, error: { ...message.error!, retryAfterMs: 20 * 60_000 } }} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
+    expect(screen.getByText(/Busy right now\. Try again in/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText(/Retrying in/)).toBeNull();
+  });
+
   it("after every automatic try, says so and offers no Try again", () => {
     render(<StatusFooter message={{ ...failed("rate_limited"), retryAttempt: 4 }} onRetry={() => {}} onContinue={() => {}} onResume={() => {}} />);
     expect(screen.getByText("Still rate limited after 4 tries.")).toBeInTheDocument();

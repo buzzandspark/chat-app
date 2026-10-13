@@ -6,12 +6,15 @@ import { nextCookies } from "better-auth/next-js";
 import { admin, anonymous } from "better-auth/plugins";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
+import { CLIENT_ADDRESS_HEADER } from "@server/client-address";
+
+export const DEV_AUTH_SECRET = "dev-secret-not-for-production-0123456789";
 
 /** Production never falls through to better-auth's own fallbacks, which include a public default secret. */
 function authSecret(): string {
   if (env.BETTER_AUTH_SECRET) return env.BETTER_AUTH_SECRET;
   if (env.isProd) throw new Error("BETTER_AUTH_SECRET is not set");
-  return "dev-secret-not-for-production-0123456789";
+  return DEV_AUTH_SECRET;
 }
 
 /** Moves a guest's chats, replies and spend to the account it signed in to, before the guest is deleted. */
@@ -60,6 +63,8 @@ function createAuth() {
     // better-auth's per-IP limiter (3 sign-ins per 10 s) stays on in production;
     // the e2e harness signs in several users from one address in seconds.
     rateLimit: { enabled: env.isProd && !env.e2e },
+    // better-auth's sign-in limiter and sessions.ip_address read the address our own limits use, which the proxy sets.
+    advanced: { ipAddress: { ipAddressHeaders: [CLIENT_ADDRESS_HEADER] } },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,

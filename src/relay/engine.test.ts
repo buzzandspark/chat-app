@@ -1,14 +1,15 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
-import { generations, messages, usageEvents, users } from "@db/schema";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { generations, messages, spendBuckets, usageEvents, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
-import { Engine, ForbiddenError, type ReplyDoneInfo, type StartInput } from "./engine";
+import { Budgets } from "./budgets";
+import { BusyError, Engine, ForbiddenError, type ReplyDoneInfo, type StartInput } from "./engine";
 import { ProviderStatusError } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { TpsStats } from "./tps";
-import { QuotaExceededError } from "./quota";
+import { BudgetExceededError, QuotaExceededError, QuotaManager } from "./quota";
 import { scenarioScript, type ScenarioName } from "./scenarios";
 import { EventStore } from "./store";
 import { collectUntilTerminal, createTestDb, seedUser, waitFor } from "./test-utils";
@@ -342,6 +343,32 @@ describe("Engine", () => {
     expect(db.select({ spent: users.costSpentUsd }).from(users).where(eq(users.id, USER)).get()?.spent).toBeLessThan(0.006);
   });
 
+  it("admits on the UTF-8 size of the prompt's text and thinking, leaving out the turns a replace drops, then meters from message_start", async () => {
+    const quota = new QuotaManager(db);
+    const admit = vi.spyOn(quota, "admit");
+    const started = vi.spyOn(quota, "started");
+    engine = makeEngine(0, { quota });
+    // Three bytes a character.
+    const first = input({ text: "字".repeat(250) });
+    engine.start(first);
+    await collectUntilTerminal(store, first.generationId);
+    expect(admit).toHaveBeenLastCalledWith(USER, first.generationId, "claude-sonnet-5-5", 750);
+    expect(started).toHaveBeenCalledWith(first.generationId, "claude-sonnet-5-5", expect.objectContaining({ inputTokens: 800 }));
+    const reply = db.select().from(messages).where(eq(messages.id, first.assistantMessageId)).get()!;
+    const replyBytes = reply.content.reduce((n, b) => n + (b.type === "text" ? Buffer.byteLength(b.text) : b.type === "thinking" ? Buffer.byteLength(b.thinking) : 0), 0);
+    expect(reply.content.some((b) => b.type === "thinking")).toBe(true);
+
+    const next = input({ chatId: first.chatId, text: "y".repeat(250) });
+    engine.start(next);
+    await collectUntilTerminal(store, next.generationId);
+    expect(admit).toHaveBeenLastCalledWith(USER, next.generationId, "claude-sonnet-5-5", 750 + 250 + replyBytes);
+
+    const regenerate = input({ chatId: first.chatId, userMessageId: next.userMessageId, text: undefined, replaceFromMessageId: next.assistantMessageId });
+    engine.start(regenerate);
+    await collectUntilTerminal(store, regenerate.generationId);
+    expect(admit).toHaveBeenLastCalledWith(USER, regenerate.generationId, "claude-sonnet-5-5", 750 + 250 + replyBytes);
+  });
+
   it("builds history from earlier turns and keeps a retry's existing user message", async () => {
     const chatId = uuidv7();
     const first = input({ chatId, text: "first question" });
@@ -542,5 +569,203 @@ describe("Engine: gate, retry and afterDone (forks)", () => {
     engine.start(refused);
     await collectUntilTerminal(store, refused.generationId);
     expect(seen).toHaveLength(1);
+  });
+});
+
+describe("Engine: guest budgets", () => {
+  it("charges each way a guest's reply can end to its address and every guest's budget", async () => {
+    seedUser(db, "g1", { role: "guest", costCapUsd: 1, budgetKeys: ["ip:203.0.113.7"] });
+    const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 100, ip48: 100, all: 100 }, () => 0) });
+    const fast = makeEngine(0, { quota });
+    const slow = makeEngine(1, { quota });
+    const endingWith = (last: { kind: "disconnect" } | { kind: "error"; error: { type: string; message: string } }) => {
+      const scripted = new ScriptedProvider({ model: "claude-haiku-5-5", parts: [{ kind: "text", text: "partial" }, last] }, 0);
+      return new Engine({ db, store, quota, providers: () => ({ name: "anthropic", stream: scripted.stream.bind(scripted) }) });
+    };
+    const guest = (scenario: ScenarioName) => input({ userId: "g1", userRole: "guest", model: "claude-haiku-5-5", scenario });
+    const spent = () => db.select().from(users).where(eq(users.id, "g1")).get()!.costSpentUsd;
+    const levels = () => db.select().from(spendBuckets).all().map((b) => b.levelUsd);
+    const runOn = async (on: Engine, scenario: ScenarioName) => {
+      const inp = guest(scenario);
+      on.start(inp);
+      return { inp, end: (await collectUntilTerminal(store, inp.generationId)).at(-1) };
+    };
+
+    const endings: Record<string, () => Promise<unknown>> = {
+      done: async () => expect((await runOn(fast, "normal")).end).toMatchObject({ type: "done" }),
+      stopped: async () => {
+        const inp = guest("slow_tokens");
+        slow.start(inp);
+        await waitFor(() => store.get(inp.generationId)?.events.some((e) => e.type === "text_delta") ?? false);
+        await slow.stopAndWait(inp.generationId);
+        expect(store.get(inp.generationId)!.events.at(-1)).toMatchObject({ type: "stopped" });
+      },
+      interrupted: async () => expect((await runOn(endingWith({ kind: "disconnect" }), "normal")).end).toMatchObject({ type: "interrupted" }),
+      error: async () =>
+        expect((await runOn(endingWith({ kind: "error", error: { type: "api_error", message: "x" } }), "normal")).end).toMatchObject({ type: "error" }),
+      crash: async () => {
+        const { inp } = await runOn(fast, "normal");
+        db.update(generations).set({ status: "running" }).where(eq(generations.id, inp.generationId)).run();
+        store.evict(inp.generationId);
+        const before = spent();
+        fast.resume(inp.generationId, "g1");
+        expect(spent()).toBeGreaterThan(before);
+      },
+    };
+    for (const [ending, run] of Object.entries(endings)) {
+      const before = spent();
+      await run();
+      expect(spent(), ending).toBeGreaterThan(before);
+      const [ip, all] = levels();
+      expect(ip, ending).toBeCloseTo(spent(), 12);
+      expect(all, ending).toBeCloseTo(spent(), 12);
+    }
+    // A reply whose worst case does not fit under the cap never starts.
+    db.update(users).set({ costCapUsd: spent() + 0.001 }).where(eq(users.id, "g1")).run();
+    expect(() => fast.start(guest("normal"))).toThrow(QuotaExceededError);
+  });
+});
+
+describe("Engine: guest prompts", () => {
+  const guestInput = (text: string) => input({ userId: "g1", userRole: "guest", model: "claude-haiku-5-5", text });
+  let quota: QuotaManager;
+  let streamed: ProviderRequest[];
+  let counted: number;
+
+  beforeEach(() => {
+    seedUser(db, "g1", { role: "guest", costCapUsd: 1, budgetKeys: ["ip:203.0.113.7"] });
+    quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 1, ip48: 3, all: 10 }, () => 0) });
+    streamed = [];
+    const scripted = new ScriptedProvider((req) => scenarioScript("normal", req), 0);
+    const live: Provider = {
+      name: "anthropic",
+      stream(req, opts) {
+        streamed.push(req);
+        return scripted.stream(req, opts);
+      },
+      countTokens: async () => counted,
+    };
+    engine = new Engine({ db, store, quota, providers: () => live });
+  });
+
+  const send = async (text: string) => {
+    const inp = guestInput(text);
+    engine.start(inp);
+    return (await collectUntilTerminal(store, inp.generationId)).at(-1);
+  };
+
+  it("counts a guest's prompt before sending it, refuses one over the limit unsent, and cuts off the address of a dense payload", async () => {
+    counted = 60_001;
+    expect(await send("A long conversation in plain words. ".repeat(6_000))).toMatchObject({ type: "error", error: { kind: "context_full" } });
+    expect(db.select().from(spendBuckets).all()).toEqual([]);
+    counted = 66_000;
+    expect(await send("x".repeat(70_000))).toMatchObject({ type: "error", error: { kind: "context_full" } });
+    expect(streamed).toHaveLength(0);
+    expect(db.select().from(users).where(eq(users.id, "g1")).get()!.costSpentUsd).toBe(0);
+    counted = 100;
+    expect(() => engine.start(guestInput("hello"))).toThrow(BudgetExceededError);
+  });
+
+  it("stops a guest reply whose message_start bills a prompt over the limit, charging what it billed", async () => {
+    quota = new QuotaManager(db, { maxPromptTokens: 500, budgets: new Budgets(db, { ip: 1, ip48: 3, all: 10 }, () => 0) });
+    engine = new Engine({ db, store, quota, providers: () => ({ name: "anthropic", stream: (req, opts) => new ScriptedProvider(scenarioScript("normal", req), 0).stream(req, opts), countTokens: async () => 100 }) });
+    // The scripted message_start bills 800 input tokens.
+    expect(await send("hello")).toMatchObject({ type: "error", error: { kind: "context_full" } });
+    expect(db.select().from(users).where(eq(users.id, "g1")).get()!.costSpentUsd).toBeGreaterThan(0);
+  });
+
+  it("counts only a prompt whose byte bound is over the limit, and refuses it retryably when the count fails or stalls", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    let count: (signal: AbortSignal) => Promise<number> = () => Promise.reject(new Error("overloaded"));
+    const scripted = new ScriptedProvider((req) => scenarioScript("normal", req), 0);
+    engine = new Engine({
+      db,
+      store,
+      quota,
+      countTimeoutMs: 50,
+      providers: () => ({ name: "anthropic", stream: (req, opts) => (streamed.push(req), scripted.stream(req, opts)), countTokens: (_req, opts) => count(opts.signal) }),
+    });
+    expect(await send("hello")).toMatchObject({ type: "done" });
+    const retry = { type: "error", error: { kind: "overloaded", retryable: true } };
+    expect(await send("x".repeat(60_000))).toMatchObject(retry);
+    count = (signal) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
+    expect(await send("x".repeat(60_000))).toMatchObject(retry);
+    expect(streamed).toHaveLength(1);
+    quiet.mockRestore();
+  });
+});
+
+describe("Engine: guests' running replies", () => {
+  const guest = (userId: string, overrides: Partial<StartInput> = {}) =>
+    input({ userId, userRole: "guest", model: "claude-haiku-5-5", scenario: "slow_tokens", ...overrides });
+
+  beforeEach(() => {
+    for (const id of ["g1", "g2", "g3"]) seedUser(db, id, { role: "guest", costCapUsd: 1 });
+  });
+
+  it("runs two live replies at once per guest, a fork taking half of one and waiting for it, each asking for at most 8192 tokens", async () => {
+    const requests: ProviderRequest[] = [];
+    const slow = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
+    const free = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
+    const live: Provider = {
+      name: "anthropic",
+      stream(req, opts) {
+        requests.push(req);
+        return slow.stream(req, opts);
+      },
+    };
+    engine = new Engine({ db, store, providers: (ctx) => (ctx.scenario === "normal" ? free : live), partialPersistMs: 50 });
+    const first = guest("g1");
+    engine.start(first);
+    engine.start(guest("g1", { fanOut: true }));
+    engine.start(guest("g1", { fanOut: true }));
+    expect(() => engine.start(guest("g1"))).toThrow(BusyError);
+    // A third fork waits for a slot instead.
+    expect(engine.start(guest("g1", { fanOut: true }))).toEqual({ created: true });
+    // Another guest, an invited user and a scripted run are not held back.
+    expect(engine.start(guest("g2"))).toEqual({ created: true });
+    expect(engine.start(input({ scenario: "slow_tokens" }))).toEqual({ created: true });
+    expect(engine.start(guest("g1", { scenario: "normal" }))).toEqual({ created: true });
+    await waitFor(() => requests.length === 5);
+    expect(requests.filter((r) => r.userId === "g1")).toHaveLength(3);
+    await engine.stopAndWait(first.generationId);
+    await waitFor(() => requests.length === 6);
+    expect(requests.map((r) => [r.userId, r.maxTokens])).toEqual(expect.arrayContaining([["g1", 8192], ["g2", 8192], [USER, undefined]]));
+    expect(requests.filter((r) => r.userId !== USER).every((r) => r.maxTokens === 8192)).toBe(true);
+    await engine.drain();
+  });
+
+  it("ends a fork stopped while it waits for a slot without sending it", async () => {
+    const requests: ProviderRequest[] = [];
+    const slow = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
+    engine = new Engine({ db, store, providers: () => ({ name: "anthropic", stream: (req, opts) => (requests.push(req), slow.stream(req, opts)) }), guestRunning: { perGuest: 1, total: 10 } });
+    engine.start(guest("g1"));
+    const waiting = guest("g1", { fanOut: true });
+    engine.start(waiting);
+    engine.stop(waiting.generationId);
+    expect((await collectUntilTerminal(store, waiting.generationId)).at(-1)).toMatchObject({ type: "stopped" });
+    expect(requests).toHaveLength(1);
+    await engine.drain();
+  });
+
+  it("holds a waiting fork's worst case against the cap only once it has a slot", async () => {
+    // Each fork's worst case is about $0.0046: two fit under the cap, three do not.
+    db.update(users).set({ costCapUsd: 0.01 }).where(eq(users.id, "g1")).run();
+    const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 100, ip48: 100, all: 100 }, () => 0) });
+    const scripted = new ScriptedProvider((req) => scenarioScript("normal", req), 1);
+    engine = new Engine({ db, store, quota, providers: () => ({ name: "anthropic", stream: scripted.stream.bind(scripted) }), guestRunning: { perGuest: 1, total: 10 } });
+    const forks = [1, 2, 3].map(() => guest("g1", { fanOut: true, scenario: "normal" }));
+    for (const fork of forks) expect(engine.start(fork)).toEqual({ created: true });
+    for (const fork of forks) expect((await collectUntilTerminal(store, fork.generationId)).at(-1)).toMatchObject({ type: "done" });
+  });
+
+  it("holds all guests together to the total", async () => {
+    engine = makeEngine(1, { guestRunning: { perGuest: 2, total: 3 } });
+    engine.start(guest("g1"));
+    engine.start(guest("g1"));
+    engine.start(guest("g2"));
+    expect(() => engine.start(guest("g3"))).toThrow(BusyError);
+    expect(engine.start(input({ scenario: "slow_tokens" }))).toEqual({ created: true });
+    await engine.drain();
   });
 });

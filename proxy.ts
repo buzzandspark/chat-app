@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { CLIENT_ADDRESS_HEADER, forwardedAddress } from "@server/client-address";
 import { crossSite } from "@server/cross-site";
 import { env } from "@shared/env";
 
@@ -16,7 +17,11 @@ export function proxy(request: NextRequest) {
     if (!request.nextUrl.pathname.startsWith("/api/auth/") && crossSite(request.method, request.headers)) {
       return NextResponse.json({ error: "cross_site" }, { status: 403, headers: { "cache-control": "no-store" } });
     }
-    return NextResponse.next();
+    const headers = new Headers(request.headers);
+    headers.delete(CLIENT_ADDRESS_HEADER);
+    const address = forwardedAddress(request.headers);
+    if (address !== null) headers.set(CLIENT_ADDRESS_HEADER, address);
+    return NextResponse.next({ request: { headers } });
   }
   const segment = /^\/([^/]+)$/.exec(request.nextUrl.pathname)?.[1];
   if (segment !== undefined && !TOP_LEVEL.has(segment) && segment !== env.ADMIN_PATH_SLUG) {

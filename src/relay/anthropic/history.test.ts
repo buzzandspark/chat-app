@@ -106,5 +106,7 @@ describe("history", () => {
     expect(haiku.output_config).toEqual({ effort: "high" });
     const haikuPlain = buildRequest({ model: "claude-haiku-5-5", thinking: { harder: false }, messages });
     expect(haikuPlain.output_config).toEqual({ effort: "low" });
+    expect(haikuPlain.max_tokens).toBe(16_000);
+    expect(buildRequest({ model: "claude-haiku-5-5", thinking: { harder: false }, messages, maxTokens: 8192 }).max_tokens).toBe(8192);
   });
 });

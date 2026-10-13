@@ -24,10 +24,11 @@ import {
   type StreamAccumulator,
 } from "./anthropic/parse-stream";
 import { priceIterations, summarize, type UsageRow } from "./anthropic/pricing";
+import { GUEST_MAX_TOKENS } from "./anthropic/thinking-config";
 import type { MessageSnapshot, RelayEvent, RelayEventBody, ServerTimings } from "./events";
 import { ProviderStatusError, sleep } from "./providers/replay";
 import { isBillableProvider, type Provider, type ProviderRequest } from "./providers/types";
-import { QuotaManager } from "./quota";
+import { BudgetExceededError, PromptTooLongError, QuotaExceededError, QuotaManager } from "./quota";
 import type { EventStore } from "./store";
 import { TpsStats } from "./tps";
 import { settleOrphan } from "./orphans";
@@ -42,6 +43,13 @@ export class ForbiddenError extends Error {
   constructor(message = "Forbidden") {
     super(message);
     this.name = "ForbiddenError";
+  }
+}
+/** A guest has as many replies running as it may, or guests together do. */
+export class BusyError extends Error {
+  constructor(public retryAfterMs = 10_000) {
+    super("Too many replies running; try again in a moment");
+    this.name = "BusyError";
   }
 }
 
@@ -84,8 +92,12 @@ export interface EngineOptions {
   partialPersistMs?: number;
   /** A generation whose upstream sends nothing for this long ends as `interrupted { reason: "upstream" }`. 0 disables. */
   upstreamIdleMs?: number;
+  /** A guest prompt's token count that takes longer than this fails, and the reply can be retried. */
+  countTimeoutMs?: number;
   isDraining?: () => boolean;
   afterDone?: (info: ReplyDoneInfo) => void;
+  /** Live replies running at once for one guest and for all guests together; a fork of a fan-out takes half of one. */
+  guestRunning?: { perGuest: number; total: number };
 }
 
 export interface StartInput {
@@ -109,6 +121,8 @@ export interface StartInput {
   cacheTail?: boolean;
   /** Re-send a request that fails before the API begins a message, with exponential backoff. */
   retry?: RetryPolicy;
+  /** One fork of an Explore fan-out: for a guest it takes half a running slot and waits for one instead of failing busy. */
+  fanOut?: boolean;
 }
 
 /**
@@ -124,7 +138,7 @@ export type ResumeOutcome =
   | { kind: "snapshot"; event: RelayEvent }
   | { kind: "not_found" };
 
-type AbortReason = "stop" | "shutdown" | "scenario" | "idle" | "cap";
+type AbortReason = "stop" | "shutdown" | "scenario" | "idle" | "cap" | "too_long";
 
 interface FinalState {
   content: StoredContentBlock[];
@@ -159,6 +173,14 @@ interface Active {
   faults: EngineFaults;
   /** False for scripted and replayed runs: no reservation, zero-cost usage rows, no TPS sample. */
   billable: boolean;
+  guest: boolean;
+  /** Half slots a billable guest run takes: two for a reply, one for a fork. Zero for everyone else. */
+  units: number;
+  /** False while a guest's fork waits for a slot; `slot` settles once it holds one or is aborted. */
+  holding: boolean;
+  slot: Promise<void> | null;
+  /** A waiting fork's prompt size: it is admitted against the cap once it holds a slot, not while it waits. */
+  admitBytes: number | null;
 }
 
 /** A generation runs as a detached promise that outlives the response. */
@@ -171,9 +193,12 @@ export class Engine {
   private now: () => number;
   private partialPersistMs: number;
   private upstreamIdleMs: number;
+  private countTimeoutMs: number;
   private isDraining: () => boolean;
   private afterDone: ((info: ReplyDoneInfo) => void) | null;
+  private guestRunning: { perGuest: number; total: number };
   private active = new Map<string, Active>();
+  private waiting: { active: Active; resolve: () => void }[] = [];
 
   constructor(options: EngineOptions) {
     this.db = options.db;
@@ -184,8 +209,10 @@ export class Engine {
     this.now = options.now ?? Date.now;
     this.partialPersistMs = options.partialPersistMs ?? 2000;
     this.upstreamIdleMs = options.upstreamIdleMs ?? 60_000;
+    this.countTimeoutMs = options.countTimeoutMs ?? 5_000;
     this.isDraining = options.isDraining ?? (() => false);
     this.afterDone = options.afterDone ?? null;
+    this.guestRunning = options.guestRunning ?? { perGuest: 2, total: 50 };
   }
 
   /** Idempotent on `generationId`: a duplicate returns `created: false`. */
@@ -220,16 +247,14 @@ export class Engine {
       scenario: input.scenario,
     });
     const billable = isBillableProvider(provider.name);
+    const guest = input.userRole === "guest";
+    const units = billable && guest ? (input.fanOut ? 1 : 2) : 0;
+    const holding = units === 0 || this.fits(input.userId, units);
+    if (!holding && !input.fanOut) throw new BusyError();
     // A scripted or replayed run spends nothing, so it is neither metered against the cap nor refused by it.
-    if (billable) {
-      // A retry's text is already in the chat; count it once.
-      this.quota.admit(
-        input.userId,
-        input.generationId,
-        input.model,
-        QuotaManager.estimateInputTokens(this.chatChars(input.chatId) + (userRowExists ? 0 : chatText.length)),
-      );
-    }
+    // A retry's text is already in the chat; count it once.
+    const bytes = billable ? this.promptBytes(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : Buffer.byteLength(chatText)) : 0;
+    if (billable && holding) this.quota.admit(input.userId, input.generationId, input.model, bytes);
 
     const now = new Date(this.now());
     let conflict: ReplaceConflict | null;
@@ -368,8 +393,14 @@ export class Engine {
       promise: Promise.resolve(),
       faults: input.faults ?? {},
       billable,
+      guest,
+      units,
+      holding,
+      slot: null,
+      admitBytes: billable && !holding ? bytes : null,
     };
     this.active.set(active.id, active);
+    if (!holding) active.slot = this.slotFor(active);
     this.append(active, {
       type: "started",
       chatId: input.chatId,
@@ -382,6 +413,69 @@ export class Engine {
       console.error(`[engine] generation ${active.id} crashed`, err);
     });
     return { created: true };
+  }
+
+  /** Whether `units` more half slots fit under the guest's share and all guests' together. */
+  private fits(userId: string, units: number): boolean {
+    let mine = 0;
+    let all = 0;
+    for (const a of this.active.values()) {
+      if (!a.holding || a.units === 0) continue;
+      all += a.units;
+      if (a.userId === userId) mine += a.units;
+    }
+    return mine + units <= this.guestRunning.perGuest * 2 && all + units <= this.guestRunning.total * 2;
+  }
+
+  /** Resolves once a waiting fork holds a slot, or once it is aborted. */
+  private slotFor(active: Active): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        active.controller.signal.removeEventListener("abort", done);
+        this.waiting = this.waiting.filter((w) => w.active !== active);
+        resolve();
+      };
+      this.waiting.push({ active, resolve: done });
+      active.controller.signal.addEventListener("abort", done, { once: true });
+    });
+  }
+
+  /** Hands freed slots to waiting forks in the order they asked. */
+  private pump(): void {
+    for (const w of [...this.waiting]) {
+      if (!this.fits(w.active.userId, w.active.units)) continue;
+      w.active.holding = true;
+      w.resolve();
+    }
+  }
+
+  /** A guest's prompt whose byte bound is over the limit is counted exactly before it is sent (a waiting fork takes its hold first): over the limit it is refused, and the count tightens the hold. */
+  private async fitGuestPrompt(active: Active, provider: Provider, request: ProviderRequest): Promise<RelayError | null> {
+    try {
+      if (active.admitBytes !== null) this.quota.admit(active.userId, active.id, request.model, active.admitBytes);
+      if (this.quota.boundFits(active.id)) return null;
+      const tokens = await this.countPrompt(active, provider, request);
+      if (tokens === "failed") return { kind: "overloaded", message: "Couldn't measure this chat", retryable: true, retryAfterMs: 10_000, status: 529 };
+      this.quota.fit(active.id, tokens);
+      return null;
+    } catch (err) {
+      if (err instanceof PromptTooLongError) return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 };
+      if (err instanceof QuotaExceededError) return { kind: "quota_exceeded", message: "Spending cap reached", retryable: false };
+      if (err instanceof BudgetExceededError) return { kind: "rate_limited", message: "Busy right now", retryable: true, retryAfterMs: err.retryAfterMs, status: 429 };
+      throw err;
+    }
+  }
+
+  /** Null when the provider cannot count, so the byte bound decides; "failed" when the count fails or stalls, which a retry may get past. */
+  private async countPrompt(active: Active, provider: Provider, request: ProviderRequest): Promise<number | null | "failed"> {
+    if (!provider.countTokens) return null;
+    try {
+      return await provider.countTokens(request, { signal: AbortSignal.any([active.controller.signal, AbortSignal.timeout(this.countTimeoutMs)]) });
+    } catch (err) {
+      if (active.controller.signal.aborted) throw err;
+      console.error(`[engine] token count failed for ${active.id}`, err);
+      return "failed";
+    }
   }
 
   /** Stops and settles every running generation of a user (admin delete or ban). */
@@ -425,7 +519,7 @@ export class Engine {
       // The process restarted mid-run: settle its estimated cost as the boot backstop does; the provider column keeps a crashed scenario run free.
       const now = new Date(this.now());
       this.db.transaction((tx) => {
-        settleOrphan(tx as unknown as Db, { id: row.id, messageId: row.messageId, chatId: row.chatId, userId: row.userId, requestedModel: row.requestedModel, provider: row.provider }, now);
+        settleOrphan(tx, { id: row.id, messageId: row.messageId, chatId: row.chatId, userId: row.userId, requestedModel: row.requestedModel, provider: row.provider }, now, this.quota);
       });
     }
     const message = this.db.select().from(messages).where(eq(messages.id, row.messageId)).get();
@@ -482,6 +576,7 @@ export class Engine {
     const timings: ServerTimings = { received: active.startedAt };
     try {
       if (input.gate) await input.gate.catch(() => {});
+      if (active.slot) await active.slot;
       if (active.controller.signal.aborted) {
         this.finishAborted(active, active.abortReason ?? "stop", timings);
         return;
@@ -502,7 +597,15 @@ export class Engine {
         userId: input.userId,
         scenario: input.scenario,
         cacheTail: input.cacheTail,
+        maxTokens: active.guest ? GUEST_MAX_TOKENS : undefined,
       };
+      if (active.guest && active.billable) {
+        const refused = await this.fitGuestPrompt(active, provider, request);
+        if (refused) {
+          this.finishError(active, refused, timings);
+          return;
+        }
+      }
 
       for (let attempt = 0; ; attempt++) {
         const error = await this.attempt(active, provider, request, timings);
@@ -564,6 +667,10 @@ export class Engine {
           }
           if (body.type === "error") return body.error;
           this.append(active, body);
+          if (body.type === "message_start" && active.billable && !this.quota.started(active.id, body.model, body)) {
+            active.abortReason = "too_long";
+            active.controller.abort(new DOMException("too_long", "AbortError"));
+          }
           // Metered as it streams; at the cap every running reply of the user stops.
           if ((body.type === "text_delta" || body.type === "thinking_delta") && active.billable && this.quota.meter(active.id, body.text.length)) {
             this.stopAtCap(active.userId);
@@ -633,6 +740,7 @@ export class Engine {
     if (active.partialTimer) clearInterval(active.partialTimer);
     active.partialTimer = null;
     this.active.delete(active.id);
+    if (active.units > 0 && active.holding) this.pump();
   }
 
   private persistPartial(active: Active): void {
@@ -688,6 +796,10 @@ export class Engine {
   private finishAborted(active: Active, reason: AbortReason, timings: ServerTimings): void {
     if (reason === "cap") {
       this.finishError(active, { kind: "quota_exceeded", message: "Spending cap reached", retryable: false }, timings);
+      return;
+    }
+    if (reason === "too_long") {
+      this.finishError(active, { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 }, timings);
       return;
     }
     if (reason === "stop") {
@@ -811,7 +923,7 @@ export class Engine {
     const now = new Date(this.now());
     const estimated = final.estimated ?? final.generationStatus !== "done";
     this.db.transaction((tx) => {
-      if (active.billable) QuotaManager.addSpend(tx as unknown as Db, active.userId, costUsd);
+      if (active.billable) this.quota.spend(tx, active.userId, costUsd);
       tx.update(messages)
         .set({
           content: final.content,
@@ -877,14 +989,19 @@ export class Engine {
     return rows.filter((r) => r.position < cutoff).map((r) => ({ role: r.role, content: r.content, status: r.status }));
   }
 
-  private chatChars(chatId: string): number {
+  /** The UTF-8 size of the text and thinking the request will carry: rows a replace is about to drop do not count. */
+  private promptBytes(chatId: string, replaceFromMessageId: string | undefined): number {
     const rows = this.db
-      .select({ content: messages.content })
+      .select({ id: messages.id, position: messages.position, content: messages.content })
       .from(messages)
       .where(eq(messages.chatId, chatId))
       .all();
+    const cutoff = rows.find((r) => r.id === replaceFromMessageId)?.position ?? Number.MAX_SAFE_INTEGER;
     let n = 0;
-    for (const r of rows) for (const b of r.content) if (b.type === "text") n += b.text.length;
+    for (const r of rows) {
+      if (r.position >= cutoff) continue;
+      for (const b of r.content) n += b.type === "text" ? Buffer.byteLength(b.text) : b.type === "thinking" ? Buffer.byteLength(b.thinking) : 0;
+    }
     return n;
   }
 }

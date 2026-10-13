@@ -11,6 +11,7 @@ export interface ProviderRequest {
   scenario?: string;
   /** A fork's first request also caches the parent's final reply. */
   cacheTail?: boolean;
+  maxTokens?: number;
 }
 
 export interface ProviderStreamOptions {
@@ -21,6 +22,8 @@ export interface ProviderStreamOptions {
 export interface Provider {
   readonly name: "anthropic" | "replay" | "scripted" | "recording";
   stream(request: ProviderRequest, options: ProviderStreamOptions): AsyncIterable<NormalizableEvent>;
+  /** The request's exact prompt tokens; providers that spend nothing need not count. */
+  countTokens?(request: ProviderRequest, options: ProviderStreamOptions): Promise<number>;
 }
 
 /** Only the live provider (and its recorder) spends money. Keyed by name so an orphan settled from its `generations.provider` column applies the same rule as `Engine.start`. */

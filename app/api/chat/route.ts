@@ -2,12 +2,13 @@ import type { NextRequest } from "next/server";
 import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@db/client";
-import { DrainingError, ForbiddenError } from "@relay/engine";
-import { QuotaExceededError } from "@relay/quota";
+import { BusyError, DrainingError, ForbiddenError } from "@relay/engine";
+import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
-import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import { errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
+import { refuseGuestSend, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
 import { singleEventResponse, streamGeneration } from "@server/sse-response";
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     const user = await requireUser();
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request", issues: parsed.error.issues });
+    // Refused, not stripped: a scenario request must never fall through to the live model.
+    if (parsed.data.scenario && !scenariosAllowed(user.role)) return jsonError(403, { error: "forbidden" });
     // A guest runs Haiku only, whatever the request names (a reply seeded or saved on another model included).
     const body = user.role === "guest" ? { ...parsed.data, model: GUEST_MODEL } : parsed.data;
     const { engine, store } = getRelay();
@@ -38,6 +41,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     // is never refused, and its regenerate never stops the very generation it names.
     const existing = engine.owner(body.generationId) !== null;
     if (!existing && isDraining()) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
+    if (!existing && user.role === "guest") {
+      const refused = refuseGuestSend(request, user.id);
+      if (refused) return refused;
+    }
     const scenario = body.scenario ? SCENARIOS[body.scenario] : undefined;
     if (!existing && body.replaceFromMessageId) {
       // Settle the replaced turns' generations first: deleting a running one's rows would strand its buffer.
@@ -83,6 +90,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       if (err instanceof QuotaExceededError) {
         return jsonError(402, { error: "quota_exceeded", spentUsd: err.spentUsd, capUsd: err.capUsd });
       }
+      if (err instanceof BudgetExceededError || err instanceof BusyError) return tooMany(err.retryAfterMs);
       if (err instanceof ForbiddenError) return jsonError(403, { error: "forbidden" });
       if (err instanceof DrainingError) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
       if (err instanceof Error && /retry without/.test(err.message)) return jsonError(409, { error: "missing_user_message" });

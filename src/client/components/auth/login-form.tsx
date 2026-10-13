@@ -5,17 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { newChatHref } from "@client/hooks/use-new-chat";
+import { safeNext } from "@shared/safe-next";
 
-/** Only a same-origin path, resolved the way the browser would (so `/\t/evil` and friends cannot leave the origin). */
-function safeNext(next: string | null): string | null {
-  if (!next) return null;
-  try {
-    const url = new URL(next, window.location.origin);
-    if (url.origin !== window.location.origin || url.pathname === "/c/new") return null;
-    return url.pathname + url.search + url.hash;
-  } catch {
-    return null;
-  }
+/** Back where sign-in was asked for; the `/c/new` alias goes straight to a new chat. */
+function nextPath(): string {
+  const next = safeNext(new URLSearchParams(window.location.search).get("next"));
+  return next && new URL(next, window.location.origin).pathname !== "/c/new" ? next : newChatHref();
 }
 
 /** A text field of a submitted form ("" when absent). */
@@ -35,8 +30,7 @@ export function LoginForm() {
       const email = formText(form, "email");
       const result = await signIn(email, formText(form, "password"));
       if (!result.ok) return { error: result.message, email };
-      const next = safeNext(new URLSearchParams(window.location.search).get("next"));
-      router.push(next ?? newChatHref());
+      router.push(nextPath());
       router.refresh();
       return { error: null, email };
     },

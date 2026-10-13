@@ -1,4 +1,5 @@
 "use client";
+import { busyText } from "@client/components/chat/rate-limit";
 import { MAX_FORKS, type ForkOption } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import type { ChatStore } from "./chat-store";
@@ -44,8 +45,9 @@ export async function forkChat(
   } catch {
     return { ok: false, error: "You seem to be offline." };
   }
+  if (res.status === 429) return { ok: false, error: busyText(Number(res.headers.get("retry-after")) * 1000) };
   if (!res.ok) return { ok: false, error: MESSAGES[res.status] ?? `Forking failed (${res.status}). Try again.` };
-  const data = (await res.json()) as { forks: { chatId: string }[]; failed?: { error: string } };
+  const data = (await res.json()) as { forks: { chatId: string }[]; failed?: { error: string; retryAfterMs?: number } };
   const first = data.forks[0];
   if (!first) return { ok: false, error: "No fork could be started." };
   store.updateMessage(messageId, { options: [], optionsStream: null });
@@ -61,7 +63,7 @@ export async function forkChat(
   for (const f of data.forks.slice(1)) void prefetchChat(store, f.chatId);
   setPendingChat(first.chatId);
   router.push(`/c/${first.chatId}`);
-  if (data.failed) return { ok: true, error: data.failed.error === "quota_exceeded" ? CAP : "Some forks could not start." };
+  if (data.failed) return { ok: true, error: data.failed.error === "quota_exceeded" ? CAP : data.failed.error === "rate_limited" ? busyText(data.failed.retryAfterMs ?? 0) : "Some forks could not start." };
   return { ok: true };
 }
 

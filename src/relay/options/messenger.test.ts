@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { MAX_FORKS, MAX_OPTION_TITLE } from "@shared/forks";
-import { clampOptions, completeOptions, LiveOptionsMessenger, OPTIONS_MODEL } from "./messenger";
+import { clampOptions, completeOptions, LiveOptionsMessenger, OPTIONS_MODEL, OptionsCallError } from "./messenger";
 
 /** A client whose messages.stream emits `text` in small pieces, then resolves the final message. */
 function streaming(text: string) {
@@ -20,6 +20,32 @@ function streaming(text: string) {
   });
   return { client: { messages: { stream } } as unknown as Anthropic, stream };
 }
+
+/** A real SDK client over a server-sent event stream that, with `fail`, breaks off after the events. */
+function overSse(events: { type: string }[], fail?: Error) {
+  const body = new TextEncoder().encode(events.map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`).join(""));
+  const fetch = async () => {
+    let sent = false;
+    return new Response(
+      new ReadableStream({
+        pull(controller) {
+          if (sent) return fail ? controller.error(fail) : controller.close();
+          sent = true;
+          controller.enqueue(body);
+        },
+      }),
+      { headers: { "content-type": "text/event-stream" } },
+    );
+  };
+  return new Anthropic({ apiKey: "test", fetch });
+}
+
+const CUT_OFF = '{"count":2,"options":[{"title":"A","prompt":"a"},{"title":"B","pro';
+const HEAD = [
+  { type: "message_start", message: { id: "m", type: "message", role: "assistant", model: OPTIONS_MODEL, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 900, output_tokens: 1 } } },
+  { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+  { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: CUT_OFF } },
+];
 
 describe("options messenger", () => {
   it("streams the detection at medium effort with thinking, reporting the count first and each option as it completes", async () => {
@@ -61,9 +87,28 @@ describe("options messenger", () => {
     const refused = await new LiveOptionsMessenger(streaming("I can't help with that.").client).detect("x");
     expect(refused.options).toEqual([]);
     expect(refused.trace!.response).toBe("I can't help with that.");
-    const parse = vi.fn().mockResolvedValue({ parsed_output: { options: two }, usage: { input_tokens: 1, output_tokens: 1 } });
-    expect((await new LiveOptionsMessenger({ messages: { parse } } as unknown as Anthropic).rewrite(two, "shorter")).options).toEqual(two);
+    expect((await new LiveOptionsMessenger(streaming(JSON.stringify({ options: two })).client).rewrite(two, "shorter")).options).toEqual(two);
     expect(clampOptions(two.slice(0, 1))).toEqual([]);
+  });
+
+  it("a cut-off answer keeps the usage it was billed and has no options", async () => {
+    const tail = [{ type: "content_block_stop", index: 0 }, { type: "message_delta", delta: { stop_reason: "max_tokens", stop_sequence: null }, usage: { output_tokens: 8192 } }, { type: "message_stop" }];
+    const messenger = new LiveOptionsMessenger(overSse([...HEAD, ...tail]));
+    for (const result of [await messenger.detect("x"), await messenger.rewrite([{ title: "A", prompt: "a" }], "shorter")]) {
+      expect(result.options).toEqual([]);
+      expect(result.usage).toEqual({ inputTokens: 900, outputTokens: 8192, cacheReadTokens: 0, cacheWriteTokens: 0 });
+      expect(result.trace).toMatchObject({ stopReason: "max_tokens", response: CUT_OFF });
+    }
+  });
+
+  it("a call that breaks off after Haiku started fails with the cost so far, estimated from the text", async () => {
+    const lost = new Error("socket hang up");
+    const err = await new LiveOptionsMessenger(overSse(HEAD, lost)).detect("x").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OptionsCallError);
+    expect(err).toMatchObject({ usage: { inputTokens: 900, outputTokens: Math.ceil(CUT_OFF.length / 2.5), cacheReadTokens: 0, cacheWriteTokens: 0 } });
+    // Nothing started, nothing billed: the error as it came.
+    const before = await new LiveOptionsMessenger(overSse([], lost)).detect("x").catch((e: unknown) => e);
+    expect(before).not.toBeInstanceOf(OptionsCallError);
   });
 
   it("completeOptions reads the options finished so far from a partial answer", () => {
@@ -73,9 +118,9 @@ describe("options messenger", () => {
   });
 
   it("the rewrite applies an instruction to each prompt on its own", async () => {
-    const parse = vi.fn().mockResolvedValue({ parsed_output: { options: [] }, usage: { input_tokens: 1, output_tokens: 1 } });
-    await new LiveOptionsMessenger({ messages: { parse } } as unknown as Anthropic).rewrite([{ title: "A", prompt: "a" }], "assess performance");
-    const params = parse.mock.calls[0]![0] as { system: string; messages: { content: string }[] };
+    const { client, stream } = streaming(JSON.stringify({ options: [] }));
+    await new LiveOptionsMessenger(client).rewrite([{ title: "A", prompt: "a" }], "assess performance");
+    const params = (stream.mock.calls[0] as unknown as [unknown])[0] as { system: string; messages: { content: string }[] };
     expect(params.system).toContain("on its own");
     expect(params.system).toContain("unless the instruction explicitly asks");
     expect(params.messages[0]!.content).toContain("assess performance");

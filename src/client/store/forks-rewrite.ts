@@ -1,4 +1,5 @@
 "use client";
+import { busyText } from "@client/components/chat/rate-limit";
 import type { ForkOption, OptionsTrace } from "@shared/forks";
 import { CAP, logOptionsTrace } from "./forks";
 
@@ -14,10 +15,13 @@ export async function rewriteOptions(messageId: string, instruction: string, opt
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instruction, options }),
     });
+    if (res.status === 429) return { ok: false, error: busyText(Number(res.headers.get("retry-after")) * 1000) };
     if (!res.ok) return { ok: false, error: res.status === 402 ? CAP : `Could not apply the instruction (${res.status}).` };
     const data = (await res.json()) as { options: ForkOption[]; trace?: OptionsTrace | null };
     // The server sends traces only in development; the check lets production builds drop the logging.
     if (process.env.NODE_ENV !== "production" && data.trace) logOptionsTrace("rewrite", data.trace, performance.now() - asked);
+    // A cut-off or refused answer comes back as no options.
+    if (data.options.length === 0) return { ok: false, error: "Could not apply the instruction. Try again." };
     return { ok: true, options: data.options };
   } catch {
     return { ok: false, error: "You seem to be offline." };

@@ -11,7 +11,7 @@ import { modelDisplayName } from "@shared/models";
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { chunk } from "../ui/lazy-chunk";
 import { useChatActions, useChatLiveState } from "./chat-context";
-import { MAX_AUTO_RETRIES, rateLimitDelayMs } from "./rate-limit";
+import { isLongWait, MAX_AUTO_RETRIES, rateLimitDelayMs } from "./rate-limit";
 import { ServedBy, StatusFooter } from "./status-footer";
 import { ThinkingBlock } from "./thinking-block";
 
@@ -102,7 +102,7 @@ export function AssistantMessage({ message }: { message: MessageState }) {
 
   // A 429 retries itself with exponential backoff, four times at most, only for a reply this client asked for.
   // The timer dies with the row, so hiding the chat, a manual Try again, or a later send all cancel it.
-  const rateLimited = message.status === "error" && message.error?.kind === "rate_limited" && message.local && retryable;
+  const rateLimited = message.status === "error" && message.error?.kind === "rate_limited" && message.local && retryable && !isLongWait(message.error.retryAfterMs);
   const attempt = message.retryAttempt;
   const retryAfterMs = message.error?.retryAfterMs;
   const createdAt = message.createdAt;

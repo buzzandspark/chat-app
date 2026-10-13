@@ -2,8 +2,15 @@
 // NEXT_MANUAL_SIG_HANDLE=true in the Dockerfile.
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { boot } = await import("./src/server/boot");
-    await boot();
+    try {
+      const { boot } = await import("./src/server/boot");
+      await boot();
+    } catch (err) {
+      // A half-booted server answers every request with a 500; exiting lets the health check and restart policy see it.
+      if (process.env.NODE_ENV !== "production") throw err;
+      console.error("[boot] failed; exiting", err);
+      process.exit(1);
+    }
   }
 }
 

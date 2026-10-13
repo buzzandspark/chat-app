@@ -10,6 +10,7 @@ export interface RequestInput {
   messages: readonly HistoryMessage[];
   userId?: string;
   cacheTail?: boolean;
+  maxTokens?: number;
 }
 
 export type StreamParams = Parameters<Anthropic["beta"]["messages"]["stream"]>[0];
@@ -19,7 +20,7 @@ export function buildRequest(input: RequestInput): StreamParams {
   const params = modelParams(input.model, input.thinking);
   const request: StreamParams = {
     model: input.model,
-    max_tokens: MAX_TOKENS,
+    max_tokens: input.maxTokens ?? MAX_TOKENS,
     system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     messages: buildHistory(input.messages, { cacheTail: input.cacheTail }),
     betas: params.betas,

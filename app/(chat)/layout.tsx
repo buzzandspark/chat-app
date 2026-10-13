@@ -10,7 +10,7 @@ import { SignInButton } from "@client/components/shell/sign-in-button";
 import { SignOutButton } from "@client/components/shell/sign-out-button";
 import { UsageBar } from "@client/components/shell/usage-bar";
 import { listChats } from "@server/chats";
-import { getCurrentUser } from "@server/current-user";
+import { getCurrentUser, scenariosAllowed } from "@server/current-user";
 import { capUsage, getUserSettings } from "@server/settings";
 
 /**
@@ -82,7 +82,7 @@ async function Account() {
 async function WithUser({ children }: { children: React.ReactNode }) {
   const user = await currentUser();
   return (
-    <ShellUserProvider userId={user.id} guest={user.role === "guest"} scenarioPanel exploreOptions={getUserSettings(user.id).exploreOptions}>
+    <ShellUserProvider userId={user.id} guest={user.role === "guest"} scenarioPanel={scenariosAllowed(user.role)} exploreOptions={getUserSettings(user.id).exploreOptions}>
       <SettingsDefaults />
       {children}
     </ShellUserProvider>

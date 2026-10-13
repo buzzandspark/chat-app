@@ -2,19 +2,28 @@ import "server-only";
 import { z } from "zod";
 import { DefaultCapEnvSchema } from "./cost-cap-schema";
 
+/** A blank `KEY=` line means the default, not 0. */
+const blankAsUnset = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   ANTHROPIC_API_KEY: z.string().optional(),
   DATABASE_PATH: z.string().default("data/app.db"),
   BETTER_AUTH_SECRET: z.string().min(16).optional(),
   BETTER_AUTH_URL: z.string().url().optional(),
-  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_EMAIL: z.string().trim().email().optional(),
   ADMIN_PASSWORD: z.string().min(8).optional(),
   ADMIN_PATH_SLUG: z.string().regex(/^[a-z0-9-]+$/).default("admin"),
   /** USD cap for an invited user when the admin leaves the field blank (ADR-0004). */
   DEFAULT_COST_CAP_USD: DefaultCapEnvSchema,
   /** USD cap for a guest (an anonymous visitor on Haiku). */
-  GUEST_COST_CAP_USD: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.coerce.number().positive().max(100).default(0.25)),
+  GUEST_COST_CAP_USD: z.preprocess(blankAsUnset, z.coerce.number().positive().max(100).default(0.1)),
+  /** USD a day that the guests from one address (an IPv6 /64), from one IPv6 /48, and all guests together may spend. */
+  GUEST_IP_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(1)),
+  GUEST_IP48_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(3)),
+  GUEST_ALL_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(10)),
+  /** The largest prompt a guest may send, counted exactly before it is sent; capped below Haiku's long-context tier at 100k tokens. */
+  GUEST_MAX_PROMPT_TOKENS: z.preprocess(blankAsUnset, z.coerce.number().int().positive().max(90_000).default(60_000)),
   DEV_USER_ID: z.string().default("dev-user"),
   REPLAY_MODE: z.string().optional(),
   RECORD: z.string().optional(),
