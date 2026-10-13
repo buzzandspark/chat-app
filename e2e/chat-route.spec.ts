@@ -151,4 +151,36 @@ test.describe("chat route", () => {
     await expect(page.getByTestId("thread-skeleton")).toHaveCount(0);
     expect(seeds.filter((u) => /\/api\/chats\/[0-9a-f-]{36}$/.test(u))).toHaveLength(0);
   });
+
+  test("Back to a chat deleted here shows it empty and leaves it out of the sidebar", async ({ page }, info) => {
+    const doomed = `doomed ${info.project.name}`;
+    const later = ["Y", "Z", "W", "V", "U"].map((t) => `later ${t} ${info.project.name}`);
+    for (const t of [doomed, ...later]) {
+      await openNewChat(page);
+      await sendText(page, t);
+      await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    }
+    const userRows = page.locator('[data-role="user"]:visible');
+    const openFromSidebar = async (title: string) => {
+      await ensureSidebarOpen(page);
+      await sidebar(page).getByRole("link", { name: title }).click();
+      await expect(userRows.last()).toContainText(title);
+    };
+    // The deleted chat's history entry comes from a client navigation, so Back can replay its cached page.
+    await openFromSidebar(doomed);
+    const doomedUrl = page.url();
+    await ensureSidebarOpen(page);
+    await sidebar(page).getByRole("button", { name: `Actions for ${doomed}` }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+    await expect(page).not.toHaveURL(doomedUrl);
+    for (const t of later) await openFromSidebar(t);
+    for (let i = 0; i <= later.length && page.url() !== doomedUrl; i++) await page.goBack();
+    await expect(page).toHaveURL(doomedUrl);
+    await waitForComposer(page);
+    await expect(userRows).toHaveCount(0);
+    await ensureSidebarOpen(page);
+    await expect(sidebar(page).getByRole("link", { name: later[0] })).toBeVisible();
+    await expect(sidebar(page).getByRole("link", { name: doomed })).toHaveCount(0);
+  });
 });

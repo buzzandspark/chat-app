@@ -30,12 +30,13 @@ export function SeedChat({ chatId, title, updatedAt, rows, older = 0, forkedFrom
     setApplied(rows);
   }
   useEffect(() => {
+    if (store.isRemoved(chatId)) return;
     // A chat opened by deep link joins the sidebar even if the layout rendered before it existed.
     if (title) getSidebarStore().ensure({ id: chatId, title, updatedAt: updatedAt ?? 0, forkedFrom });
     // A reply still streaming on the server reattaches through the resume path.
     for (const row of rows) {
       if (row.role === "assistant" && row.status === "streaming" && row.generationId) client.attach(row.generationId, row.id);
     }
-  }, [chatId, title, updatedAt, rows, client, forkedFrom]);
+  }, [chatId, title, updatedAt, rows, store, client, forkedFrom]);
   return null;
 }

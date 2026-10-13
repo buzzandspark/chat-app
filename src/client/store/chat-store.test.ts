@@ -272,6 +272,21 @@ describe("ChatStore", () => {
       expect(store.getChat("c2").settings.model).toBe("claude-sonnet-5-5");
     });
 
+    it("seeds a chat deleted here as empty, even from a cached page, until something is sent in it", () => {
+      const { store } = makeStore();
+      const rows = [row({ id: "u1", role: "user", content: [text("q")] }), row({ id: "a1", role: "assistant", content: [text("a")] })];
+      store.seedChat("c1", "Doomed", rows, { fork: { from: "p", position: 2 } });
+      store.removeChat("c1");
+      store.seedChat("c1", "Doomed", rows, { fork: { from: "p", position: 2 } });
+      expect(store.getChat("c1")).toMatchObject({ seeded: true, messageIds: [], title: null, forkedFrom: null });
+      expect(store.getMessage("u1")).toBeUndefined();
+      expect(store.isRemoved("c1")).toBe(true);
+      store.addMessage(createMessageState({ id: "u2", chatId: "c1", role: "user", blocks: [{ type: "text", text: "again" }] }));
+      expect(store.isRemoved("c1")).toBe(false);
+      store.seedChat("c1", "Again", [row({ id: "u2", role: "user", content: [text("again")] })]);
+      expect(store.getChat("c1").messageIds).toEqual(["u2"]);
+    });
+
     it("createChat marks a client-made chat as seeded and empty", () => {
       const { store } = makeStore();
       store.createChat("c9");

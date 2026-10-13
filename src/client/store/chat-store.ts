@@ -217,6 +217,8 @@ export class ChatStore {
   private internals = new Map<string, Internal>();
   private chats = new Map<string, ChatState>();
   private byGeneration = new Map<string, string>();
+  /** Chats deleted here; Back can replay a cached page of one, whose rows must not come back. */
+  private removed = new Set<string>();
   private messageListeners = new Map<string, Set<Listener>>();
   private chatListeners = new Map<string, Set<Listener>>();
   private queue: RelayEvent[] = [];
@@ -321,6 +323,12 @@ export class ChatStore {
     rows: readonly SeedRow[],
     options: { deferNotify?: boolean; older?: number; fork?: { from: string | null; position: number | null } } = {},
   ): void {
+    // A deleted chat seeds as empty whatever a cached page still lists.
+    if (this.removed.has(chatId)) {
+      title = null;
+      rows = [];
+      options = { deferNotify: options.deferNotify, fork: { from: null, position: null } };
+    }
     const previous = this.chats.get(chatId);
     const listed = new Set(rows.map((r) => r.id));
     // Each unlisted local message keeps its place after the nearest earlier listed row (null: before them all).
@@ -387,6 +395,7 @@ export class ChatStore {
   }
 
   addMessage(message: MessageState): void {
+    this.removed.delete(message.chatId);
     this.messages.set(message.id, { ...message, local: true });
     this.internals.set(message.id, { blockIndex: new Map() });
     if (message.generationId) this.byGeneration.set(message.generationId, message.id);
@@ -442,8 +451,14 @@ export class ChatStore {
     return streaming;
   }
 
+  /** Deleted here and not written to since. */
+  isRemoved(chatId: string): boolean {
+    return this.removed.has(chatId);
+  }
+
   /** The chat was deleted: drop its messages and leave a seeded, empty chat so the view shows the empty state. */
   removeChat(chatId: string): void {
+    this.removed.add(chatId);
     const chat = this.chats.get(chatId);
     if (!chat) return;
     for (const id of chat.messageIds) {
