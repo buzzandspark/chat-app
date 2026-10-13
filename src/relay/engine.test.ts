@@ -328,6 +328,20 @@ describe("Engine", () => {
     expect(db.select().from(messages).all()).toEqual([]);
   });
 
+  it("refuses to send into another user's chat with ForbiddenError and writes nothing", async () => {
+    seedUser(db, "u2");
+    const theirs = input({ userId: "u2" });
+    engine.start(theirs);
+    await collectUntilTerminal(store, theirs.generationId);
+    const rows = () => ({ messages: db.select().from(messages).all(), generations: db.select().from(generations).all(), usage: db.select().from(usageEvents).all() });
+    const before = rows();
+    const mine = input({ chatId: theirs.chatId });
+    expect(() => engine.start(mine)).toThrow(ForbiddenError);
+    expect(rows()).toEqual(before);
+    expect(store.has(mine.generationId)).toBe(false);
+    expect(engine.runningCount()).toBe(0);
+  });
+
   it("stops every running reply of a user once spend reaches the cap, keeping the text so far", async () => {
     // A reply is metered only when its user has a cap at the start. The two inputs alone ($0.0016 each) pass
     // $0.003, so the cap drops to that only once both replies have text.
