@@ -30,7 +30,7 @@ Composer ──POST /api/chat──▶ route ──engine.start()──▶ rows 
                                client ChatStore ◀───────────┘ GET /api/generations/:id/events?after=seq (resume: buffered slice, then live)
 ```
 
-- **Providers** (`src/relay/providers/`) all yield raw Anthropic stream events. Scenarios always run in memory through `scriptToFixture`, which also generates `fixtures/<model>/<scenario>.jsonl`; replay mode reads those files, rotating through five per model by turn. `RecordingProvider` wraps the live provider under `RECORD=1`. Scenarios cost nothing; production runs them only for admins and the e2e harness.
+- **Providers** (`src/relay/providers/`) all yield raw Anthropic stream events. Scenarios always run in memory through `scriptToFixture`, which also generates `fixtures/<model>/<scenario>.jsonl`; replay mode reads those files, rotating through five per model by turn. `RecordingProvider` wraps the live provider under `RECORD=1`. Scenarios cost nothing; production runs them only for signed-in users and the e2e harness.
 - **Normalizer** (`anthropic/parse-stream.ts`) maps the Anthropic stream into the relay vocabulary. A `fallback` block before any text is invisible; after text it emits a visible `fallback_boundary` and keeps the partial.
 - **Accumulator** (`anthropic/accumulate.ts`) builds the content blocks to persist; the engine writes them every 2 s and on every terminal event.
 - **History** (`anthropic/history.ts`) echoes thinking blocks unchanged, drops what precedes a final fallback block and unsigned thinking from interrupted streams, excludes refused and errored replies, and places the moving cache breakpoint on the newest user message. `request.ts` is the only request builder.

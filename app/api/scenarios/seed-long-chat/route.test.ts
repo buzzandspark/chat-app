@@ -41,10 +41,10 @@ afterEach(() => {
 });
 
 describe("POST /api/scenarios/seed-long-chat", () => {
-  it("is admin-only in production, and writes nothing for anyone else", async () => {
-    expect((await seedAs("user")).status).toBe(403);
+  it("is closed to guests in production, and writes nothing for them", async () => {
     expect((await seedAs("guest")).status).toBe(403);
     expect(ctx.db?.query.chats.findMany().sync()).toHaveLength(0);
+    expect((await seedAs("user")).status).toBe(201);
     expect((await seedAs("admin")).status).toBe(201);
   });
 
@@ -53,6 +53,6 @@ describe("POST /api/scenarios/seed-long-chat", () => {
     expect((await seedAs("guest")).status).toBe(201);
     ctx.isProd = true;
     ctx.e2e = true;
-    expect((await seedAs("user")).status).toBe(201);
+    expect((await seedAs("guest")).status).toBe(201);
   });
 });

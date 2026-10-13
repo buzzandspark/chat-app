@@ -63,9 +63,9 @@ function touchLastActive(userId: string): void {
   }
 }
 
-/** Scenarios (scripted replies, the long-chat seed) write rows for free: in production only an admin and the e2e harness run them. */
+/** Scenarios (scripted replies, the long-chat seed) write rows for free: in production only signed-in users and the e2e harness run them. */
 export function scenariosAllowed(role: UserRole): boolean {
-  return !env.isProd || env.e2e || role === "admin";
+  return !env.isProd || env.e2e || role !== "guest";
 }
 
 export async function requireAdmin(): Promise<CurrentUser> {

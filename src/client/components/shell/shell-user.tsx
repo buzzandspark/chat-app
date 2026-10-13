@@ -6,7 +6,7 @@ export interface ShellUser {
   userId: string;
   /** An anonymous visitor: Haiku only (the other models show greyed out) until it signs in. */
   guest: boolean;
-  /** Whether the scenario panel is shown: anyone outside production, only an admin in production (`scenariosAllowed`). */
+  /** Whether the scenario panel is shown: anyone outside production, only signed-in users in production (`scenariosAllowed`). */
   scenarioPanel: boolean;
   /** The Settings switch; the server holds it too and skips detection when it is off. */
   exploreOptions: boolean;

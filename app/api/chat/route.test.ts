@@ -43,20 +43,19 @@ afterEach(() => {
 });
 
 describe("POST /api/chat with a scenario", () => {
-  it("refuses a non-admin's scenario in production rather than running the live model", async () => {
-    for (const role of ["user", "guest"] as const) {
-      const res = await send(role, { scenario: SCENARIO_NAMES[0] });
-      expect(res.status).toBe(403);
-      expect(await res.json()).toEqual({ error: "forbidden" });
-    }
+  it("refuses a guest's scenario in production rather than running the live model", async () => {
+    const res = await send("guest", { scenario: SCENARIO_NAMES[0] });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "forbidden" });
     expect(getRelay).not.toHaveBeenCalled();
   });
 
-  it("lets an admin run one in production, and anyone outside production", async () => {
+  it("lets a signed-in user run one in production, and anyone outside production", async () => {
     expect((await send("admin", { scenario: SCENARIO_NAMES[0] })).status).not.toBe(403);
+    expect((await send("user", { scenario: SCENARIO_NAMES[0] })).status).not.toBe(403);
     ctx.isProd = false;
     expect((await send("guest", { scenario: SCENARIO_NAMES[0] })).status).not.toBe(403);
-    expect(getRelay).toHaveBeenCalledTimes(2);
+    expect(getRelay).toHaveBeenCalledTimes(3);
   });
 });
 
