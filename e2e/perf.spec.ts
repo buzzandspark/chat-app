@@ -244,6 +244,8 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
   });
 
   test("giant code block keeps scrolling smooth", async ({ page }) => {
+    // Streaming alone may take up to 180 s under throttling; CI runs took ~55 s against the 60 s default.
+    test.setTimeout(240_000);
     await throttle(page);
     await openNewChat(page);
     await page.evaluate(() => {

@@ -28,7 +28,7 @@ test.describe("sessions and errors", () => {
     // The reply's ⋯ menu loads its chunk on first use; with chunks failing it gives way to a Retry.
     await page.route("**/_next/static/chunks/*.js", (route) => route.abort());
     await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
-    const retry = lastAssistant(page).getByRole("button", { name: /Couldn.t load\. Retry/ });
+    const retry = lastAssistant(page).getByRole("button", { name: /didn.t load\. Retry/ });
     await expect(retry).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("still here");
@@ -38,7 +38,7 @@ test.describe("sessions and errors", () => {
     await ensureSidebarOpen(page);
     const row = sidebar(page).getByRole("listitem").filter({ has: page.getByRole("link", { name: "still here" }) }).first();
     await row.getByRole("button", { name: "Actions for still here" }).click();
-    const rowRetry = row.getByRole("button", { name: /Couldn.t load\. Retry/ });
+    const rowRetry = row.getByRole("button", { name: /didn.t load\. Retry/ });
     await expect(rowRetry).toBeVisible({ timeout: 10_000 });
     // Once the network is back, Retry restores each control and the next press loads its chunk.
     await page.unroute("**/_next/static/chunks/*.js");
