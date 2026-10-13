@@ -24,12 +24,12 @@ interface UsagePeriod {
 export interface ModelUsage {
   model: string;
   label: string;
-  month: UsageTotals;
+  today: UsageTotals;
   all: UsageTotals;
 }
 
 export interface UsageSummary {
-  month: UsagePeriod;
+  today: UsagePeriod;
   all: UsagePeriod;
   /** The chats total broken down by model, most spent first. */
   chatModels: ModelUsage[];
@@ -46,15 +46,15 @@ export interface UserSettings {
 
 const zero = (): UsageTotals => ({ costUsd: 0, inputTokens: 0, outputTokens: 0 });
 
-/** The first instant of `now`'s calendar month, in UTC. */
-export function monthStart(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+/** The first instant of `now`'s day, in UTC. */
+export function dayStart(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
-/** The user's spend split between chat replies (by model) and Explore, this month (UTC) and all time. */
+/** The user's spend split between chat replies (by model) and Explore, today (UTC) and all time. */
 export function usageSummary(userId: string, now: Date, db: Db = getDb()): UsageSummary {
   const explore = sql<number>`${inArray(usageEvents.iterationType, EXPLORE_ITERATIONS)}`;
-  const recent = sql<number>`${usageEvents.createdAt} >= ${monthStart(now).getTime()}`;
+  const recent = sql<number>`${usageEvents.createdAt} >= ${dayStart(now).getTime()}`;
   const rows = db
     .select({
       explore,
@@ -68,7 +68,7 @@ export function usageSummary(userId: string, now: Date, db: Db = getDb()): Usage
     .where(eq(usageEvents.userId, userId))
     .groupBy(explore, recent, usageEvents.model)
     .all();
-  const summary: UsageSummary = { month: { chats: zero(), explore: zero() }, all: { chats: zero(), explore: zero() }, chatModels: [], exploreModels: [], spentUsd: 0, capUsd: null };
+  const summary: UsageSummary = { today: { chats: zero(), explore: zero() }, all: { chats: zero(), explore: zero() }, chatModels: [], exploreModels: [], spentUsd: 0, capUsd: null };
   const byModel = { chats: new Map<string, ModelUsage>(), explore: new Map<string, ModelUsage>() };
   const add = (into: UsageTotals, row: UsageTotals) => {
     into.costUsd += row.costUsd;
@@ -78,14 +78,14 @@ export function usageSummary(userId: string, now: Date, db: Db = getDb()): Usage
   for (const row of rows) {
     const kind = row.explore ? "explore" : "chats";
     add(summary.all[kind], row);
-    if (row.recent) add(summary.month[kind], row);
+    if (row.recent) add(summary.today[kind], row);
     let entry = byModel[kind].get(row.model);
     if (!entry) {
-      entry = { model: row.model, label: modelDisplayName(row.model).replace(/^Claude /, ""), month: zero(), all: zero() };
+      entry = { model: row.model, label: modelDisplayName(row.model).replace(/^Claude /, ""), today: zero(), all: zero() };
       byModel[kind].set(row.model, entry);
     }
     add(entry.all, row);
-    if (row.recent) add(entry.month, row);
+    if (row.recent) add(entry.today, row);
   }
   const ranked = (models: Map<string, ModelUsage>) => [...models.values()].sort((a, b) => b.all.costUsd - a.all.costUsd || a.label.localeCompare(b.label));
   summary.chatModels = ranked(byModel.chats);

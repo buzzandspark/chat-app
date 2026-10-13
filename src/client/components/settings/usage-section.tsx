@@ -22,7 +22,7 @@ function Cell({ totals, className }: { totals: UsageTotals; className: string })
 }
 
 /** A total and its models, tight together; the group's own padding sits above its border and below its last row. */
-function UsageGroup({ name, testId, period, models }: { name: string; testId: string; period: { month: UsageTotals; all: UsageTotals }; models: ModelUsage[] }) {
+function UsageGroup({ name, testId, period, models }: { name: string; testId: string; period: { today: UsageTotals; all: UsageTotals }; models: ModelUsage[] }) {
   const pad = (i: number) => cn(i === 0 ? "pt-3" : "pt-1.5", i === models.length ? "pb-3" : "pb-1.5");
   return (
     <>
@@ -35,7 +35,7 @@ function UsageGroup({ name, testId, period, models }: { name: string; testId: st
           <td colSpan={2} />
         ) : (
           <>
-            <Cell totals={period.month} className={pad(0)} />
+            <Cell totals={period.today} className={pad(0)} />
             <Cell totals={period.all} className={pad(0)} />
           </>
         )}
@@ -45,7 +45,7 @@ function UsageGroup({ name, testId, period, models }: { name: string; testId: st
           <th scope="row" className={cn("pl-4 text-left align-middle text-small font-normal text-foreground", pad(i + 1))}>
             {m.label}
           </th>
-          <Cell totals={m.month} className={pad(i + 1)} />
+          <Cell totals={m.today} className={pad(i + 1)} />
           <Cell totals={m.all} className={pad(i + 1)} />
         </tr>
       ))}
@@ -62,7 +62,7 @@ export function UsageSkeleton() {
   );
 }
 
-/** Spend on chat replies and on Explore options, each in total and by model, this month and all time, and the cap when there is one. */
+/** Spend on chat replies and on Explore options, each in total and by model, today and all time, and the cap when there is one. */
 export function UsageSection({ usage }: { usage: UsageSummary }) {
   const { capUsd, spentUsd } = usage;
   const share = capUsd === null ? 0 : capUsd > 0 ? Math.min(1, spentUsd / capUsd) : 1;
@@ -76,7 +76,7 @@ export function UsageSection({ usage }: { usage: UsageSummary }) {
           <tr className="text-caption text-muted-foreground">
             <td />
             <th scope="col" className="pb-1 pl-3 text-right font-normal">
-              This month
+              Today
             </th>
             <th scope="col" className="pb-1 pl-3 text-right font-normal">
               All time
@@ -84,8 +84,8 @@ export function UsageSection({ usage }: { usage: UsageSummary }) {
           </tr>
         </thead>
         <tbody>
-          <UsageGroup name="Chats" testId="usage-chats" period={{ month: usage.month.chats, all: usage.all.chats }} models={usage.chatModels} />
-          <UsageGroup name="Explore" testId="usage-explore" period={{ month: usage.month.explore, all: usage.all.explore }} models={usage.exploreModels} />
+          <UsageGroup name="Chats" testId="usage-chats" period={{ today: usage.today.chats, all: usage.all.chats }} models={usage.chatModels} />
+          <UsageGroup name="Explore" testId="usage-explore" period={{ today: usage.today.explore, all: usage.all.explore }} models={usage.exploreModels} />
         </tbody>
       </table>
       {capUsd !== null ? (

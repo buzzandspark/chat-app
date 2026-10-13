@@ -42,7 +42,7 @@ test.describe("settings", () => {
     // The phone overlay closes on the way, as it does for a chat.
     if (isMobile) await expect(sidebar(page)).toHaveAttribute("data-open", "false");
     await expect(page.getByRole("heading", { name: "Usage" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "This month" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Today" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "All time" })).toBeVisible();
     await expect(visible(page, "usage-chats")).toContainText("Chats");
     // The model row carries its figures (the group's own total shows only with two models or more).
