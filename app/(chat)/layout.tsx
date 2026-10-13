@@ -61,7 +61,7 @@ export default function ChatLayout({ children }: LayoutProps<"/">) {
 
 async function SidebarListData() {
   const user = await currentUser();
-  return <SidebarList initialChats={listChats(user.id)} />;
+  return <SidebarList initialChats={listChats(user.id)} userId={user.id} />;
 }
 
 async function UserLabel() {

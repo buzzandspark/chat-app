@@ -16,6 +16,7 @@ type Listener = () => void;
 /** Chat list store so a first send updates the sidebar without a server round trip. */
 export class SidebarStore {
   private chats: ChatSummary[] = [];
+  private userId: string | null = null;
   private listeners = new Set<Listener>();
 
   get(): ChatSummary[] {
@@ -29,7 +30,12 @@ export class SidebarStore {
     };
   }
 
-  hydrate(chats: ChatSummary[]): void {
+  /** Keeps local rows the server list doesn't have yet, but only for the same user: a sign-in as someone else starts over. */
+  hydrate(chats: ChatSummary[], userId: string): void {
+    if (userId !== this.userId) {
+      this.userId = userId;
+      this.chats = [];
+    }
     const known = new Map(this.chats.map((c) => [c.id, c]));
     const merged = chats.map((c) => {
       const local = known.get(c.id);
@@ -109,18 +115,18 @@ export function getSidebarStore(): SidebarStore {
 }
 
 /** `initial` is the server snapshot, so SSR and hydration render the real rows with no empty-state flash. */
-export function useSidebarChats(initial?: ChatSummary[]): ChatSummary[] {
+export function useSidebarChats(initial?: { chats: ChatSummary[]; userId: string }): ChatSummary[] {
   const store = getSidebarStore();
   const [seededWith, setSeededWith] = useState<ChatSummary[] | null>(null);
   // On the server the singleton is shared by every request, so only the snapshot below may carry the rows.
-  if (initial && seededWith !== initial && typeof window !== "undefined") {
-    store.hydrate(initial);
-    setSeededWith(initial);
+  if (initial && seededWith !== initial.chats && typeof window !== "undefined") {
+    store.hydrate(initial.chats, initial.userId);
+    setSeededWith(initial.chats);
   }
   return useSyncExternalStore(
     (cb) => store.subscribe(cb),
     () => store.get(),
-    () => initial ?? EMPTY,
+    () => initial?.chats ?? EMPTY,
   );
 }
 

@@ -36,7 +36,7 @@ beforeEach(() => vi.stubGlobal("IntersectionObserver", NoIntersections));
 function renderList() {
   render(
     <ModalProvider>
-      <SidebarList initialChats={chats} />
+      <SidebarList initialChats={chats} userId="u1" />
     </ModalProvider>,
   );
 }
@@ -119,7 +119,7 @@ describe("SidebarList forks", () => {
   it("marks the parent and hides its forks until it or one of them is open", () => {
     render(
       <ModalProvider>
-        <SidebarList initialChats={withForks} />
+        <SidebarList initialChats={withForks} userId="u1" />
       </ModalProvider>,
     );
     expect(screen.getByRole("link", { name: "Databases, has forks" })).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe("SidebarList forks", () => {
     nav.pathname = `/c/${forkB}`;
     render(
       <ModalProvider>
-        <SidebarList initialChats={withForks} />
+        <SidebarList initialChats={withForks} userId="u1" />
       </ModalProvider>,
     );
     const nested = screen.getByRole("list", { name: "Forks of Databases" });
@@ -153,7 +153,7 @@ describe("SidebarList forks", () => {
     nav.pathname = `/c/${forkB}`;
     render(
       <ModalProvider>
-        <SidebarList initialChats={withForks} />
+        <SidebarList initialChats={withForks} userId="u1" />
       </ModalProvider>,
     );
     const items = async (name: string) => {

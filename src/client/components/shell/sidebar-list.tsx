@@ -180,8 +180,8 @@ const SidebarRow = memo(function SidebarRow({
 });
 
 /** The chat list, server-rendered from the user's rows (the layout streams it into the sidebar's slot). */
-export function SidebarList({ initialChats }: { initialChats: ChatSummary[] }) {
-  const chats = useSidebarChats(initialChats);
+export function SidebarList({ initialChats, userId }: { initialChats: ChatSummary[]; userId: string }) {
+  const chats = useSidebarChats({ chats: initialChats, userId });
   const { onNavigate } = useContext(SidebarListContext);
   const pathname = usePathname();
   const currentChatId = /^\/c\/([0-9a-f-]{36})$/.exec(pathname ?? "")?.[1] ?? null;

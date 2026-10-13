@@ -85,4 +85,27 @@ test.describe("sessions and errors", () => {
     const after = (await context.cookies()).filter((c) => /session_token/.test(c.name) && c.value);
     expect(after).toHaveLength(0);
   });
+
+  test("signing in as someone else after Sign in again shows only their chats", async ({ page, context, isMobile }, info) => {
+    const secret = `guest secret ${info.project.name}`;
+    await openNewChat(page);
+    await sendText(page, secret);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await ensureSidebarOpen(page);
+    await expect(sidebar(page).getByRole("link", { name: secret })).toBeVisible();
+    if (isMobile) await page.getByRole("button", { name: "Close sidebar" }).click();
+    // The session dies under the open page; the next send offers Sign in again.
+    await context.addCookies([{ name: "better-auth.session_token", value: "stale-token-that-matches-no-session", domain: "127.0.0.1", path: "/" }]);
+    await sendText(page, "after the session died");
+    await page.getByRole("link", { name: "Sign in again" }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await page.getByLabel("Email").fill(ADMIN_EMAIL);
+    await page.getByLabel("Password").fill(ADMIN_PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).toHaveURL(ANY_CHAT_URL);
+    await waitForComposer(page);
+    await ensureSidebarOpen(page);
+    await expect(page.getByText(ADMIN_EMAIL).first()).toBeVisible();
+    await expect(sidebar(page).getByRole("link", { name: secret })).toHaveCount(0);
+  });
 });

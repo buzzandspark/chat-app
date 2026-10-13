@@ -58,7 +58,7 @@ describe("forkTabs", () => {
 
 describe("ForkTabs", () => {
   it("marks the open chat and navigates on a click", () => {
-    getSidebarStore().hydrate(chats);
+    getSidebarStore().hydrate(chats, "u1");
     renderTabs("f1");
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((t) => t.textContent)).toEqual(["Main chat", "SQLite", "Postgres"]);
@@ -70,7 +70,7 @@ describe("ForkTabs", () => {
   });
 
   it("a closed tab leaves the strip and is told to the server; opening its chat brings it back", () => {
-    getSidebarStore().hydrate(chats);
+    getSidebarStore().hydrate(chats, "u1");
     renderTabs("f1");
     fireEvent.click(screen.getByRole("button", { name: "Close tab Postgres" }));
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Main chat", "SQLite"]);
@@ -83,7 +83,7 @@ describe("ForkTabs", () => {
 
   it("a reopen the server refuses is sent once, not retried in a loop", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    getSidebarStore().hydrate(chats.map((c) => (c.id === "f2" ? { ...c, tabHidden: true } : c)));
+    getSidebarStore().hydrate(chats.map((c) => (c.id === "f2" ? { ...c, tabHidden: true } : c)), "u1");
     renderTabs("f2");
     for (let i = 0; i < 5; i++) await act(() => new Promise((r) => setTimeout(r, 0)));
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -91,7 +91,7 @@ describe("ForkTabs", () => {
   });
 
   it("Ctrl+Shift+brackets leave the tabs alone while a dialog is open", () => {
-    getSidebarStore().hydrate(chats);
+    getSidebarStore().hydrate(chats, "u1");
     renderTabs("f2");
     fireEvent.click(screen.getByRole("button", { name: "Open dialog" }));
     fireEvent.keyDown(window, { ctrlKey: true, shiftKey: true, code: "BracketRight" });
@@ -99,14 +99,14 @@ describe("ForkTabs", () => {
   });
 
   it("closing the open tab moves to the next one; Ctrl+Shift+brackets cycle", () => {
-    getSidebarStore().hydrate(chats);
+    getSidebarStore().hydrate(chats, "u1");
     renderTabs("f1");
     fireEvent.click(screen.getByRole("button", { name: "Close tab SQLite" }));
     expect(push).toHaveBeenCalledWith("/c/f2");
     // Still on its chat until the navigation lands: the tab must stay closed rather than reopen itself.
     expect(getSidebarStore().get().find((c) => c.id === "f1")?.tabHidden).toBe(true);
     cleanup();
-    getSidebarStore().hydrate(chats);
+    getSidebarStore().hydrate(chats, "u1");
     renderTabs("f2");
     fireEvent.keyDown(window, { ctrlKey: true, shiftKey: true, code: "BracketRight" });
     expect(push).toHaveBeenLastCalledWith("/c/p");
@@ -115,7 +115,7 @@ describe("ForkTabs", () => {
   });
 
   it("a press on the open tab opens its menu, and a second press closes it", async () => {
-    getSidebarStore().hydrate(chats);
+    getSidebarStore().hydrate(chats, "u1");
     renderTabs("f1");
     const open = screen.getByRole("tab", { name: "SQLite" });
     fireEvent.click(open);
@@ -128,7 +128,7 @@ describe("ForkTabs", () => {
   });
 
   it("a right-click opens the tab's menu: Declare winner on a fork, Delete forks on the main chat", async () => {
-    getSidebarStore().hydrate(chats);
+    getSidebarStore().hydrate(chats, "u1");
     renderTabs("f1");
     fireEvent.contextMenu(screen.getByRole("tab", { name: "Postgres" }));
     const menu = await screen.findByRole("menu", { name: "Tab actions for Postgres" });

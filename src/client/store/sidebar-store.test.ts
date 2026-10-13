@@ -3,7 +3,7 @@ import { patchChatOptimistic, SidebarStore, type ChatSummary } from "./sidebar-s
 
 function makeStore(chats: ChatSummary[] = []) {
   const store = new SidebarStore();
-  store.hydrate(chats);
+  store.hydrate(chats, "u1");
   let emits = 0;
   store.subscribe(() => emits++);
   return { store, emits: () => emits };
@@ -33,6 +33,17 @@ describe("SidebarStore.upsert", () => {
     expect(ids(store)).toEqual(["a", "new", "b"]);
     expect(store.get()[1]).toEqual({ id: "new", title: "New", updatedAt: 200 });
     expect(emits()).toBe(1);
+  });
+});
+
+describe("SidebarStore.hydrate", () => {
+  it("keeps a local row the server list lacks for the same user, and drops every row for another user", () => {
+    const { store } = makeStore([{ id: "a", title: "A's chat", updatedAt: 1 }]);
+    store.upsert({ id: "new", title: "Just sent", updatedAt: 5 });
+    store.hydrate([{ id: "a", title: "A's chat", updatedAt: 1 }], "u1");
+    expect(ids(store)).toEqual(["new", "a"]);
+    store.hydrate([{ id: "b", title: "B's chat", updatedAt: 2 }], "u2");
+    expect(ids(store)).toEqual(["b"]);
   });
 });
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { getSidebarStore, useSidebarChats, type ChatSummary } from "./sidebar-store";
 
 function Titles({ initial }: { initial: ChatSummary[] }) {
-  return <>{useSidebarChats(initial).map((c) => c.title).join(",")}</>;
+  return <>{useSidebarChats({ chats: initial, userId: "u1" }).map((c) => c.title).join(",")}</>;
 }
 
 describe("useSidebarChats on the server", () => {

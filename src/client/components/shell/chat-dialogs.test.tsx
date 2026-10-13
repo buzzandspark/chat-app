@@ -17,7 +17,7 @@ const chats: ChatSummary[] = [
 ];
 
 async function deleteOpen(id: string) {
-  getSidebarStore().hydrate(chats.map((c) => ({ ...c })));
+  getSidebarStore().hydrate(chats.map((c) => ({ ...c })), "u1");
   const chat = getSidebarStore().get().find((c) => c.id === id)!;
   render(
     <ChatStoreProvider>
