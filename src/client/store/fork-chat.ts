@@ -18,7 +18,6 @@ const MESSAGES: Record<number, string> = {
   402: CAP,
   404: "This chat no longer exists.",
   409: "This chat cannot be forked.",
-  413: "This chat is too long to fork.",
   503: "The server is restarting; try again in a moment.",
 };
 

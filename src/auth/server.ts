@@ -6,7 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { admin, anonymous } from "better-auth/plugins";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
-import { trustedIpHeader } from "@server/ratelimit";
+import { CLIENT_ADDRESS_HEADER } from "@server/client-address";
 
 export const DEV_AUTH_SECRET = "dev-secret-not-for-production-0123456789";
 
@@ -41,7 +41,6 @@ async function adoptGuest(guestId: string, userId: string): Promise<void> {
  */
 function createAuth() {
   const adminPlugin = admin({ defaultRole: "user", adminRoles: ["admin"] });
-  const ipHeader = trustedIpHeader();
   return betterAuth({
     appName: "Chat",
     baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
@@ -64,8 +63,8 @@ function createAuth() {
     // better-auth's per-IP limiter (3 sign-ins per 10 s) stays on in production;
     // the e2e harness signs in several users from one address in seconds.
     rateLimit: { enabled: env.isProd && !env.e2e },
-    // better-auth's sign-in limiter and sessions.ip_address read the header our own limits trust.
-    advanced: ipHeader ? { ipAddress: { ipAddressHeaders: [ipHeader] } } : undefined,
+    // better-auth's sign-in limiter and sessions.ip_address read the address our own limits use, which the proxy sets.
+    advanced: { ipAddress: { ipAddressHeaders: [CLIENT_ADDRESS_HEADER] } },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,

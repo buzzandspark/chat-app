@@ -113,13 +113,15 @@ describe("GET /api/guest", () => {
     expect((await get(PAGE)).headers.get("location")).toBe("/c/abc");
   });
 
-  it("allows 60 new guests a minute across every address", async () => {
+  it("allows 60 new guests a minute across every address, and a refusal there costs the address nothing", async () => {
     for (let i = 0; i < 60; i++) {
       if (i % 10 === 0) nextIp++;
       expect((await get(PAGE)).headers.get("location")).toBe("/c/abc");
     }
     nextIp++;
     expect((await get(PAGE)).headers.get("location")).toMatch(/^\/login/);
+    getLimiters().guestStartAll.reset();
+    for (let i = 0; i < 10; i++) expect((await get(PAGE)).headers.get("location")).toBe("/c/abc");
   });
 });
 

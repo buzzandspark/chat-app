@@ -537,9 +537,7 @@ export class GenerationClient {
                 ? "forbidden"
                 : res.status === 503
                   ? "unavailable"
-                  : body.error === "context_full"
-                    ? "context_full"
-                    : "bad_request";
+                  : "bad_request";
     const message =
       kind === "quota_exceeded"
         ? "You have used your whole budget on this instance"
@@ -555,11 +553,9 @@ export class GenerationClient {
                   ? "This chat belongs to another account"
                   : kind === "unavailable"
                     ? "The server is restarting"
-                    : kind === "context_full"
-                      ? "This chat is too long to continue"
-                      : tooLong(body)
-                        ? `This message is too long (the limit is ${MAX_MESSAGE_CHARS.toLocaleString()} characters)`
-                        : `Request failed (${res.status})`;
+                    : tooLong(body)
+                      ? `This message is too long (the limit is ${MAX_MESSAGE_CHARS.toLocaleString()} characters)`
+                      : `Request failed (${res.status})`;
     this.store.updateMessage(messageId, {
       status: "error",
       connection: "idle",

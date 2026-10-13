@@ -2,6 +2,7 @@ import "server-only";
 import { isIP } from "node:net";
 import { RateLimiter } from "@relay/ratelimit";
 import { env } from "@shared/env";
+import { forwardedAddress, trustedIpHeader, trustProxyHops } from "./client-address";
 
 interface Limiters {
   seedLongChat: RateLimiter;
@@ -46,22 +47,13 @@ export interface ClientKeys {
   budgetKeys: string[];
 }
 
-export function trustedIpHeader(): string | undefined {
-  return process.env.TRUSTED_IP_HEADER?.trim().toLowerCase() || undefined;
-}
-
-/**
- * The client address as the trusted proxy saw it: the one address in `TRUSTED_IP_HEADER`, else the X-Forwarded-For entry
- * `TRUST_PROXY_HOPS` from the right (1 on Railway), never the leftmost, which the client wrote. A missing one shares `unknown`.
- */
+/** Keys for the client address the trusted proxy saw (see `forwardedAddress`); a missing one shares `unknown`. */
 export function clientKeys(request: Request): ClientKeys {
-  const header = trustedIpHeader();
-  const hops = Number(process.env.TRUST_PROXY_HOPS ?? (env.isProd ? 1 : 0));
   // Without a trusted proxy every forwarding header is the client's own word: one shared key then.
-  if (!header && !(hops > 0)) return { ip: "local", budgetKeys: ["ip:local"] };
-  const raw = header ? request.headers.get(header) : fromRight(request.headers.get("x-forwarded-for"), hops);
-  const address = raw === null ? null : parseIp(raw);
-  if (address === null) return { ip: "unknown", budgetKeys: ["ip:unknown"] };
+  if (!trustedIpHeader() && !(trustProxyHops() > 0)) return { ip: "local", budgetKeys: ["ip:local"] };
+  const raw = forwardedAddress(request.headers);
+  if (raw === null) return { ip: "unknown", budgetKeys: ["ip:unknown"] };
+  const address = parseIp(raw);
   if (typeof address === "string") return { ip: address, budgetKeys: [`ip:${address}`] };
   // An IPv6 client usually holds a whole /64, and a site a /48: key by those prefixes, not by each address.
   const prefix = (groups: number) => `${address.slice(0, groups).map((g) => g.toString(16)).join(":")}::/${groups * 16}`;
@@ -72,19 +64,9 @@ export function clientIp(request: Request): string {
   return clientKeys(request).ip;
 }
 
-/** The X-Forwarded-For entry `hops` from the right; null with fewer entries, which did not all come from a proxy. */
-function fromRight(forwarded: string | null, hops: number): string | null {
-  const parts = (forwarded ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  return parts[parts.length - hops] ?? null;
-}
-
-/** An IPv4 address, or an IPv6 address's eight groups (IPv4-mapped ones as IPv4); null if it is not one address. */
-function parseIp(raw: string): string | number[] | null {
-  // `[2001:db8::1]:443` and `fe80::1%eth0`: the brackets, port and zone are not part of the address.
-  const value = raw.trim().replace(/^\[([^\]]*)\](?::\d+)?$/, "$1").replace(/%.*$/, "");
-  const family = isIP(value);
-  if (family === 4) return value;
-  if (family !== 6) return null;
+/** An IPv4 address, or an IPv6 address's eight groups (IPv4-mapped ones as IPv4). */
+function parseIp(value: string): string | number[] {
+  if (isIP(value) === 4) return value;
   // A trailing dotted quad (`::ffff:1.2.3.4`) is the last two groups.
   const hex = value.replace(/(\d+)\.(\d+)\.(\d+)\.(\d+)$/, (_, a: string, b: string, c: string, d: string) =>
     `${((Number(a) << 8) | Number(b)).toString(16)}:${((Number(c) << 8) | Number(d)).toString(16)}`,

@@ -136,8 +136,14 @@ export class QuotaManager {
     if (user.cap !== null) this.meters.set(id, { userId, inputUsd, outputRate: rates.output, chars: 0, reservedUsd: null, keys: [], model, promptBytes });
   }
 
+  /** True when a guest call's byte bound is within the guest limit: its hold already covers the prompt, so it needs no count. */
+  boundFits(id: string): boolean {
+    const m = this.meters.get(id);
+    return !m || m.reservedUsd === null || !this.guests || m.promptBytes + PROMPT_OVERHEAD_TOKENS <= this.guests.maxPromptTokens;
+  }
+
   /**
-   * A guest call's exact prompt, from the token-counting endpoint (null when it could not be counted, which falls back to the byte bound).
+   * A guest call's exact prompt, from the token-counting endpoint (null when the provider cannot count, which falls back to the byte bound).
    * Throws PromptTooLongError over the guest limit, after filling the address's budget when the prompt is a dense payload.
    */
   fit(id: string, promptTokens: number | null): void {

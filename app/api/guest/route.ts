@@ -42,9 +42,12 @@ async function start(request: Request, mayCreate: boolean): Promise<Response> {
   // The browser discards a refused prefetch or prerender, so the visit itself comes back here and makes the guest.
   if (request.headers.has("sec-purpose")) return new Response(null, { status: 503, headers: { "cache-control": "no-store" } });
   const login = `/login?next=${encodeURIComponent(next)}`;
-  const limiters = getLimiters();
+  const { guestStart, guestStartAll } = getLimiters();
   const keys = clientKeys(request);
-  if (!mayCreate || isDraining() || !limiters.guestStart.check(keys.ip).ok || !limiters.guestStartAll.check("all").ok) return redirectTo(login);
+  if (!mayCreate || isDraining() || !guestStart.check(keys.ip, false).ok || !guestStartAll.check("all", false).ok) return redirectTo(login);
+  // Counted only when both allow it, and before the sign-in's await, so a burst of visits cannot all pass the check.
+  guestStart.check(keys.ip);
+  guestStartAll.check("all");
   // A stale cookie (an expired or purged session) must not block a fresh guest.
   const fresh = new Headers(reqHeaders);
   fresh.delete("cookie");

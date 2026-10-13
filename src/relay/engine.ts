@@ -92,6 +92,8 @@ export interface EngineOptions {
   partialPersistMs?: number;
   /** A generation whose upstream sends nothing for this long ends as `interrupted { reason: "upstream" }`. 0 disables. */
   upstreamIdleMs?: number;
+  /** A guest prompt's token count that takes longer than this fails, and the reply can be retried. */
+  countTimeoutMs?: number;
   isDraining?: () => boolean;
   afterDone?: (info: ReplyDoneInfo) => void;
   /** Live replies running at once for one guest and for all guests together; a fork of a fan-out takes half of one. */
@@ -191,6 +193,7 @@ export class Engine {
   private now: () => number;
   private partialPersistMs: number;
   private upstreamIdleMs: number;
+  private countTimeoutMs: number;
   private isDraining: () => boolean;
   private afterDone: ((info: ReplyDoneInfo) => void) | null;
   private guestRunning: { perGuest: number; total: number };
@@ -206,6 +209,7 @@ export class Engine {
     this.now = options.now ?? Date.now;
     this.partialPersistMs = options.partialPersistMs ?? 2000;
     this.upstreamIdleMs = options.upstreamIdleMs ?? 60_000;
+    this.countTimeoutMs = options.countTimeoutMs ?? 5_000;
     this.isDraining = options.isDraining ?? (() => false);
     this.afterDone = options.afterDone ?? null;
     this.guestRunning = options.guestRunning ?? { perGuest: 2, total: 50 };
@@ -445,11 +449,14 @@ export class Engine {
     }
   }
 
-  /** A guest's prompt is counted exactly before it is sent (a waiting fork takes its hold first): over the limit it is refused, and the count tightens the hold. */
+  /** A guest's prompt whose byte bound is over the limit is counted exactly before it is sent (a waiting fork takes its hold first): over the limit it is refused, and the count tightens the hold. */
   private async fitGuestPrompt(active: Active, provider: Provider, request: ProviderRequest): Promise<RelayError | null> {
     try {
       if (active.admitBytes !== null) this.quota.admit(active.userId, active.id, request.model, active.admitBytes);
-      this.quota.fit(active.id, await this.countPrompt(active, provider, request));
+      if (this.quota.boundFits(active.id)) return null;
+      const tokens = await this.countPrompt(active, provider, request);
+      if (tokens === "failed") return { kind: "overloaded", message: "Couldn't measure this chat", retryable: true, retryAfterMs: 10_000, status: 529 };
+      this.quota.fit(active.id, tokens);
       return null;
     } catch (err) {
       if (err instanceof PromptTooLongError) return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 };
@@ -459,17 +466,15 @@ export class Engine {
     }
   }
 
-  /** Null when the provider cannot count, or the count fails or stalls: the reply then goes ahead on the byte bound. */
-  private async countPrompt(active: Active, provider: Provider, request: ProviderRequest): Promise<number | null> {
+  /** Null when the provider cannot count, so the byte bound decides; "failed" when the count fails or stalls, which a retry may get past. */
+  private async countPrompt(active: Active, provider: Provider, request: ProviderRequest): Promise<number | null | "failed"> {
     if (!provider.countTokens) return null;
-    const signals = [active.controller.signal];
-    if (this.upstreamIdleMs > 0) signals.push(AbortSignal.timeout(this.upstreamIdleMs));
     try {
-      return await provider.countTokens(request, { signal: AbortSignal.any(signals) });
+      return await provider.countTokens(request, { signal: AbortSignal.any([active.controller.signal, AbortSignal.timeout(this.countTimeoutMs)]) });
     } catch (err) {
       if (active.controller.signal.aborted) throw err;
-      console.error(`[engine] token count failed for ${active.id}, using the byte bound`, err);
-      return null;
+      console.error(`[engine] token count failed for ${active.id}`, err);
+      return "failed";
     }
   }
 

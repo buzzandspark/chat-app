@@ -58,7 +58,7 @@ Both must show your own address, not `203.0.113.7`. If they show the forged one,
 
 See `.env.example`. `ADMIN_PATH_SLUG` chooses where the admin console lives; non-admins get a 404 there.
 
-The client address keys rate limits and guest budgets. With `TRUSTED_IP_HEADER` set, it is that header's single address, and better-auth's sessions and sign-in limiter read the same header. Otherwise it is the `X-Forwarded-For` entry `TRUST_PROXY_HOPS` from the right, where `TRUST_PROXY_HOPS` (default 1 in production) is how many proxies sit in front of the app. An IPv6 client is keyed by its /64. A request without a readable address shares one `unknown` key with every other such request rather than going unlimited.
+The client address keys rate limits and guest budgets. With `TRUSTED_IP_HEADER` set, it is that header's single address. Otherwise it is the `X-Forwarded-For` entry `TRUST_PROXY_HOPS` from the right, where `TRUST_PROXY_HOPS` (default 1 in production) is how many proxies sit in front of the app. The proxy passes the same address to better-auth's sessions and sign-in limiter. An IPv6 client is keyed by its /64. A request without a readable address shares one `unknown` key with every other such request rather than going unlimited.
 
 ## Cost caps
 
@@ -88,7 +88,7 @@ Each budget fills with spend and drains continuously at its daily rate. A guest 
 - a guest runs at most 2 replies at once, and guests together 50; a fork of an Explore fan-out takes half a reply's place, and forks past that wait their turn
 - a guest runs at most 2 Explore calls (detection or rewrite) at once, and guests together 50
 - a guest reply has `max_tokens` 8192, thinking included, as does every Explore call
-- a guest prompt is counted exactly before it is sent and refused as too long over `GUEST_MAX_PROMPT_TOKENS` (default 60,000, at most 90,000), so no guest request reaches Haiku's long-context price tier at 100,000 tokens
+- a guest prompt whose size could put it over `GUEST_MAX_PROMPT_TOKENS` is counted exactly before it is sent and refused as too long over it (default 60,000, at most 90,000), so no guest request reaches Haiku's long-context price tier at 100,000 tokens
 - an address whose guest sends an over-long prompt of machine payload (under 1.2 bytes of UTF-8 a token, such as base64) has its budget filled to two days' worth, which refuses its guests for about a day
 - a guest sends at most 12 replies, forks or declared winners a minute and an address 40; a guest rewrites Explore options at most 10 times a minute and an address 30
 

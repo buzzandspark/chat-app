@@ -260,9 +260,6 @@ describe("GenerationClient", () => {
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("error");
     expect(m.error?.kind).toBe("quota_exceeded");
-    const long = makeClient(() => new Response(JSON.stringify({ error: "context_full" }), { status: 413 }));
-    const tooLong = await settle(long.send({ chatId: "c1", text: "q", model: "claude-haiku-5-5", thinking: { harder: false } }).assistantMessageId);
-    expect(tooLong.error).toMatchObject({ kind: "context_full", retryable: false });
   });
 
   it("gives up after max attempts and marks offline", async () => {

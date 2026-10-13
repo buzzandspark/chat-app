@@ -674,7 +674,7 @@ describe("Engine: guest prompts", () => {
     expect(db.select().from(users).where(eq(users.id, "g1")).get()!.costSpentUsd).toBeGreaterThan(0);
   });
 
-  it("sends a guest's prompt on the byte bound when the count fails or stalls", async () => {
+  it("counts only a prompt whose byte bound is over the limit, and refuses it retryably when the count fails or stalls", async () => {
     const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
     let count: (signal: AbortSignal) => Promise<number> = () => Promise.reject(new Error("overloaded"));
     const scripted = new ScriptedProvider((req) => scenarioScript("normal", req), 0);
@@ -682,13 +682,15 @@ describe("Engine: guest prompts", () => {
       db,
       store,
       quota,
-      upstreamIdleMs: 50,
+      countTimeoutMs: 50,
       providers: () => ({ name: "anthropic", stream: (req, opts) => (streamed.push(req), scripted.stream(req, opts)), countTokens: (_req, opts) => count(opts.signal) }),
     });
     expect(await send("hello")).toMatchObject({ type: "done" });
+    const retry = { type: "error", error: { kind: "overloaded", retryable: true } };
+    expect(await send("x".repeat(60_000))).toMatchObject(retry);
     count = (signal) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
-    expect(await send("hello")).toMatchObject({ type: "done" });
-    expect(streamed).toHaveLength(2);
+    expect(await send("x".repeat(60_000))).toMatchObject(retry);
+    expect(streamed).toHaveLength(1);
     quiet.mockRestore();
   });
 });
