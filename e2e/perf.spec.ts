@@ -84,7 +84,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
         transferredKb: Math.round(performance.getEntriesByType("resource").reduce((s, r) => s + ((r as PerformanceResourceTiming).transferSize || 0), 0) / 1024),
       };
     });
-    // Scripts fetched after hydration with no interaction (Radix chunks used to load at mount).
+    // Scripts fetched after hydration with no interaction (Radix chunks wait for first intent).
     const chunksAfterHydration = await page.evaluate(() => {
       const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
       const hydrated = nav ? nav.domContentLoadedEventEnd : 0;

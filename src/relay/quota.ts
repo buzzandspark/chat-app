@@ -72,7 +72,8 @@ function worstCaseUsd(model: string, promptTokens: number): number {
   return (promptTokens * Math.max(rates.input, rates.cacheWrite) + GUEST_MAX_TOKENS * rates.output) / 1_000_000;
 }
 
-// A user's reply is metered as it streams and all their replies stop at the cap, which can overshoot by about one delta per stream.
+// A user's reply is metered as it streams and all their replies stop at the cap; settled cost (real or time-estimated usage)
+// replaces the meter, so spend can pass the cap by more than a delta.
 // A guest call instead holds its worst-case cost from the start, so neither its cap nor its budgets overshoot.
 export class QuotaManager {
   private meters = new Map<string, Meter>();

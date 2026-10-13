@@ -13,8 +13,8 @@ cp .env.example .env
 
 In `.env`, set:
 
-- `ANTHROPIC_API_KEY`: your key from console.anthropic.com. Leave it empty to run in replay mode (recorded fixtures, no spend); production then also needs `REPLAY_MODE=1`.
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` (8+ chars; production needs 10+ and refuses `change-me`): the admin account seeded on first boot.
+- `ANTHROPIC_API_KEY`: your key from console.anthropic.com. Leave it empty to run in replay mode (generated fixtures, no spend); production then also needs `REPLAY_MODE=1`.
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` (8+ chars; production needs 10+ and refuses `change-me`): the admin account, created at boot if that email has none (the password applies only then).
 
 ```sh
 pnpm dev    # http://localhost:3000
@@ -38,11 +38,11 @@ browser ── POST /api/chat ──▶ route ──▶ relay engine ──▶ A
 ## Major decisions
 
 - **One long-lived process with SQLite** (ADR-0002, 0003): replies outlive their HTTP request and resume reads an in-process buffer. No serverless, no Redis.
-- **SSE over `fetch` with client-chosen ids** (ADR-0001): a duplicate send attaches to the running reply, and one `GET /events?after=<seq>` endpoint covers reconnects, reloads and restarts.
+- **SSE over `fetch` with client-chosen ids** (ADR-0001): a duplicate send attaches to the running reply, and one `GET /api/generations/:id/events?after=<seq>` endpoint covers reconnects, reloads and restarts.
 - **Client store first** (ADR-0005): the chat view renders from the store and server rows only seed it, so switching chats paints in the next frame.
 - **Guests and invites** (ADR-0004): visitors are capped Haiku guests; accounts are invite-only with per-user cost caps metered as replies stream.
 - **Explore options** (ADR-0006): Haiku detects alternatives in a reply; forks copy the chat and share its prompt cache.
-- **Replay harness**: scripted scenarios and recorded fixtures exercise disconnects, fallbacks, refusals and errors without spending.
+- **Replay harness**: scripted scenarios and generated fixtures exercise disconnects, fallbacks, refusals and errors without spending.
 
 Details: `docs/design-doc.md`, `docs/adr/`. Deployment and guest limits: `docs/self-host.md`.
 
@@ -55,4 +55,4 @@ pnpm e2e --project=pixel7      # then --project=iphone14 --project=desktop
 pnpm test:shutdown             # SIGTERM and SIGKILL mid-stream against the built server
 ```
 
-Scripts that build or drive a server refuse to run in a checkout whose dev server is live. Use `pnpm worktree` for a sibling checkout with its own port and data (override with `ALLOW_SHARED_DEV=1`).
+Scripts that build or drive a server refuse to run in a checkout whose dev server is live (`ALLOW_SHARED_DEV=1` overrides). `pnpm worktree` makes a sibling checkout with its own `node_modules` and `data/`, and prints a dev command on port 3141.

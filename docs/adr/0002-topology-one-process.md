@@ -8,12 +8,12 @@ The relay has to keep a generation alive after the HTTP response that started it
 
 ## Decision
 
-Next.js runs as a single Node server (`next start` from `output: "standalone"`) on Railway, which provides a PR environment per pull request.
+Next.js runs as a single Node server (`node server.js` from the `output: "standalone"` build) on any container host, e.g. Railway.
 
 - **Dockerfile**: multi-stage, build and runtime stages both on `node:24-bookworm-slim`. `better-sqlite3` ships prebuilt glibc binaries, so Alpine (musl) would force a source build on every install; the build stage still installs `python3`, `make`, and `g++` as a fallback. The runtime stage copies the standalone output, whose file trace includes `better-sqlite3` together with the `bindings` package it loads its binary through. It sets `NEXT_MANUAL_SIG_HANDLE=true` and runs `CMD ["node", "server.js"]` in exec form so Node receives the signal directly.
-- **Database**: SQLite via Drizzle and `better-sqlite3`, one file (`data/app.db` locally, a Railway volume mounted at `/data` in production), WAL mode, migrations run at boot in `instrumentation.ts`.
+- **Database**: SQLite via Drizzle and `better-sqlite3`, one file (`data/app.db` locally, a volume mounted at `/data` in the container), WAL mode, migrations run at boot (`src/server/boot.ts`).
 - **Relay**: `src/relay/` is a plain module with no framework imports. Route handlers call into it; tests call the engine directly. A generation runs as a detached promise that outlives the HTTP response. The event buffer is an in-process `Map`.
-- **Shutdown**: our handler stops accepting new generations, aborts upstream requests, writes each partial, settles estimated cost, marks rows `interrupted { reason: "shutdown" }`, notifies connected clients, closes SQLite, and exits. Railway's stop grace period is set to 30 s.
+- **Shutdown**: our handler (`src/server/shutdown.ts`) stops accepting new generations, aborts upstream requests, writes each partial, settles estimated cost, marks rows `interrupted { reason: "shutdown" }`, notifies connected clients, closes SQLite, and exits. `railway.json` sets Railway's stop grace period to 30 s (`drainingSeconds`).
 
 ## Alternatives rejected
 

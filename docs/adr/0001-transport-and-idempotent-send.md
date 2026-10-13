@@ -15,12 +15,12 @@ A chat client on a phone loses its connection constantly: the tab is backgrounde
   - no buffer, row `running`: the process restarted; the row is marked `interrupted` and a `snapshot` control event carries the saved partial content and `status: "interrupted"`;
   - no buffer, row terminal: the buffer was evicted; a `snapshot` carries the saved message and its terminal status;
   - no row: the server never received the POST; the client re-POSTs with the same ids.
-- Control events (`snapshot`, and any terminal event produced by the GET path rather than the producer) carry `seq: null` and bypass sequence dedupe. Snapshot application depends on status: `done` replaces local state; `interrupted` or `stopped` keeps local text when it extends the snapshot (the saved partial can be up to 2 s behind) and applies only the status, so visible text never shrinks.
+- Control events (`snapshot`, and any terminal event produced by the GET path rather than the producer) carry `seq: null` and bypass sequence dedupe. Snapshot application depends on status: `done` and `refused` replace local state; `interrupted` or `stopped` keeps local text when it extends the snapshot (the saved partial can be up to 2 s behind) and applies only the status, so visible text never shrinks.
 
 ## Alternatives rejected
 
 - **`EventSource`.** Cannot POST, cannot set headers, and its built-in reconnect would fight our backoff and resume logic.
-- **WebSockets.** Bidirectional transport is not needed (stop is a separate POST), and SSE over HTTP/2 reconnects and resumes with plain fetch semantics and no upgrade dance through proxies.
+- **WebSockets.** Bidirectional transport is not needed (stop is a separate POST), and SSE over plain HTTP reconnects and resumes with plain fetch semantics and no upgrade dance through proxies.
 - **Server-generated ids.** The server would have to hand an id back before the client could retry safely, which reintroduces the window where a retry duplicates a send.
 
 ## Consequences

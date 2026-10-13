@@ -7,19 +7,25 @@ For local development see the README.
 ## Docker
 
 ```sh
-docker build -t chat .
-docker run -p 3000:3000 -v chat-data:/data --env-file .env chat
+docker build -t chat:local .                                                # pnpm docker:build
+docker run --rm -p 3000:3000 -v chat-data:/data --env-file .env chat:local  # pnpm docker:run
 ```
+
+`NEXT_PUBLIC_*` values are baked in at build time, so pass them as build args (`docker build --build-arg NEXT_PUBLIC_SENTRY_DSN=… -t chat:local .`); `--env-file` doesn't reach them.
+
+Set `ANTHROPIC_API_KEY`. Without it the server runs in replay mode with canned replies, and only the boot log says so.
 
 The container expects a volume at `/data` and keeps its database at `/data/app.db`. Leave `DATABASE_PATH` unset (it is commented out in `.env.example`); if you set it, it must point under `/data`. A relative path such as `data/app.db` resolves inside the container's `/app`, off the volume, and the database is lost when the container is recreated. Docker's `--env-file` takes everything after `=` as the value, including a trailing `# comment`, so keep comments in `.env` on lines of their own.
 
 In production the server refuses to start, and exits with code 1, when:
 
-- `BETTER_AUTH_SECRET` is unset or is the `.env.example` placeholder. Generate one with `openssl rand -base64 32`.
+- `BETTER_AUTH_SECRET` is unset, shorter than 16 characters, or the `.env.example` placeholder. Generate one with `openssl rand -base64 32`.
 - `BETTER_AUTH_URL` is unset. Set it to the URL users reach the app at.
 - `ANTHROPIC_API_KEY` is unset and `REPLAY_MODE` is not `1`. Replay mode serves recorded replies, so a deployment asks for it explicitly.
 - `ADMIN_PASSWORD` is `change-me` or shorter than 10 characters.
 - any other variable is invalid, or boot fails, for example on a migration.
+
+`ADMIN_PASSWORD` applies only when the admin account is created, so replace the placeholder before first boot.
 
 Leave `E2E` unset. It is the test harness's switch (no guest redirect, cookieless requests run as the uncapped dev user, no sign-in rate limit), and the server refuses to start with it in production unless `E2E_ALLOW_PRODUCTION=1`, which only the harness sets.
 
@@ -29,7 +35,7 @@ The server runs as the unprivileged `node` user (uid 1000). The container starts
 
 ## Railway
 
-Railway builds the Dockerfile. New Railway services don't read `railway.json`, so set its values in the service's settings: health check path `/api/health`, 30 s of draining, and restart on failure up to 5 times. Add a volume mounted at `/data`, generate a domain, and set the environment variables from `.env.example`:
+Railway builds the Dockerfile. New Railway services don't read `railway.json`, so set its values in the service's settings: health check path `/api/health`, 30 s of draining, and restart on failure up to 5 times. Add a volume mounted at `/data`, generate a domain, and set the environment variables from `.env.example` (not `DATABASE_PATH`: the image already points it at `/data/app.db`):
 
 - `BETTER_AUTH_URL`: the generated domain, `https://<name>.up.railway.app`.
 - `TRUSTED_IP_HEADER=x-real-ip`: Railway's edge sets it to the client's address.
@@ -74,14 +80,14 @@ The client address keys rate limits and guest budgets. With `TRUSTED_IP_HEADER` 
 
 ## Cost caps
 
-Each invited user has an all-time cost cap in USD (`users.cost_cap_usd`). Over the cap, sends return `quota_exceeded` and the UI points here. Raise or clear the cap in the admin console.
+Each invited user has an all-time cost cap in USD (`users.cost_cap_usd`). Over the cap, sends return `quota_exceeded`. Raise or clear the cap in the admin console.
 
 A new user whose cap field is left blank gets `DEFAULT_COST_CAP_USD` (default 5). No cap is an explicit choice: the No cap box when creating, or `none` in Edit cap; the API takes the string `"none"` and refuses `null`. Spend under no cap is bounded only by your Anthropic account.
 
 Not covered by the default:
 
 - **The seeded admin** (`ADMIN_EMAIL`) starts with no cap: it is the operator's own account on the operator's key. Give it one with Edit cap if you want a ceiling on your own use; an account promoted to admin keeps the cap it had.
-- **Users created before the default existed** keep whatever they had, including no cap; nothing is rewritten on upgrade. The console lists them as "no cap"; set a cap on each one you did not mean to leave open.
+- **Accounts with no cap** show as "no cap" in the console; set a cap on each one you did not mean to leave open.
 
 ## Guest limits
 

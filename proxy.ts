@@ -38,7 +38,7 @@ export function proxy(request: NextRequest) {
     url.searchParams.set("next", (root ? "/c" : request.nextUrl.pathname) + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
-  // `/c/new` from old bookmarks and links goes to /c, where a new chat lives until its first send.
+  // `/c/new` bookmarks and links go to /c, where a new chat lives until its first send.
   if (root || request.nextUrl.pathname === "/c/new") {
     const url = request.nextUrl.clone();
     url.pathname = "/c";

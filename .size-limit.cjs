@@ -21,8 +21,7 @@ module.exports = [
   {
     name: "chat route JS (gzip)",
     path: paths,
-    // Raised from 200 kB on 2026-10-07: error boundaries, back gesture, lazy-control stand-ins and sign out cost
-    // about 5 kB of app code; the next cut is replacing `marked` (14 kB).
+    // Tight on purpose: the route measures just under it. The next cut is replacing `marked` (14 kB).
     limit: "205 kB",
     gzip: true,
   },
