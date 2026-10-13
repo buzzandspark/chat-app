@@ -113,7 +113,7 @@ describe("GenerationClient", () => {
       };
       return new GenerationClient(store, { fetch: fetchImpl, backoff: { baseMs: 1, maxMs: 2, maxAttempts: 5 }, sleep: async () => {}, idleMs: 30 });
     })();
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId, 5000);
     expect(m.status).toBe("done");
     expect(textOf(m.blocks)).toBe("hi");
@@ -128,7 +128,7 @@ describe("GenerationClient", () => {
       const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };
       return sseResponse(makeEvents(body.generationId, body.assistantMessageId, "ok"));
     });
-    const { assistantMessageId } = client.retry({ chatId: "c1", userMessageId: "u1", text: "again", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.retry({ chatId: "c1", userMessageId: "u1", text: "again", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     await settle(assistantMessageId);
     expect(calls[0]!.body).toMatchObject({ messageId: "u1", text: "again" });
   });
@@ -138,7 +138,7 @@ describe("GenerationClient", () => {
       const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };
       return sseResponse(makeEvents(body.generationId, body.assistantMessageId, "hi"));
     });
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("done");
     expect(textOf(m.blocks)).toBe("hi");
@@ -159,7 +159,7 @@ describe("GenerationClient", () => {
       }
       return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
     });
-    const { assistantMessageId, generationId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId, generationId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("done");
     expect(textOf(m.blocks)).toBe("ok");
@@ -185,7 +185,7 @@ describe("GenerationClient", () => {
       };
       // The real sleep, on fake timers: the delays between POSTs are what the backoff schedule says.
       const client = new GenerationClient(store, { fetch: fetchImpl, backoff: { baseMs: 500, maxMs: 8000, maxAttempts: 10 } });
-      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
       await vi.runAllTimersAsync();
       store.flush();
       const m = store.getMessage(assistantMessageId)!;
@@ -210,7 +210,7 @@ describe("GenerationClient", () => {
       const all = makeEvents(m[1]!, store.messageIdForGeneration(m[1]!)!, "abcdef");
       return sseResponse(all.filter((e) => e.seq! > Number(m[2])));
     });
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId);
     expect(textOf(m.blocks)).toBe("abcdef");
     expect(m.status).toBe("done");
@@ -249,7 +249,7 @@ describe("GenerationClient", () => {
       };
       return sseResponse([snapshot]);
     });
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("interrupted");
     expect(textOf(m.blocks)).toBe("a");
@@ -257,7 +257,7 @@ describe("GenerationClient", () => {
 
   it("surfaces HTTP failures with the right error kind", async () => {
     const client = makeClient(() => new Response(JSON.stringify({ error: "quota_exceeded" }), { status: 402 }));
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("error");
     expect(m.error?.kind).toBe("quota_exceeded");
@@ -265,7 +265,7 @@ describe("GenerationClient", () => {
 
   it("tells a reply refused for room under the cap from one refused at the cap", async () => {
     const client = makeClient(() => new Response(JSON.stringify({ error: "quota_short", spentUsd: 4.5, capUsd: 5 }), { status: 402 }));
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId);
     expect(m.error).toMatchObject({ kind: "quota_short", retryable: false });
     expect(errorText(m.error)).toBe("Not enough left under your spending cap for a full reply.");
@@ -280,7 +280,7 @@ describe("GenerationClient", () => {
       }
       throw new TypeError("fetch failed");
     });
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const started = Date.now();
     while (Date.now() - started < 2000) {
       const m = store.getMessage(assistantMessageId)!;
@@ -309,7 +309,7 @@ describe("GenerationClient", () => {
       if (gets === 1) return new Response(JSON.stringify({ error: "draining" }), { status: 503 });
       return sseResponse(events.slice(4));
     });
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("done");
     expect(textOf(m.blocks)).toBe("hello");
@@ -321,7 +321,7 @@ describe("GenerationClient", () => {
       if (url === "/api/chat") return sseResponse(eventsFromPost(init, "hello"), { cutAfter: 4 });
       return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
     });
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("error");
     expect(m.error?.kind).toBe("gone");
@@ -330,7 +330,7 @@ describe("GenerationClient", () => {
 
   it("attach does nothing for a reply that already finished here", async () => {
     const client = makeClient((_url, init) => sseResponse(eventsFromPost(init, "ok")));
-    const { assistantMessageId, generationId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId, generationId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     await settle(assistantMessageId);
     const before = calls.length;
     client.attach(generationId, assistantMessageId);
@@ -346,10 +346,10 @@ describe("GenerationClient", () => {
       if (body.text === "no") return new Response(JSON.stringify({ error: "rate_limited", retryAfterMs: 1 }), { status: 429 });
       return sseResponse(eventsFromPost(init, "ok"));
     });
-    const refused = client.send({ chatId: "c1", text: "no", model: "claude-sonnet-5-5", thinking: { harder: false } }, { onAccepted: () => accepted++ });
+    const refused = client.send({ chatId: "c1", text: "no", model: "claude-sonnet-5-5", thinking: { effort: "low" } }, { onAccepted: () => accepted++ });
     await settle(refused.assistantMessageId);
     expect(accepted).toBe(0);
-    const ok = client.send({ chatId: "c1", text: "yes", model: "claude-sonnet-5-5", thinking: { harder: false } }, { onAccepted: () => accepted++ });
+    const ok = client.send({ chatId: "c1", text: "yes", model: "claude-sonnet-5-5", thinking: { effort: "low" } }, { onAccepted: () => accepted++ });
     await settle(ok.assistantMessageId);
     expect(accepted).toBe(1);
   });
@@ -360,7 +360,7 @@ describe("GenerationClient", () => {
       if (refuse-- > 0) return new Response(JSON.stringify({ error: "rate_limited", retryAfterMs: 1 }), { status: 429 });
       return sseResponse(eventsFromPost(init, "ok"));
     });
-    const input = { chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { harder: false } } as const;
+    const input = { chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { effort: "low" } } as const;
     const first = client.retry({ ...input, replaceFrom: "old-reply" });
     const failed = await settle(first.assistantMessageId);
     expect(failed.error?.kind).toBe("rate_limited");
@@ -376,10 +376,10 @@ describe("GenerationClient", () => {
 
   it("a refused Edit's retry replaces from the edited message; a refused plain send's replaces nothing", async () => {
     const client = makeClient(() => new Response(JSON.stringify({ error: "rate_limited", retryAfterMs: 1 }), { status: 429 }));
-    const edit = client.send({ chatId: "c1", text: "edited", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "u-original" });
+    const edit = client.send({ chatId: "c1", text: "edited", model: "claude-sonnet-5-5", thinking: { effort: "low" }, replaceFrom: "u-original" });
     expect(client.retryReplaceFrom(await settle(edit.assistantMessageId))).toBe("u-original");
     // The server never had the failed reply, and refuses a replace from an id it does not have.
-    const plain = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const plain = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     expect(client.retryReplaceFrom(await settle(plain.assistantMessageId))).toBeUndefined();
   });
 
@@ -389,7 +389,7 @@ describe("GenerationClient", () => {
       if (busy-- > 0) return new Response(JSON.stringify({ error: "replace_running" }), { status: 409, headers: { "retry-after": "1" } });
       return sseResponse(eventsFromPost(init, "ok"));
     });
-    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "old-reply" });
+    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { effort: "low" }, replaceFrom: "old-reply" });
     expect((await settle(regen.assistantMessageId)).status).toBe("done");
     expect(calls.map((c) => c.body!.generationId)).toEqual([regen.generationId, regen.generationId, regen.generationId]);
     expect(calls.every((c) => c.body!.replaceFromMessageId === "old-reply")).toBe(true);
@@ -397,7 +397,7 @@ describe("GenerationClient", () => {
 
   it("a replace whose target another request already replaced ends as a conflict, sent once", async () => {
     const client = makeClient(() => new Response(JSON.stringify({ error: "replace_gone" }), { status: 409 }));
-    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "old-reply" });
+    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { effort: "low" }, replaceFrom: "old-reply" });
     const failed = await settle(regen.assistantMessageId);
     expect(failed.error).toMatchObject({ kind: "conflict", retryable: false, status: 409 });
     expect(calls).toHaveLength(1);
@@ -411,7 +411,7 @@ describe("GenerationClient", () => {
       return sseResponse(events);
     });
     // Errored mid-stream: the server applied the replace and keeps this reply's row.
-    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { harder: false }, replaceFrom: "old-reply" });
+    const regen = client.retry({ chatId: "c1", userMessageId: "u1", model: "claude-sonnet-5-5", thinking: { effort: "low" }, replaceFrom: "old-reply" });
     const failed = await settle(regen.assistantMessageId);
     expect(failed.status).toBe("error");
     expect(client.retryReplaceFrom(failed)).toBe(regen.assistantMessageId);
@@ -444,7 +444,7 @@ describe("GenerationClient", () => {
           signal?.addEventListener("abort", () => resolve(), { once: true });
         }),
     });
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "hi", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     for (let i = 0; i < 100 && release === null; i++) await new Promise((r) => setTimeout(r, 2));
     expect(release).not.toBeNull();
     client.resumeAll();
@@ -489,7 +489,7 @@ describe("GenerationClient", () => {
 
     it("a POST with no headers is dropped after headersMs and the reply resumes over the GET", async () => {
       const client = headersClient((url, init) => (url === "/api/chat" ? hang(init) : resumed(url)));
-      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
       await vi.advanceTimersByTimeAsync(9_999);
       expect(sent).toHaveLength(1);
       await vi.advanceTimersByTimeAsync(1);
@@ -507,7 +507,7 @@ describe("GenerationClient", () => {
     it("resumeAll while a POST or a GET waits for headers drops it and retries at once, with no backoff sleep", async () => {
       // The POST and the first GET hang; the second GET answers.
       const client = headersClient((url, init, n) => (n <= 2 ? hang(init) : resumed(url)));
-      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+      const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
       await vi.advanceTimersByTimeAsync(1_000);
       client.resumeAll();
       await vi.advanceTimersByTimeAsync(0);
@@ -525,7 +525,7 @@ describe("GenerationClient", () => {
 
     it("the loop giving up while a POST waits for headers cancels it, retries nothing and leaves no timer", async () => {
       const client = headersClient((_url, init) => hang(init));
-      const { generationId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+      const { generationId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
       await vi.advanceTimersByTimeAsync(1_000);
       // Nothing public aborts the loop's controller; this is what a give-up (stop, unmount) would do.
       const inflight = (client as unknown as { inflight: Map<string, { controller: AbortController }> }).inflight;
@@ -555,7 +555,7 @@ describe("GenerationClient", () => {
     // A hidden tab: no animation frames, so nothing flushes on its own.
     store = new ChatStore({ schedule: () => 1, cancel: () => {} });
     const client = makeClient((url, init) => (url === "/api/chat" ? sseResponse(eventsFromPost(init, "ok")) : new Response("{}")));
-    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     await new Promise((r) => setTimeout(r, 20));
     expect(store.getMessage(assistantMessageId)!.status).toBe("streaming"); // `done` is still queued
     client.resumeAll();
@@ -602,7 +602,7 @@ describe("the chat's queue", () => {
       return sseResponse(makeEvents(body.generationId, body.assistantMessageId, "ok"));
     });
     store.setSettings("c1", { model: "claude-opus-5-5" });
-    const first = client.send({ chatId: "c1", text: "first", model: "claude-opus-5-5", thinking: { harder: false } });
+    const first = client.send({ chatId: "c1", text: "first", model: "claude-opus-5-5", thinking: { effort: "low" } });
     store.enqueueMessage("c1", { id: "q1", text: "second", scenario: "long_reply" });
     store.enqueueMessage("c1", { id: "q2", text: "third", scenario: null });
     await settle(first.assistantMessageId);
@@ -617,7 +617,7 @@ describe("the chat's queue", () => {
       const body = JSON.parse(String(init?.body)) as { generationId: string };
       return sseResponse([{ type: "error", seq: 0, generationId: body.generationId, t: 0, error: { kind: "overloaded", message: "Overloaded", retryable: true } }]);
     });
-    const first = client.send({ chatId: "c1", text: "first", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const first = client.send({ chatId: "c1", text: "first", model: "claude-sonnet-5-5", thinking: { effort: "low" } });
     store.enqueueMessage("c1", { id: "q1", text: "second", scenario: null });
     await settle(first.assistantMessageId);
     await new Promise((r) => setTimeout(r, 0));

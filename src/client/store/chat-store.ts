@@ -1,7 +1,7 @@
 import type { ClientBlock, StoredContentBlock } from "@shared/blocks";
 import { toClientBlocks } from "@shared/blocks";
 import type { ForkOption } from "@shared/forks";
-import { DEFAULT_MODEL, isModelId, type ModelId } from "@shared/models";
+import { DEFAULT_EFFORT, DEFAULT_MODEL, isModelId, normalizeThinking, type ModelId } from "@shared/models";
 import type {
   InterruptedReason,
   MessageStatus,
@@ -67,7 +67,7 @@ export interface ChatSettings {
   scenario: { name: string; title: string } | null;
 }
 
-const DEFAULT_SETTINGS: ChatSettings = { model: DEFAULT_MODEL, thinking: { harder: false }, scenario: null };
+const DEFAULT_SETTINGS: ChatSettings = { model: DEFAULT_MODEL, thinking: { effort: DEFAULT_EFFORT }, scenario: null };
 
 export interface ChatState {
   id: string;
@@ -361,8 +361,8 @@ export class ChatStore {
       for (let i = rows.length - 1; i >= 0; i--) {
         const row = rows[i]!;
         if (row.role === "assistant" && isModelId(row.requestedModel)) {
-          const thinking = row.thinking ?? settings.thinking;
-          if (settings.model !== row.requestedModel || thinking.harder !== settings.thinking.harder) {
+          const thinking = row.thinking == null ? settings.thinking : normalizeThinking(row.thinking);
+          if (settings.model !== row.requestedModel || thinking.effort !== settings.thinking.effort) {
             settings = { ...settings, model: row.requestedModel, thinking };
           }
           break;

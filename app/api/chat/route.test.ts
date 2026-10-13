@@ -127,3 +127,18 @@ describe("POST /api/chat for an existing generation", () => {
     expect(await res.json()).toEqual({ error: "forbidden" });
   });
 });
+
+describe("POST /api/chat effort", () => {
+  it("passes the chosen effort on, reads a stale tab's harder flag, and defaults to low", async () => {
+    const cases: [unknown, string][] = [
+      [{ effort: "xhigh" }, "xhigh"],
+      [{ harder: true }, "high"],
+      [{ harder: false }, "low"],
+      [undefined, "low"],
+    ];
+    for (const [thinking, effort] of cases) {
+      expect((await send("user", { thinking })).status).not.toBe(400);
+      expect(start).toHaveBeenLastCalledWith(expect.objectContaining({ thinking: { effort } }));
+    }
+  });
+});

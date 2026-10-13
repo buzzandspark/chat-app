@@ -6,7 +6,6 @@ import type {
   MessageStatus,
   RefusalInfo,
   RelayError,
-  ThinkingOptions,
   Timings,
   UserRole,
 } from "@shared/types";
@@ -164,7 +163,8 @@ export const messages = sqliteTable(
     generationId: text("generation_id"),
     timings: text("timings", { mode: "json" }).$type<Timings>(),
     /** The effort a reply was asked with; a fork repeats it so the prompt cache holds. */
-    thinking: text("thinking", { mode: "json" }).$type<ThinkingOptions>(),
+    /** ThinkingOptions, or the older `{ harder }` shape: read it through normalizeThinking. */
+    thinking: text("thinking", { mode: "json" }).$type<unknown>(),
     /** Haiku's fork prompts for a reply: null = not run, [] = no options. */
     forkOptions: text("fork_options", { mode: "json" }).$type<ForkOption[]>(),
     /** The last producer seq folded into `content` by the write that saved it, for resume; null for user messages and old rows. */

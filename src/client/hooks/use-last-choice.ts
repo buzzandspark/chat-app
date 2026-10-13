@@ -1,6 +1,6 @@
 "use client";
 import type { ChatSettings } from "@client/store/chat-store";
-import { isModelId } from "@shared/models";
+import { isModelId, normalizeThinking } from "@shared/models";
 
 const PREFIX = "chat:settings:";
 
@@ -11,10 +11,10 @@ export function readLastChoice(userId: string): Partial<Choice> {
   try {
     const raw = localStorage.getItem(PREFIX + userId);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as { model?: unknown; thinking?: { harder?: unknown } };
+    const parsed = JSON.parse(raw) as { model?: unknown; thinking?: unknown };
     const out: Partial<Choice> = {};
     if (isModelId(parsed.model)) out.model = parsed.model;
-    if (typeof parsed.thinking?.harder === "boolean") out.thinking = { harder: parsed.thinking.harder };
+    if (parsed.thinking !== undefined) out.thinking = normalizeThinking(parsed.thinking);
     return out;
   } catch {
     return {};

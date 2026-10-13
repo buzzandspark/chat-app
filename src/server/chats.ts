@@ -3,6 +3,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@db/client";
 import type { StoredContentBlock } from "@shared/blocks";
 import type { ForkOption } from "@shared/forks";
+import { normalizeThinking } from "@shared/models";
 import type { MessageStatus, RefusalInfo, RelayError, ThinkingOptions, Timings } from "@shared/types";
 
 export interface ChatSummary {
@@ -125,7 +126,7 @@ export function getChatWithMessages(
       refusal: r.refusal ?? null,
       error: r.error ?? null,
       timings: r.timings ?? null,
-      thinking: r.thinking ?? null,
+      thinking: r.thinking == null ? null : normalizeThinking(r.thinking),
       options: r.forkOptions ?? null,
       generationId: r.generationId,
       lastSeq: r.lastSeq,

@@ -9,7 +9,7 @@ import { textOf } from "@client/store/chat-store";
 import { useChat, useChatSettingsKnown, useChatStore, useMessage } from "@client/store/hooks";
 import { useChatActions, useChatContext, type ChatSettings } from "./chat-context";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
-import { MODELS, type ModelId } from "@shared/models";
+import { EFFORT_LABELS, MODELS, type ModelId } from "@shared/models";
 import { MAX_MESSAGE_CHARS, type ThinkingOptions } from "@shared/types";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,7 @@ function PickerStandIn({
   onPress?: () => void;
 }) {
   const info = MODELS[model];
+  const effort = thinking.effort === "low" ? null : EFFORT_LABELS[thinking.effort].toLowerCase();
   // Announce what the loaded trigger will open: the menu at `md`, the sheet (a dialog) on phones.
   const desktop = useIsDesktop();
   return (
@@ -84,14 +85,14 @@ function PickerStandIn({
       variant="ghost"
       size="sm"
       className="touch-target max-w-[55vw] gap-1 text-muted-foreground"
-      aria-label={known ? `Model: ${info.short}${thinking.harder ? ", think harder" : ""}` : "Model"}
+      aria-label={known ? `Model: ${info.short}${effort ? `, effort ${effort}` : ""}` : "Model"}
       aria-haspopup={desktop ? "menu" : "dialog"}
       aria-disabled={!onPress || undefined}
       {...(intent ? intentProps(intent) : {})}
       onClick={onPress}
     >
       <span className={cn("truncate", !known && "invisible")}>{info.short}</span>
-      {thinking.harder && known ? <span className="rounded-md bg-accent px-1.5 text-caption text-accent-foreground">harder</span> : null}
+      {effort && known ? <span className="shrink-0 rounded-md bg-accent px-1.5 text-caption text-accent-foreground">{effort}</span> : null}
       <ChevronDown data-icon="inline-end" className="size-3.5" />
     </Button>
   );

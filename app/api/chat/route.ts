@@ -5,7 +5,7 @@ import { getDb, schema } from "@db/client";
 import { BusyError, DrainingError, ForbiddenError, MissingUserMessageError } from "@relay/engine";
 import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
-import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
+import { EFFORTS, GUEST_MODEL, MODEL_IDS, normalizeThinking } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
 import { assertMayInteract, errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
 import { refuseGuestSend, tooMany } from "@server/ratelimit";
@@ -20,7 +20,8 @@ const Body = z.object({
   assistantMessageId: z.string().uuid(),
   text: z.string().min(1).max(MAX_MESSAGE_CHARS).optional(),
   model: z.enum(MODEL_IDS),
-  thinking: z.object({ harder: z.boolean() }).default({ harder: false }),
+  /** Also accepts the older `{ harder }` shape a stale tab may post. */
+  thinking: z.preprocess(normalizeThinking, z.object({ effort: z.enum(EFFORTS) })),
   scenario: z.enum(SCENARIO_NAMES).optional(),
   /** Edit and Regenerate name the first message to drop; the engine replaces in one transaction. */
   replaceFromMessageId: z.string().uuid().optional(),

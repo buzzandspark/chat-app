@@ -24,7 +24,7 @@ run("prompt caching per model", () => {
   const client = new Anthropic({ apiKey: key, maxRetries: 2 });
   for (const model of MODEL_IDS) {
     it(`${model}: second request reads from cache`, async () => {
-      const params = buildRequest({ model, thinking: { harder: false }, messages: bigFixture() });
+      const params = buildRequest({ model, thinking: { effort: "low" }, messages: bigFixture() });
       const first = await client.beta.messages.create({ ...params, max_tokens: 32, stream: false });
       expect(first.usage.cache_creation_input_tokens ?? 0).toBeGreaterThan(0);
       const second = await client.beta.messages.create({ ...params, max_tokens: 32, stream: false });

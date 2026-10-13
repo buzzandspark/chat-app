@@ -26,7 +26,7 @@ test.describe("guest mode", () => {
     // The server runs Haiku whatever model a guest's request names.
     const chatId = crypto.randomUUID();
     const sent = await page.request.post("/api/chat", {
-      data: { generationId: crypto.randomUUID(), chatId, messageId: crypto.randomUUID(), assistantMessageId: crypto.randomUUID(), text: "hi", model: "claude-opus-5-5", thinking: { harder: false } },
+      data: { generationId: crypto.randomUUID(), chatId, messageId: crypto.randomUUID(), assistantMessageId: crypto.randomUUID(), text: "hi", model: "claude-opus-5-5", thinking: { effort: "low" } },
     });
     expect(sent.ok()).toBe(true);
     const saved = (await (await page.request.get(`/api/chats/${chatId}`)).json()) as { messages: { role: string; requestedModel: string | null }[] };

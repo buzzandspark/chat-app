@@ -3,8 +3,8 @@ import type { Db } from "@db/client";
 import { chats, generations, messages } from "@db/schema";
 import { MAX_FORKS } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
-import { DEFAULT_MODEL, GUEST_MODEL, isModelId } from "@shared/models";
-import type { ThinkingOptions, UserRole } from "@shared/types";
+import { DEFAULT_MODEL, GUEST_MODEL, isModelId, normalizeThinking } from "@shared/models";
+import type { UserRole } from "@shared/types";
 import type { Engine, RetryPolicy } from "./engine";
 import { isTerminal } from "./events";
 import type { EventStore } from "./store";
@@ -86,7 +86,7 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
   // Null means never detected (a declared winner's reply), which stays forkable; empty means spent.
   if (lastReply.forkOptions?.length === 0) throw new ForkError("spent");
   const model = input.userRole === "guest" ? GUEST_MODEL : isModelId(lastReply.requestedModel) ? lastReply.requestedModel : DEFAULT_MODEL;
-  const thinking: ThinkingOptions = lastReply.thinking ?? { harder: false };
+  const thinking = normalizeThinking(lastReply.thinking);
   const lastGeneration = lastReply.generationId
     ? db.select({ scenario: generations.scenario }).from(generations).where(eq(generations.id, lastReply.generationId)).get()
     : undefined;

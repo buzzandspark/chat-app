@@ -27,19 +27,19 @@ export function modelParams(model: ModelId, opts: ThinkingOptions): ModelParams 
           display: "summarized",
           block_binding: { prefix_mismatch_behavior: "drop_block" },
         },
-        output_config: { effort: opts.harder ? "high" : "low" },
+        output_config: { effort: opts.effort },
         betas: [FALLBACK_BETA, BINDING_BETA],
         fallbacks: "default",
       };
     case "claude-haiku-5-5":
-      // Adaptive thinking steered by effort (default medium), bound thinking blocks; no server-side fallback is documented for it.
+      // Adaptive thinking steered by effort, bound thinking blocks; no server-side fallback is documented for it.
       return {
         thinking: {
           type: "adaptive",
           display: "summarized",
           block_binding: { prefix_mismatch_behavior: "drop_block" },
         },
-        output_config: { effort: opts.harder ? "high" : "low" },
+        output_config: { effort: opts.effort },
         betas: [BINDING_BETA],
       };
   }

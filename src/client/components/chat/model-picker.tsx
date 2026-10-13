@@ -1,15 +1,14 @@
 "use client";
 import { Check, ChevronDown } from "lucide-react";
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { DropdownMenu as MenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useBackGesture } from "@client/hooks/use-back-gesture";
 import { useIsDesktop } from "@client/hooks/use-media-query";
-import { MODEL_IDS, MODELS, type ModelId, GUEST_MODEL } from "@shared/models";
+import { EFFORT_LABELS, EFFORTS, MODEL_IDS, MODELS, type Effort, type ModelId, GUEST_MODEL } from "@shared/models";
 import type { ThinkingOptions } from "@shared/types";
 
 // Shown only in the picker, so the main chunk carries names, not copy.
@@ -19,13 +18,20 @@ const MODEL_BLURBS: Record<ModelId, string> = {
   "claude-haiku-5-5": "Fastest replies at the lowest cost",
 };
 
-const THINKING_LABEL = "Think harder";
+const EFFORT_BLURBS: Record<Effort, string> = {
+  low: "Quick replies, least thinking",
+  medium: "Balanced",
+  high: "Thinks longer before replying",
+  xhigh: "Deep thinking for hard tasks",
+  max: "Thinks as long as it needs",
+};
 
 // Menu items are divs, so cursor-pointer/select-none give them the feel of the buttons the sheet uses.
 const ROW = "flex min-h-12 w-full cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50";
 // A model a guest can't use: greyed out and inert (Radix marks a disabled item data-disabled).
 const LOCKED = "data-disabled:cursor-not-allowed data-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50";
 const rowTone = (selected: boolean) => (selected ? "bg-accent text-accent-foreground" : "hover:bg-muted active:bg-muted");
+const GROUP_LABEL = "mt-1 px-3 pt-1 text-caption font-medium text-muted-foreground";
 
 function RowText({ title, blurb }: { title: string; blurb: string }) {
   return (
@@ -38,8 +44,8 @@ function RowText({ title, blurb }: { title: string; blurb: string }) {
 
 const STEPS: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
 
-/** The sheet's model rows are one tab stop; arrows (and Home/End) move between them. Picking closes the
- *  sheet, so unlike a form's radio group the arrows move focus only and Space/Enter picks. */
+/** Each of the sheet's radio groups is one tab stop; arrows (and Home/End) move between its rows. Picking a model
+ *  closes the sheet, so unlike a form's radio group the arrows move focus only and Space/Enter picks. */
 function onRadioKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
   const group = e.currentTarget.closest('[role="radiogroup"]');
   if (!group) return;
@@ -72,12 +78,14 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
   const [open, setOpen] = useState(defaultOpen);
   const picked = useRef(false);
   useBackGesture(open && !desktop, () => setOpen(false));
+  const effortLabelId = useId();
   const info = MODELS[model];
+  const effort = thinking.effort === "low" ? null : EFFORT_LABELS[thinking.effort].toLowerCase();
 
   const trigger = (
-    <Button variant="ghost" size="sm" className="touch-target max-w-[55vw] gap-1 text-muted-foreground" aria-label={`Model: ${info.short}${thinking.harder ? ", think harder" : ""}`}>
+    <Button variant="ghost" size="sm" className="touch-target max-w-[55vw] gap-1 text-muted-foreground" aria-label={`Model: ${info.short}${effort ? `, effort ${effort}` : ""}`}>
       <span className="truncate">{info.short}</span>
-      {thinking.harder ? <span className="rounded-md bg-accent px-1.5 text-caption text-accent-foreground">harder</span> : null}
+      {effort ? <span className="shrink-0 rounded-md bg-accent px-1.5 text-caption text-accent-foreground">{effort}</span> : null}
       <ChevronDown data-icon="inline-end" className="size-3.5" />
     </Button>
   );
@@ -116,17 +124,26 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
               </MenuPrimitive.RadioItem>
             ))}
           </MenuPrimitive.RadioGroup>
-          <MenuPrimitive.CheckboxItem
-            checked={thinking.harder}
-            onCheckedChange={(harder) => onChange({ thinking: { harder } })}
-            // Toggling keeps the menu open.
-            onSelect={(e) => e.preventDefault()}
-            className={cn(ROW, "mt-1")}
-          >
-            <RowText title={THINKING_LABEL} blurb="Thinks longer before replying" />
-            {/* The item is the menuitemcheckbox; the switch only draws its state. */}
-            <Switch checked={thinking.harder} tabIndex={-1} aria-hidden className="pointer-events-none" />
-          </MenuPrimitive.CheckboxItem>
+          <MenuPrimitive.Label id={effortLabelId} className={GROUP_LABEL}>
+            Effort
+          </MenuPrimitive.Label>
+          <MenuPrimitive.RadioGroup value={thinking.effort} aria-labelledby={effortLabelId} className="flex flex-col gap-1">
+            {EFFORTS.map((e) => (
+              <MenuPrimitive.RadioItem
+                key={e}
+                value={e}
+                onSelect={(event) => {
+                  // Picking an effort keeps the menu open.
+                  event.preventDefault();
+                  onChange({ thinking: { effort: e } });
+                }}
+                className={cn(ROW, rowTone(e === thinking.effort))}
+              >
+                <RowText title={EFFORT_LABELS[e]} blurb={EFFORT_BLURBS[e]} />
+                {e === thinking.effort ? <Check className="size-4 shrink-0" /> : null}
+              </MenuPrimitive.RadioItem>
+            ))}
+          </MenuPrimitive.RadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -134,12 +151,11 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom" className="rounded-t-sheet px-gutter pb-[max(env(safe-area-inset-bottom,0px),1rem)]" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <SheetContent side="bottom" className="max-h-dvh overflow-y-auto rounded-t-sheet px-gutter pb-[max(env(safe-area-inset-bottom,0px),1rem)]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader className="px-0">
           <SheetTitle>Model</SheetTitle>
         </SheetHeader>
         <div className="flex flex-col gap-1 py-1">
-          {/* A radio group, with the switch outside it: a listbox may hold only options. */}
           <div role="radiogroup" aria-label="Models" className="flex flex-col gap-1">
             {MODEL_IDS.map((id) => {
               const selected = id === model;
@@ -164,10 +180,30 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
               );
             })}
           </div>
-          <label className="mt-1 flex min-h-12 items-center justify-between gap-3 rounded-lg px-3 py-2.5">
-            <RowText title={THINKING_LABEL} blurb="Thinks longer before replying" />
-            <Switch checked={thinking.harder} onCheckedChange={(harder) => onChange({ thinking: { harder } })} aria-label={THINKING_LABEL} />
-          </label>
+          <div id={effortLabelId} className={GROUP_LABEL}>
+            Effort
+          </div>
+          <div role="radiogroup" aria-labelledby={effortLabelId} className="flex flex-col gap-1">
+            {EFFORTS.map((e) => {
+              const selected = e === thinking.effort;
+              return (
+                <button
+                  key={e}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={selected ? 0 : -1}
+                  onKeyDown={onRadioKeyDown}
+                  // Picking an effort keeps the sheet open.
+                  onClick={() => onChange({ thinking: { effort: e } })}
+                  className={cn(ROW, rowTone(selected))}
+                >
+                  <RowText title={EFFORT_LABELS[e]} blurb={EFFORT_BLURBS[e]} />
+                  {selected ? <Check className="size-4 shrink-0" /> : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

@@ -1,4 +1,6 @@
 // Client-safe model catalogue; request params live in thinking-config.ts, prices in pricing.ts.
+import type { ThinkingOptions } from "./types";
+
 export const MODEL_IDS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"] as const;
 export type ModelId = (typeof MODEL_IDS)[number];
 export const DEFAULT_MODEL: ModelId = "claude-sonnet-5-5";
@@ -9,7 +11,7 @@ export interface ModelInfo {
   short: string;
   /** Context window in tokens. */
   contextWindow: number;
-  /** Every current model thinks adaptively; "Think harder" maps to effort. */
+  /** Every current model thinks adaptively, steered by the chosen effort. */
   thinking: "adaptive";
 }
 
@@ -36,6 +38,24 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     thinking: "adaptive",
   },
 };
+
+/** The effort levels the API accepts in output_config.effort, lowest first. */
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export type Effort = (typeof EFFORTS)[number];
+export const DEFAULT_EFFORT: Effort = "low";
+export const EFFORT_LABELS: Record<Effort, string> = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" };
+
+export function isEffort(value: unknown): value is Effort {
+  return typeof value === "string" && (EFFORTS as readonly string[]).includes(value);
+}
+
+/** Reads stored or posted thinking options, including the older `{ harder }` shape (true is high). */
+export function normalizeThinking(value: unknown): ThinkingOptions {
+  if (typeof value !== "object" || value === null) return { effort: DEFAULT_EFFORT };
+  if ("effort" in value && isEffort(value.effort)) return { effort: value.effort };
+  if ("harder" in value && value.harder === true) return { effort: "high" };
+  return { effort: DEFAULT_EFFORT };
+}
 
 export function isModelId(value: unknown): value is ModelId {
   return typeof value === "string" && (MODEL_IDS as readonly string[]).includes(value);

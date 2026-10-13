@@ -1,6 +1,6 @@
-import type { ModelId } from "./models";
+import type { Effort, ModelId } from "./models";
 
-export type { ModelId };
+export type { Effort, ModelId };
 
 /** A guest is an anonymous visitor: Haiku only, a small cost cap, its chats move to the account it signs in to. */
 export type UserRole = "admin" | "user" | "guest";
@@ -63,8 +63,8 @@ export interface UsageSummary {
 }
 
 export interface ThinkingOptions {
-  /** "Think harder": effort high on Sonnet/Opus, budgeted thinking on Haiku. */
-  harder: boolean;
+  /** Sent as output_config.effort for every model. */
+  effort: Effort;
 }
 
 type ErrorKind =

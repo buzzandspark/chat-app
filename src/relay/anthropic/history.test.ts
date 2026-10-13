@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
+import { EFFORTS, MODEL_IDS } from "@shared/models";
 import { assistantParams, buildHistory, type HistoryMessage } from "./history";
 import { buildRequest } from "./request";
 
@@ -78,13 +79,13 @@ describe("history", () => {
     expect(first[0]!.cache_control).toBeUndefined();
     expect(assistant[1]!.cache_control).toEqual({ type: "ephemeral" });
     expect(last[0]!.cache_control).toEqual({ type: "ephemeral" });
-    const request = buildRequest({ model: "claude-sonnet-5-5", thinking: { harder: false }, messages: [], cacheTail: true });
+    const request = buildRequest({ model: "claude-sonnet-5-5", thinking: { effort: "low" }, messages: [], cacheTail: true });
     expect(request.messages).toEqual([]);
   });
 
   it("builds the full request with per-model betas, fallbacks, and binding", () => {
     const messages: HistoryMessage[] = [{ role: "user", content: [text("hi")], status: "done" }];
-    const sonnet = buildRequest({ model: "claude-sonnet-5-5", thinking: { harder: false }, messages });
+    const sonnet = buildRequest({ model: "claude-sonnet-5-5", thinking: { effort: "low" }, messages });
     expect(sonnet.betas).toEqual(["server-side-fallback-2026-07-01", "thinking-binding-controls-2026-08-01"]);
     expect(sonnet.fallbacks).toBe("default");
     expect(sonnet.thinking).toEqual({
@@ -95,18 +96,19 @@ describe("history", () => {
     expect(sonnet.output_config).toEqual({ effort: "low" });
     expect(Array.isArray(sonnet.system) && sonnet.system[0]?.cache_control).toEqual({ type: "ephemeral" });
 
-    const harder = buildRequest({ model: "claude-opus-5-5", thinking: { harder: true }, messages });
-    expect(harder.output_config).toEqual({ effort: "high" });
+    for (const model of MODEL_IDS) {
+      for (const effort of EFFORTS) expect(buildRequest({ model, thinking: { effort }, messages }).output_config).toEqual({ effort });
+    }
 
     // Haiku 5.5 thinks adaptively with effort like the others, binds its thinking blocks, and has no server-side fallback.
-    const haiku = buildRequest({ model: "claude-haiku-5-5", thinking: { harder: true }, messages });
+    const haiku = buildRequest({ model: "claude-haiku-5-5", thinking: { effort: "high" }, messages });
     expect(haiku.betas).toEqual(["thinking-binding-controls-2026-08-01"]);
     expect(haiku.fallbacks).toBeUndefined();
     expect(haiku.thinking).toEqual({ type: "adaptive", display: "summarized", block_binding: { prefix_mismatch_behavior: "drop_block" } });
     expect(haiku.output_config).toEqual({ effort: "high" });
-    const haikuPlain = buildRequest({ model: "claude-haiku-5-5", thinking: { harder: false }, messages });
+    const haikuPlain = buildRequest({ model: "claude-haiku-5-5", thinking: { effort: "low" }, messages });
     expect(haikuPlain.output_config).toEqual({ effort: "low" });
     expect(haikuPlain.max_tokens).toBe(16_000);
-    expect(buildRequest({ model: "claude-haiku-5-5", thinking: { harder: false }, messages, maxTokens: 8192 }).max_tokens).toBe(8192);
+    expect(buildRequest({ model: "claude-haiku-5-5", thinking: { effort: "low" }, messages, maxTokens: 8192 }).max_tokens).toBe(8192);
   });
 });

@@ -4,6 +4,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { Db } from "@db/client";
 import { chats, generations, messages, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
+import { normalizeThinking } from "@shared/models";
 import type { HistoryMessage } from "./anthropic/history";
 import { buildRequest } from "./anthropic/request";
 import { BusyError, Engine, type StartInput } from "./engine";
@@ -48,7 +49,7 @@ async function turn(chatId: string, text: string, extra: Partial<StartInput> = {
     assistantMessageId: uuidv7(),
     text,
     model: "claude-opus-5-5",
-    thinking: { harder: true },
+    thinking: { effort: "high" },
     ...extra,
   };
   engine.start(inp);
@@ -101,9 +102,18 @@ describe("createForks", () => {
       const [prompt, reply] = rows.slice(-2);
       expect(prompt).toMatchObject({ id: f.userMessageId, role: "user", position: parentRows.length });
       expect(prompt!.content).toEqual([{ type: "text", text: f.prompt, citations: null }]);
-      expect(reply).toMatchObject({ id: f.assistantMessageId, status: "done", requestedModel: "claude-opus-5-5", thinking: { harder: true } });
+      expect(reply).toMatchObject({ id: f.assistantMessageId, status: "done", requestedModel: "claude-opus-5-5", thinking: { effort: "high" } });
     }
     expect(parentRows.at(-1)!.forkOptions).toEqual([]);
+  });
+
+  it("forks a parent reply saved with the older harder flag at effort high", async () => {
+    const parentId = await parentChat();
+    db.update(messages).set({ thinking: { harder: true } }).where(eq(messages.id, lastRow(parentId))).run();
+    const f = fork();
+    const [started] = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks: [f] });
+    await collectUntilTerminal(store, started!.generationId);
+    expect(db.select().from(messages).where(eq(messages.id, f.assistantMessageId)).get()!.thinking).toEqual({ effort: "high" });
   });
 
   it("starts the first fork alone and the rest once its message has begun", async () => {
@@ -133,10 +143,10 @@ describe("createForks", () => {
     const parentRows = db.select().from(messages).where(eq(messages.chatId, parentId)).orderBy(asc(messages.position)).all();
     const parentReply = parentRows.at(-1)!;
     const forkReply = db.select().from(messages).where(eq(messages.id, f!.assistantMessageId)).get()!;
-    const parentRequest = buildRequest({ model: "claude-opus-5-5", thinking: parentReply.thinking!, messages: history(parentId, parentReply.id), userId: USER });
+    const parentRequest = buildRequest({ model: "claude-opus-5-5", thinking: normalizeThinking(parentReply.thinking), messages: history(parentId, parentReply.id), userId: USER });
     const forkRequest = buildRequest({
       model: forkReply.requestedModel as "claude-opus-5-5",
-      thinking: forkReply.thinking!,
+      thinking: normalizeThinking(forkReply.thinking),
       messages: history(f!.chatId, forkReply.id),
       userId: USER,
       cacheTail: true,
@@ -157,7 +167,7 @@ describe("createForks", () => {
     const parentId = await parentChat(1, { userId: "g1", userRole: "guest" });
     const started = createForks(deps(), { userId: "g1", userRole: "guest", parentId, messageId: lastRow(parentId), forks: ["A", "B", "C", "D", "E", "F"].map((t) => fork(t)) });
     expect(started).toHaveLength(6);
-    const send = (): StartInput => ({ generationId: uuidv7(), chatId: uuidv7(), userId: "g1", userRole: "guest", userMessageId: uuidv7(), assistantMessageId: uuidv7(), text: "hi", model: "claude-haiku-5-5", thinking: { harder: false } });
+    const send = (): StartInput => ({ generationId: uuidv7(), chatId: uuidv7(), userId: "g1", userRole: "guest", userMessageId: uuidv7(), assistantMessageId: uuidv7(), text: "hi", model: "claude-haiku-5-5", thinking: { effort: "low" } });
     expect(() => engine.start(send())).toThrow(BusyError);
     const ends = await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
     expect(ends.map((e) => e.at(-1)?.type)).toEqual(Array(6).fill("done"));
@@ -249,7 +259,7 @@ describe("createForks", () => {
     expect(await declareWinner(db, engine, USER, parentId)).toBeNull();
     // A reply still streaming in a loser is stopped and settled first.
     engine = new Engine({ db, store, providers: () => new ScriptedProvider((req) => scenarioScript((req.scenario as ScenarioName) ?? "normal", req), 1), partialPersistMs: 50 });
-    const slow: StartInput = { generationId: uuidv7(), chatId: forks[0]!.chatId, userId: USER, userRole: "user", userMessageId: uuidv7(), assistantMessageId: uuidv7(), text: "more", model: "claude-opus-5-5", thinking: { harder: true }, scenario: "slow_tokens" };
+    const slow: StartInput = { generationId: uuidv7(), chatId: forks[0]!.chatId, userId: USER, userRole: "user", userMessageId: uuidv7(), assistantMessageId: uuidv7(), text: "more", model: "claude-opus-5-5", thinking: { effort: "high" }, scenario: "slow_tokens" };
     engine.start(slow);
     const rowsBefore = db.select().from(messages).where(eq(messages.chatId, winner)).orderBy(asc(messages.position)).all();
     const made = await declareWinner(db, engine, USER, winner);

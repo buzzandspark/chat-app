@@ -25,7 +25,7 @@ function input(overrides: Partial<StartInput> = {}): StartInput {
     assistantMessageId: uuidv7(),
     text: "hello",
     model: "claude-sonnet-5-5",
-    thinking: { harder: false },
+    thinking: { effort: "low" },
     scenario: "slow_tokens",
     ...overrides,
   };

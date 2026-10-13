@@ -36,7 +36,7 @@ function input(overrides: Partial<StartInput> = {}): StartInput {
     assistantMessageId: uuidv7(),
     text: "hello",
     model: "claude-sonnet-5-5",
-    thinking: { harder: false },
+    thinking: { effort: "low" },
     scenario: "normal",
     ...overrides,
   };
@@ -103,7 +103,7 @@ describe("Engine", () => {
       name: "scripted" as const,
       stream(_req: unknown, { signal }: { signal: AbortSignal }) {
         return (async function* () {
-          const script = scenarioScript("normal", { model: "claude-sonnet-5-5", thinking: { harder: false }, messages: [] });
+          const script = scenarioScript("normal", { model: "claude-sonnet-5-5", thinking: { effort: "low" }, messages: [] });
           const { scriptToFixture } = await import("./providers/scripted");
           const lines = scriptToFixture(script);
           const first = lines.find((l) => "event" in l);
