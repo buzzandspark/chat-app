@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useLiveUsage } from "@client/store/usage";
+import { useEffect, useState } from "react";
+import { refreshUsage, useLiveUsage } from "@client/store/usage";
 import type { CapUsage } from "@shared/api";
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
@@ -8,6 +8,8 @@ const usd = (n: number) => `$${n.toFixed(2)}`;
 /** Spend against the cap along the header's bottom border; a taller transparent strip is the hover target. */
 export function UsageBar({ initial }: { initial: CapUsage }) {
   const live = useLiveUsage();
+  // Pages can't send a refreshed session cookie; this one route call per load lets the daily refresh reach the browser.
+  useEffect(refreshUsage, []);
   // The server's figures win until a later read (a sign-in re-renders the layout with the new account's).
   const [fromServer, setFromServer] = useState({ initial, seq: live.seq });
   if (initial !== fromServer.initial) setFromServer({ initial, seq: live.seq });
