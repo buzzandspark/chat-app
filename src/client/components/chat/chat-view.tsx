@@ -82,6 +82,9 @@ export function ChatView({ children }: { children: ReactNode }) {
       const hooks = { onAccepted: announceChat(trimmed) };
       // The reply will need the Markdown renderer's chunk; fetch it while the request is in flight.
       void ensureMarkdown();
+      // The first send names the chat in the address (/c becomes /c/<id>, nothing remounted) before sending, so the live region follows the reply.
+      // State null: Next's patched replaceState then copies its own and syncs usePathname (passing its state skips that).
+      if (newChatRoute && window.location.pathname === "/c") window.history.replaceState(null, "", `/c/${chatId}`);
       if (edit) {
         // Replace the edited user message and everything after it in the same request.
         store.truncateFrom(edit.userMessageId);
@@ -89,9 +92,6 @@ export function ChatView({ children }: { children: ReactNode }) {
       } else {
         client.send({ ...opts, text: trimmed }, hooks);
       }
-      // The first send names the chat in the address: /c becomes /c/<id> in place, with nothing remounted.
-      // State null: Next's patched replaceState then copies its own and syncs usePathname (passing its state skips that).
-      if (newChatRoute && window.location.pathname === "/c") window.history.replaceState(null, "", `/c/${chatId}`);
       setEditing(null);
       listRef.current?.engage();
       // Only with a physical keyboard: on a phone, focusing pops the keyboard over the reply.

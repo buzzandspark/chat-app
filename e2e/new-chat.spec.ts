@@ -5,7 +5,9 @@ import { ensureSidebarOpen, lastAssistant, newChatPath, openNewChat, sendText, s
 // URL stayed /c/new while the reply streamed out of view.
 test.describe("new chat", () => {
   test("the first reply in a new chat is announced to screen readers", async ({ page }, info) => {
-    await openNewChat(page);
+    // From /c: the first send gives the chat its id in the address.
+    await page.goto("/c");
+    await waitForComposer(page);
     await sendText(page, `announced chat ${info.project.name}`);
     await expect(page.locator('[aria-live="polite"].sr-only', { hasText: "Reply finished." })).toHaveCount(1, { timeout: 30_000 });
   });
