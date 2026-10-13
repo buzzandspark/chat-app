@@ -12,7 +12,7 @@ import { getSidebarStore, patchChatOptimistic, setPendingChat, usePendingChat, u
 import { ChunkBoundary } from "../ui/chunk-boundary";
 import { IconButton } from "../ui/icon-button";
 import { chunk } from "../ui/lazy-chunk";
-import { loadDialogs } from "./load-dialogs";
+import { openDialog } from "./load-dialogs";
 import { hideRowTip, showRowTip } from "./row-tip";
 import { useModals, type ModalApi } from "../ui/modal-manager";
 import type { ChatItemMenu as ChatItemMenuComponent } from "./chat-item-menu";
@@ -23,7 +23,7 @@ export interface SidebarListContextValue {
 }
 export const SidebarListContext = createContext<SidebarListContextValue>({ onNavigate: () => {} });
 
-// The row's Radix menu loads on first intent; the dialogs' chunk is preloaded in idle time (load-dialogs.ts).
+// The row's Radix menu loads on first intent; the dialogs' chunk is preloaded in idle time (load-dialogs.tsx).
 // The row's hover tint matches the ghost button's, so the button hovers with a foreground wash instead. The dark
 // variants are needed because the ghost variant's `dark:hover:bg-muted/50` outranks a plain `hover:` class.
 const MENU_BUTTON =
@@ -84,42 +84,11 @@ const SidebarRow = memo(function SidebarRow({
 }) {
   const href = `/c/${chat.id}`;
   const intent = useIntent(loadChatItemMenu);
-  const onRename = useCallback(
-    () => loadDialogs().then(({ RenameDialog }) => show(({ open, close }) => <RenameDialog chat={chat} open={open} onOpenChange={(o) => !o && close()} />), () => {}),
-    [chat, show],
-  );
-  const onDelete = useCallback(
-    () =>
-      loadDialogs().then(
-        ({ DeleteDialog }) => show(({ open, close }) => <DeleteDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
-        () => {},
-      ),
-    [chat, currentChatId, show],
-  );
-  const onDeleteAll = useCallback(
-    () =>
-      loadDialogs().then(
-        ({ DeleteAllDialog }) => show(({ open, close }) => <DeleteAllDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
-        () => {},
-      ),
-    [chat, currentChatId, show],
-  );
-  const onDeclareWinner = useCallback(
-    () =>
-      loadDialogs().then(
-        ({ DeclareWinnerDialog }) => show(({ open, close }) => <DeclareWinnerDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
-        () => {},
-      ),
-    [chat, currentChatId, show],
-  );
-  const onDeleteForks = useCallback(
-    () =>
-      loadDialogs().then(
-        ({ DeleteForksDialog }) => show(({ open, close }) => <DeleteForksDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
-        () => {},
-      ),
-    [chat, currentChatId, show],
-  );
+  const onRename = useCallback(() => openDialog(show, "RenameDialog", chat, currentChatId), [chat, currentChatId, show]);
+  const onDelete = useCallback(() => openDialog(show, "DeleteDialog", chat, currentChatId), [chat, currentChatId, show]);
+  const onDeleteAll = useCallback(() => openDialog(show, "DeleteAllDialog", chat, currentChatId), [chat, currentChatId, show]);
+  const onDeclareWinner = useCallback(() => openDialog(show, "DeclareWinnerDialog", chat, currentChatId), [chat, currentChatId, show]);
+  const onDeleteForks = useCallback(() => openDialog(show, "DeleteForksDialog", chat, currentChatId), [chat, currentChatId, show]);
   // Pin: the row moves at once; a refused request, or one that never reached the server (offline),
   // moves it back (patchChatOptimistic).
   const onTogglePin = useCallback(() => void patchChatOptimistic(getSidebarStore(), chat.id, { pinned: !chat.pinned }), [chat.id, chat.pinned]);

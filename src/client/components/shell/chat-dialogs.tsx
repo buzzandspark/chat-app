@@ -85,41 +85,48 @@ export function RenameDialog({ chat, open, onOpenChange }: DialogProps & { chat:
   );
 }
 
-export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
-  const newChat = useNewChat();
-  const router = useRouter();
-  const deleteRef = useRef<HTMLButtonElement>(null);
+/** Removes the chats from the sidebar and the store; when the open chat was one, opens `fallback` (a new chat when null). */
+function useDropChats(onOpenChange: (open: boolean) => void) {
   const store = useChatStore();
+  const router = useRouter();
+  const newChat = useNewChat();
+  return (ids: string[], currentChatId: string | null, fallback: string | null) => {
+    const sidebar = getSidebarStore();
+    for (const id of ids) {
+      sidebar.remove(id);
+      // The hidden view (and a Back to its URL) shows an empty chat, not the deleted rows.
+      store.removeChat(id);
+    }
+    const leaving = currentChatId !== null && ids.includes(currentChatId);
+    if (leaving) markNavigationClose();
+    onOpenChange(false);
+    if (!leaving) return;
+    if (fallback) {
+      setPendingChat(fallback);
+      router.push(`/c/${fallback}`);
+    } else newChat();
+  };
+}
+
+interface ConfirmDialogProps extends DialogProps {
+  title: string;
+  description: string;
+  label: string;
+  tone: "destructive" | "warning";
+  /** Resolves to the error to show, or null once done. */
+  onConfirm: () => Promise<string | null>;
+}
+
+function ConfirmDialog({ open, onOpenChange, title, description, label, tone, onConfirm }: ConfirmDialogProps) {
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // A main chat's forks outlive it (the server unlinks them), which the dialog says.
-  const [forkCount] = useState(() => getSidebarStore().get().filter((c) => c.forkedFrom === chat.id).length);
   const confirm = async () => {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) setError("Couldn't delete the chat. Try again.");
-      if (res.ok || res.status === 404) {
-        const sidebar = getSidebarStore();
-        // Deleting the open chat moves to the next tab over, as closing it does; a new chat when it has no tabs.
-        const tabs = forkTabs(sidebar.get(), chat.id)?.tabs.filter((t) => !t.hidden).map((t) => t.id) ?? [];
-        const at = tabs.indexOf(chat.id);
-        const nextTab = at === -1 ? undefined : (tabs[at + 1] ?? tabs[at - 1]);
-        for (const f of sidebar.get()) if (f.forkedFrom === chat.id) sidebar.patch(f.id, { forkedFrom: null });
-        sidebar.remove(chat.id);
-        // The hidden view (and a Back to its URL) shows an empty chat, not the deleted rows.
-        store.removeChat(chat.id);
-        if (currentChatId === chat.id) markNavigationClose();
-        onOpenChange(false);
-        if (currentChatId === chat.id) {
-          if (nextTab) {
-            setPendingChat(nextTab);
-            router.push(`/c/${nextTab}`);
-          } else newChat();
-        }
-      }
+      setError(await onConfirm());
     } catch {
       setError(OFFLINE);
     } finally {
@@ -128,6 +135,48 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
   };
   return (
     <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      description={description}
+      // Opens on the confirm button, so Enter confirms.
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        confirmRef.current?.focus();
+      }}
+    >
+      {error ? (
+        <p role="alert" className="text-small text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button
+          ref={confirmRef}
+          type="button"
+          variant={tone === "destructive" ? "destructive" : "default"}
+          className={tone === "warning" ? "touch-target bg-warning text-white hover:bg-warning/85" : "touch-target"}
+          disabled={busy}
+          onClick={() => void confirm()}
+        >
+          {label}
+        </Button>
+      </div>
+    </ResponsiveDialog>
+  );
+}
+
+export type ChatDialogProps = DialogProps & { chat: ChatSummary; currentChatId: string | null };
+
+export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: ChatDialogProps) {
+  const dropChats = useDropChats(onOpenChange);
+  // A main chat's forks outlive it (the server unlinks them), which the dialog says.
+  const [forkCount] = useState(() => getSidebarStore().get().filter((c) => c.forkedFrom === chat.id).length);
+  return (
+    <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
       title="Delete chat?"
@@ -136,223 +185,92 @@ export function DeleteDialog({ chat, currentChatId, open, onOpenChange }: Dialog
           ? `"${chat.title}" and its messages will be deleted. This can't be undone. Its ${forkCount === 1 ? "fork stays as a normal chat" : `${forkCount} forks stay as normal chats`}.`
           : `"${chat.title}" and its messages will be deleted. This can't be undone.`
       }
-      // Opens on Delete, so Enter confirms.
-      onOpenAutoFocus={(e) => {
-        e.preventDefault();
-        deleteRef.current?.focus();
+      label="Delete"
+      tone="destructive"
+      onConfirm={async () => {
+        const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
+        if (!res.ok && res.status !== 404) return "Couldn't delete the chat. Try again.";
+        const sidebar = getSidebarStore();
+        // Deleting the open chat moves to the next tab over, as closing it does; a new chat when it has no tabs.
+        const tabs = forkTabs(sidebar.get(), chat.id)?.tabs.filter((t) => !t.hidden).map((t) => t.id) ?? [];
+        const at = tabs.indexOf(chat.id);
+        const nextTab = at === -1 ? undefined : (tabs[at + 1] ?? tabs[at - 1]);
+        for (const f of sidebar.get()) if (f.forkedFrom === chat.id) sidebar.patch(f.id, { forkedFrom: null });
+        dropChats([chat.id], currentChatId, nextTab ?? null);
+        return null;
       }}
-    >
-      {error ? (
-        <p role="alert" className="text-small text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button ref={deleteRef} type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
-          Delete
-        </Button>
-      </div>
-    </ResponsiveDialog>
+    />
   );
 }
 
-
 /** The fork wins: it stays, with its history; the main chat and the other forks are deleted. */
-export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
+export function DeclareWinnerDialog({ chat, currentChatId, open, onOpenChange }: ChatDialogProps) {
   const store = useChatStore();
-  const declareRef = useRef<HTMLButtonElement>(null);
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const confirm = async () => {
-    if (busy || !chat.forkedFrom) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/chats/${chat.id}/declare-winner`, { method: "POST" });
-      if (!res.ok) {
-        setError(res.status === 404 ? "This chat is no longer a fork." : "Couldn't declare the winner. Try again.");
-        return;
-      }
-      const winner = await readJson<DeclareWinnerResponse>(res);
-      const sidebar = getSidebarStore();
-      for (const id of winner.deleted) {
-        sidebar.remove(id);
-        store.removeChat(id);
-      }
-      sidebar.patch(chat.id, { forkedFrom: null, forkOrder: null, tabHidden: false });
-      store.setFork(chat.id, { from: null, position: null });
-      // Haiku reads the winner's last reply now; its Explore button pops up when the count arrives, as after any reply.
-      if (winner.lastMessageId) void watchOptions(store, winner.lastMessageId);
-      const leaving = currentChatId !== null && winner.deleted.includes(currentChatId);
-      if (leaving) markNavigationClose();
-      onOpenChange(false);
-      if (leaving) {
-        setPendingChat(chat.id);
-        router.push(`/c/${chat.id}`);
-      }
-    } catch {
-      setError(OFFLINE);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const dropChats = useDropChats(onOpenChange);
   return (
-    <ResponsiveDialog
+    <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
       title="Declare the winner?"
       description={`"${chat.title}" stays, with its history, and can be forked again from here. The main chat and the other forks will be deleted. This can't be undone.`}
-      // Opens on Declare winner, so Enter confirms.
-      onOpenAutoFocus={(e) => {
-        e.preventDefault();
-        declareRef.current?.focus();
+      label="Declare winner"
+      tone="warning"
+      onConfirm={async () => {
+        if (!chat.forkedFrom) return null;
+        const res = await fetch(`/api/chats/${chat.id}/declare-winner`, { method: "POST" });
+        if (!res.ok) return res.status === 404 ? "This chat is no longer a fork." : "Couldn't declare the winner. Try again.";
+        const winner = await readJson<DeclareWinnerResponse>(res);
+        getSidebarStore().patch(chat.id, { forkedFrom: null, forkOrder: null, tabHidden: false });
+        store.setFork(chat.id, { from: null, position: null });
+        // Haiku reads the winner's last reply now; its Explore button pops up when the count arrives, as after any reply.
+        if (winner.lastMessageId) void watchOptions(store, winner.lastMessageId);
+        dropChats(winner.deleted, currentChatId, chat.id);
+        return null;
       }}
-    >
-      {error ? (
-        <p role="alert" className="text-small text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button ref={declareRef} type="button" className="touch-target bg-warning text-white hover:bg-warning/85" disabled={busy} onClick={() => void confirm()}>
-          Declare winner
-        </Button>
-      </div>
-    </ResponsiveDialog>
+    />
   );
 }
 
-
 /** Every fork of the main chat is deleted; the main chat stays and is opened if a fork was being viewed. */
-export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
-  const store = useChatStore();
-  const deleteRef = useRef<HTMLButtonElement>(null);
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const confirm = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/chats/${chat.id}/delete-forks`, { method: "POST" });
-      if (!res.ok) {
-        setError(res.status === 404 ? "This chat no longer exists." : "Couldn't delete the forks. Try again.");
-        return;
-      }
-      const { deleted } = await readJson<DeleteForksResponse>(res);
-      const sidebar = getSidebarStore();
-      for (const id of deleted) {
-        sidebar.remove(id);
-        store.removeChat(id);
-      }
-      const leaving = currentChatId !== null && deleted.includes(currentChatId);
-      if (leaving) markNavigationClose();
-      onOpenChange(false);
-      if (leaving) {
-        setPendingChat(chat.id);
-        router.push(`/c/${chat.id}`);
-      }
-    } catch {
-      setError(OFFLINE);
-    } finally {
-      setBusy(false);
-    }
-  };
+export function DeleteForksDialog({ chat, currentChatId, open, onOpenChange }: ChatDialogProps) {
+  const dropChats = useDropChats(onOpenChange);
   return (
-    <ResponsiveDialog
+    <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
       title="Delete all forks?"
       description={`Every fork of "${chat.title}" will be deleted; the main chat stays. This can't be undone.`}
-      // Opens on Delete, so Enter confirms.
-      onOpenAutoFocus={(e) => {
-        e.preventDefault();
-        deleteRef.current?.focus();
+      label="Delete forks"
+      tone="destructive"
+      onConfirm={async () => {
+        const res = await fetch(`/api/chats/${chat.id}/delete-forks`, { method: "POST" });
+        if (!res.ok) return res.status === 404 ? "This chat no longer exists." : "Couldn't delete the forks. Try again.";
+        const { deleted } = await readJson<DeleteForksResponse>(res);
+        dropChats(deleted, currentChatId, chat.id);
+        return null;
       }}
-    >
-      {error ? (
-        <p role="alert" className="text-small text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button ref={deleteRef} type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
-          Delete forks
-        </Button>
-      </div>
-    </ResponsiveDialog>
+    />
   );
 }
 
 /** The sidebar's Delete chat and forks on a main chat with forks: the main chat and every fork go. */
-export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: DialogProps & { chat: ChatSummary; currentChatId: string | null }) {
-  const store = useChatStore();
-  const newChat = useNewChat();
-  const deleteRef = useRef<HTMLButtonElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const confirm = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/chats/${chat.id}/delete-all`, { method: "POST" });
-      if (!res.ok && res.status !== 404) {
-        setError("Couldn't delete the chat and its forks. Try again.");
-        return;
-      }
-      const deleted = res.ok ? (await readJson<DeleteForksResponse>(res)).deleted : [chat.id];
-      const sidebar = getSidebarStore();
-      for (const id of deleted) {
-        sidebar.remove(id);
-        store.removeChat(id);
-      }
-      const leaving = currentChatId !== null && deleted.includes(currentChatId);
-      if (leaving) markNavigationClose();
-      onOpenChange(false);
-      if (leaving) newChat();
-    } catch {
-      setError(OFFLINE);
-    } finally {
-      setBusy(false);
-    }
-  };
+export function DeleteAllDialog({ chat, currentChatId, open, onOpenChange }: ChatDialogProps) {
+  const dropChats = useDropChats(onOpenChange);
   return (
-    <ResponsiveDialog
+    <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
       title="Delete chat and forks?"
       description={`"${chat.title}" and every fork of it will be deleted, with their messages. This can't be undone.`}
-      // Opens on Delete, so Enter confirms.
-      onOpenAutoFocus={(e) => {
-        e.preventDefault();
-        deleteRef.current?.focus();
+      label="Delete chat and forks"
+      tone="destructive"
+      onConfirm={async () => {
+        const res = await fetch(`/api/chats/${chat.id}/delete-all`, { method: "POST" });
+        if (!res.ok && res.status !== 404) return "Couldn't delete the chat and its forks. Try again.";
+        const deleted = res.ok ? (await readJson<DeleteForksResponse>(res)).deleted : [chat.id];
+        dropChats(deleted, currentChatId, null);
+        return null;
       }}
-    >
-      {error ? (
-        <p role="alert" className="text-small text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" className="touch-target" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button ref={deleteRef} type="button" variant="destructive" className="touch-target" disabled={busy} onClick={() => void confirm()}>
-          Delete chat and forks
-        </Button>
-      </div>
-    </ResponsiveDialog>
+    />
   );
 }

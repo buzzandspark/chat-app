@@ -2,7 +2,7 @@
 import { Trash2, Trophy } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
-import { loadDialogs } from "../shell/load-dialogs";
+import { openDialog } from "../shell/load-dialogs";
 import { useModals } from "../ui/modal-manager";
 
 
@@ -31,24 +31,15 @@ export function ForkTabMenu({ tabId, title, isMain, currentChatId, x, y, onClose
   const chat = (): ChatSummary => getSidebarStore().get().find((c) => c.id === tabId) ?? { id: tabId, title, updatedAt: 0 };
   const onDelete = () => {
     onClose();
-    const c = chat();
-    loadDialogs().then(({ DeleteDialog }) => show(({ open, close }) => <DeleteDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />), () => {});
+    openDialog(show, "DeleteDialog", chat(), currentChatId);
   };
   const onDeclareWinner = () => {
     onClose();
-    const c = chat();
-    loadDialogs().then(
-      ({ DeclareWinnerDialog }) => show(({ open, close }) => <DeclareWinnerDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
-      () => {},
-    );
+    openDialog(show, "DeclareWinnerDialog", chat(), currentChatId);
   };
   const onDeleteForks = () => {
     onClose();
-    const c = chat();
-    loadDialogs().then(
-      ({ DeleteForksDialog }) => show(({ open, close }) => <DeleteForksDialog chat={c} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
-      () => {},
-    );
+    openDialog(show, "DeleteForksDialog", chat(), currentChatId);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]"));
