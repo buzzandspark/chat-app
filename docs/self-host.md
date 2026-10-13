@@ -29,13 +29,13 @@ The server runs as the unprivileged `node` user (uid 1000). The container starts
 
 ## Railway
 
-`railway.json` points at the Dockerfile and `/api/health`, with 30 s of draining and up to 5 restarts on failure; confirm them in the service's settings. Add a volume mounted at `/data`, generate a domain, and set the environment variables from `.env.example`:
+Railway builds the Dockerfile. New Railway services don't read `railway.json`, so set its values in the service's settings: health check path `/api/health`, 30 s of draining, and restart on failure up to 5 times. Add a volume mounted at `/data`, generate a domain, and set the environment variables from `.env.example`:
 
 - `BETTER_AUTH_URL`: the generated domain, `https://<name>.up.railway.app`.
 - `TRUSTED_IP_HEADER=x-real-ip`: Railway's edge sets it to the client's address.
 - not `DATABASE_PATH`: the image already points it at `/data/app.db`.
 
-Run one replica: the app is one process with SQLite. Railway mounts volumes owned by root; the entrypoint hands `/data` to `node` at boot, so you don't need `RAILWAY_RUN_UID=0`.
+Turn on scheduled backups in the volume's Backups tab; the database is the only copy of every chat. Run one replica: the app is one process with SQLite. Railway mounts volumes owned by root; the entrypoint hands `/data` to `node` at boot, so you don't need `RAILWAY_RUN_UID=0`.
 
 After the first deploy, check that a client can't choose its own address. Make a guest with forged headers:
 
