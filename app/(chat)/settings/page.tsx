@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Settings" };
 
 export default function SettingsPage() {
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-thread space-y-8 safe-x pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
         <Suspense fallback={<UsageSkeleton />}>
           <Usage />
@@ -21,7 +21,7 @@ export default function SettingsPage() {
           <ExploreToggle />
         </section>
       </div>
-    </main>
+    </div>
   );
 }
 

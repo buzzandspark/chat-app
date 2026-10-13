@@ -179,7 +179,7 @@ function ChatShellInner({ sidebarList, userLabel, account, usage, children }: Ch
           </Suspense>
           {usage}
         </header>
-        {children}
+        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       </div>
 
     </div>
