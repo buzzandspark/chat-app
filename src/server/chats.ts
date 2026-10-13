@@ -4,7 +4,7 @@ import { getDb, schema } from "@db/client";
 import type { StoredContentBlock } from "@shared/blocks";
 import type { ForkOption } from "@shared/forks";
 import { normalizeThinking } from "@shared/models";
-import type { MessageStatus, RefusalInfo, RelayError, ThinkingOptions, Timings } from "@shared/types";
+import type { MessageStatus, RefusalInfo, RelayError, ThinkingOptions } from "@shared/types";
 
 export interface ChatSummary {
   id: string;
@@ -30,7 +30,6 @@ export interface MessageRow {
   stopReason: string | null;
   refusal: RefusalInfo | null;
   error: RelayError | null;
-  timings: Timings | null;
   thinking: ThinkingOptions | null;
   options: ForkOption[] | null;
   generationId: string | null;
@@ -125,7 +124,6 @@ export function getChatWithMessages(
       stopReason: r.stopReason,
       refusal: r.refusal ?? null,
       error: r.error ?? null,
-      timings: r.timings ?? null,
       thinking: r.thinking == null ? null : normalizeThinking(r.thinking),
       options: r.forkOptions ?? null,
       generationId: r.generationId,

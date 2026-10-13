@@ -29,7 +29,6 @@ const done: RelayEventBody = {
   stopReason: "end_turn",
   servingModel: "claude-sonnet-5-5",
   usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, estimated: false },
-  timings: { received: 0 },
 };
 
 function textOf(events: RelayEvent[]): string {

@@ -153,7 +153,6 @@ export class GenerationClient {
         requestedModel: input.model,
         generationId,
         connection: "streaming",
-        timings: { client: { sent: now } },
         createdAt: now + 1,
       }),
     );
@@ -189,7 +188,6 @@ export class GenerationClient {
         requestedModel: input.model,
         generationId,
         connection: "streaming",
-        timings: { client: { sent: now } },
         createdAt: now,
         retryAttempt: input.attempt ?? 0,
       }),
@@ -451,7 +449,6 @@ export class GenerationClient {
     entry.nudge = () => void reader.cancel().catch(() => {});
     const decoder = new TextDecoder();
     let terminal = false;
-    let firstByte = false;
     // Idle watchdog: cancelling the reader ends the loop without a terminal event, so the caller resumes.
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const armIdle = () => {
@@ -471,10 +468,6 @@ export class GenerationClient {
         const { value, done } = await reader.read();
         if (done) break;
         armIdle();
-        if (!firstByte) {
-          firstByte = true;
-          this.store.markClientTiming(messageId, "firstByte");
-        }
         parser.push(decoder.decode(value, { stream: true }));
         if (terminal) break;
       }
@@ -491,25 +484,8 @@ export class GenerationClient {
         // already released
       }
     }
-    if (terminal) {
-      this.bodies.delete(generationId);
-      this.store.markClientTiming(messageId, "done");
-      this.persistClientTimings(messageId);
-    }
+    if (terminal) this.bodies.delete(generationId);
     return terminal;
-  }
-
-  /** Delayed because first paint lands a frame after `done`. */
-  private persistClientTimings(messageId: string): void {
-    setTimeout(() => {
-      const client = this.store.getMessage(messageId)?.timings?.client;
-      if (!client) return;
-      void this.fetchImpl(`/api/messages/${messageId}/timings`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(client),
-      }).catch(() => {});
-    }, 250);
   }
 
   private dispatch(event: RelayEvent, messageId: string): void {

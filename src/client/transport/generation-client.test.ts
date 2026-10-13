@@ -46,7 +46,6 @@ function makeEvents(generationId: string, messageId: string, text: string): Rela
     stopReason: "end_turn",
     servingModel: "claude-sonnet-5-5",
     usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, estimated: false },
-    timings: { received: 0 },
   });
   return out;
 }
@@ -133,7 +132,7 @@ describe("GenerationClient", () => {
     expect(calls[0]!.body).toMatchObject({ messageId: "u1", text: "again" });
   });
 
-  it("streams a POST into the store with timings", async () => {
+  it("streams a POST into the store", async () => {
     const client = makeClient((_url, init) => {
       const body = JSON.parse(String(init?.body)) as { generationId: string; assistantMessageId: string };
       return sseResponse(makeEvents(body.generationId, body.assistantMessageId, "hi"));
@@ -142,9 +141,6 @@ describe("GenerationClient", () => {
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("done");
     expect(textOf(m.blocks)).toBe("hi");
-    expect(m.timings?.client?.sent).toBeDefined();
-    expect(m.timings?.client?.firstByte).toBeDefined();
-    expect(m.timings?.client?.done).toBeDefined();
     expect(calls).toHaveLength(1);
   });
 
@@ -243,7 +239,6 @@ describe("GenerationClient", () => {
           stopReason: null,
           refusal: null,
           error: null,
-          timings: null,
           generationId: gen,
         },
       };
@@ -472,11 +467,10 @@ describe("GenerationClient", () => {
     });
     afterEach(() => vi.useRealTimers());
 
-    /** `answer` decides each request in order (POST, then resume GETs); PATCHes for timings just succeed. */
+    /** `answer` decides each request in order (POST, then resume GETs). */
     function headersClient(answer: (url: string, init: RequestInit | undefined, n: number) => Promise<Response> | Response) {
       const fetchImpl: typeof fetch = async (input, init) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-        if (init?.method === "PATCH") return new Response("{}");
         sent.push({ url, at: Date.now(), signal: init?.signal });
         return answer(url, init, sent.length);
       };

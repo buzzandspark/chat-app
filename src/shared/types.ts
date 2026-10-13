@@ -34,25 +34,6 @@ export interface RefusalInfo {
   explanation: string | null;
 }
 
-// Server stamps on the server clock, client stamps on the client clock; intervals are derived
-// on the side that owns both endpoints, never across machines.
-export interface Timings {
-  server?: {
-    received: number;
-    upstreamFirstToken?: number;
-    firstRelayed?: number;
-    done?: number;
-    /** True when `iterations` shows a declined attempt before output (safety fallback). */
-    declinedAttempt?: boolean;
-  };
-  client?: {
-    sent: number;
-    firstByte?: number;
-    firstPaint?: number;
-    done?: number;
-  };
-}
-
 export interface UsageSummary {
   inputTokens: number;
   outputTokens: number;

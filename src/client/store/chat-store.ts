@@ -8,7 +8,6 @@ import type {
   RefusalInfo,
   RelayError,
   ThinkingOptions,
-  Timings,
   UsageSummary,
 } from "@shared/types";
 import { isControl, type MessageSnapshot, type RelayEvent } from "@relay/events";
@@ -26,7 +25,6 @@ export interface MessageState {
   stopReason: string | null;
   refusal: RefusalInfo | null;
   error: RelayError | null;
-  timings: Timings | null;
   usage: UsageSummary | null;
   generationId: string | null;
   interruptedReason: InterruptedReason | null;
@@ -98,7 +96,6 @@ export interface SeedRow {
   stopReason: string | null;
   refusal: RefusalInfo | null;
   error: RelayError | null;
-  timings: Timings | null;
   generationId: string | null;
   lastSeq?: number | null;
   scenario?: string | null;
@@ -138,7 +135,6 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
     stopReason: null,
     refusal: null,
     error: null,
-    timings: null,
     usage: null,
     generationId: null,
     interruptedReason: null,
@@ -527,27 +523,6 @@ export class ChatStore {
     this.updateMessage(id, { connection, reconnectAttempt });
   }
 
-  markClientTiming(id: string, key: keyof NonNullable<Timings["client"]>, at: number = this.now()): void {
-    const m = this.messages.get(id);
-    if (!m) return;
-    // Only a reply sent from this client has client stamps; a saved or resumed reply gets none.
-    if (!m.timings?.client) return;
-    const client = { ...m.timings.client };
-    if (client[key] !== undefined) return;
-    client[key] = at;
-    this.updateMessage(id, { timings: { ...(m.timings ?? {}), client } });
-  }
-
-  /** The first text paints in the render this commit notifies; stamped in a task after the next frame. */
-  private markFirstPaint(id: string): void {
-    if (typeof requestAnimationFrame !== "function") return;
-    requestAnimationFrame(() => {
-      const channel = new MessageChannel();
-      channel.port1.onmessage = () => this.markClientTiming(id, "firstPaint");
-      channel.port2.postMessage(0);
-    });
-  }
-
   /** Called after an applied event has taken a reply out of `streaming` (a terminal event or a final snapshot). */
   onReplyEnd(listener: (message: MessageState) => void): () => void {
     this.replyEndListeners.add(listener);
@@ -563,7 +538,6 @@ export class ChatStore {
       if (draft) {
         const previous = this.messages.get(id);
         if (previous?.status === "streaming" && draft.status !== "streaming") ended.push(draft);
-        if (draft.timings?.client?.sent !== undefined && previous && !textOf(previous.blocks) && textOf(draft.blocks)) this.markFirstPaint(id);
         this.messages.set(id, draft);
       }
       this.notifyMessage(id);
@@ -688,7 +662,6 @@ export class ChatStore {
         d.stopReason = event.stopReason;
         d.servingModel = event.servingModel;
         d.usage = event.usage;
-        d.timings = { ...(d.timings ?? {}), server: event.timings };
         d.connection = "idle";
         if (d.thinkingStartedAt !== null && d.thinkingEndedAt === null) d.thinkingEndedAt = this.now();
         break;
@@ -740,7 +713,6 @@ export class ChatStore {
     d.refusal = snapshot.refusal;
     d.error = snapshot.error;
     d.generationId = snapshot.generationId ?? d.generationId;
-    if (snapshot.timings?.server) d.timings = { ...(d.timings ?? {}), server: snapshot.timings.server };
     if (status === "refused") d.discardedText = textOf(d.blocks).length > 0;
     d.connection = "idle";
     if (d.thinkingStartedAt !== null && d.thinkingEndedAt === null) d.thinkingEndedAt = this.now();
@@ -770,7 +742,6 @@ function messageStateFromRow(row: SeedRow): MessageState {
     stopReason: row.stopReason,
     refusal: row.refusal,
     error: row.error,
-    timings: row.timings,
     generationId: row.generationId,
     discardedText: row.status === "refused" && textOf(blocks).length > 0,
     lastSeq: row.lastSeq ?? -1,

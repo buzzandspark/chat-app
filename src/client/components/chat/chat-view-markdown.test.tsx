@@ -32,7 +32,6 @@ const row = (id: string, role: "user" | "assistant", text: string): SeedRow => (
   stopReason: null,
   refusal: null,
   error: null,
-  timings: null,
   generationId: null,
   createdAt: 1,
 });

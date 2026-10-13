@@ -20,7 +20,6 @@ const rows: SeedRow[] = [
     stopReason: null,
     refusal: null,
     error: null,
-    timings: null,
     generationId: null,
     createdAt: 1,
   },

@@ -34,8 +34,8 @@ export interface StreamAccumulator {
   blocks: Map<number, BlockAcc>;
   order: number[];
   hasText: boolean;
-  /** Fallback boundaries in order; `visible` means text preceded the switch. */
-  boundaries: Array<{ index: number; from: string; to: string; category: string | null; visible: boolean }>;
+  /** Fallback boundaries in order. */
+  boundaries: Array<{ index: number; from: string; to: string; category: string | null }>;
   stopReason: StopReason | null;
   refusal: RefusalInfo | null;
   usage: {
@@ -132,7 +132,7 @@ export function normalizeEvent(raw: NormalizableEvent, acc: StreamAccumulator): 
           block.fallback = { from: cb.from.model, to: cb.to.model, category };
           acc.servingModel = cb.to.model;
           const visible = acc.hasText;
-          acc.boundaries.push({ index: raw.index, from: cb.from.model, to: cb.to.model, category, visible });
+          acc.boundaries.push({ index: raw.index, from: cb.from.model, to: cb.to.model, category });
           return [
             { type: "fallback_boundary", index: raw.index, from: cb.from.model, to: cb.to.model, category, visible },
           ];
@@ -206,12 +206,6 @@ export function resolveServingModel(acc: StreamAccumulator): string | null {
   const served = acc.usage.iterations?.find((it) => it.type === "fallback_message");
   if (served && served.type === "fallback_message") return served.model;
   return acc.startModel;
-}
-
-/** True when a model declined before any output and a fallback served the turn. */
-export function hadDeclinedAttempt(acc: StreamAccumulator): boolean {
-  const first = acc.boundaries[0];
-  return first !== undefined && !first.visible;
 }
 
 export function accumulatedText(acc: StreamAccumulator): string {

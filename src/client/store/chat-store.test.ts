@@ -38,7 +38,6 @@ const snapshotMessage = (id: string, content: StoredContentBlock[]) => ({
   stopReason: null,
   refusal: null,
   error: null,
-  timings: null,
   generationId: "g1",
 });
 const row = (partial: Partial<SeedRow> & Pick<SeedRow, "id" | "role">): SeedRow => ({
@@ -50,7 +49,6 @@ const row = (partial: Partial<SeedRow> & Pick<SeedRow, "id" | "role">): SeedRow 
   stopReason: null,
   refusal: null,
   error: null,
-  timings: null,
   generationId: null,
   createdAt: 1,
   ...partial,
@@ -106,7 +104,6 @@ describe("ChatStore", () => {
           stopReason: null,
           refusal: null,
           error: null,
-          timings: null,
           generationId: "g1",
         },
       }),
@@ -139,7 +136,6 @@ describe("ChatStore", () => {
           stopReason: "end_turn",
           refusal: null,
           error: null,
-          timings: { server: { received: 1 } },
           generationId: "g1",
         },
       }),
@@ -163,7 +159,7 @@ describe("ChatStore", () => {
     store.enqueue(ev(7, { type: "block_start", index: 3, block: "text" }));
     store.enqueue(ev(8, { type: "text_delta", index: 3, text: " after" }));
     store.enqueue(ev(9, { type: "refusal", category: null, explanation: null, hadText: true }));
-    store.enqueue(ev(10, { type: "done", stopReason: "refusal", servingModel: "claude-opus-4-8", usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, estimated: false }, timings: { received: 0 } }));
+    store.enqueue(ev(10, { type: "done", stopReason: "refusal", servingModel: "claude-opus-4-8", usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, estimated: false } }));
     runFrame();
     const m = store.getMessage("a1")!;
     expect(m.blocks.map((b) => b.type)).toEqual(["thinking", "text", "divider", "text"]);
@@ -371,16 +367,6 @@ describe("ChatStore", () => {
     });
   });
 
-  it("records client timings once", () => {
-    const { store } = makeStore();
-    seed(store);
-    // Only a reply sent from this client carries client stamps; the send sets `sent` first.
-    store.updateMessage("a1", { timings: { client: { sent: 1 } } });
-    store.markClientTiming("a1", "firstByte", 5);
-    store.markClientTiming("a1", "firstByte", 9);
-    expect(store.getMessage("a1")!.timings?.client?.firstByte).toBe(5);
-  });
-
   it("setDefaultSettings seeds untouched empty chats and later new chats", () => {
     const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
     store.createChat("fresh");
@@ -394,8 +380,8 @@ describe("ChatStore", () => {
     expect(store.getChat("later").settings.model).toBe("claude-opus-5-5");
     // An existing chat still inherits from its own last reply.
     store.seedChat("saved", "Saved", [
-      { id: "u", chatId: "saved", role: "user", content: [{ type: "text", text: "q", citations: null }], status: "done", requestedModel: null, servingModel: null, stopReason: null, refusal: null, error: null, timings: null, generationId: null, createdAt: 1 },
-      { id: "a", chatId: "saved", role: "assistant", content: [{ type: "text", text: "a", citations: null }], status: "done", requestedModel: "claude-sonnet-5-5", servingModel: "claude-sonnet-5-5", stopReason: "end_turn", refusal: null, error: null, timings: null, generationId: null, createdAt: 2 },
+      { id: "u", chatId: "saved", role: "user", content: [{ type: "text", text: "q", citations: null }], status: "done", requestedModel: null, servingModel: null, stopReason: null, refusal: null, error: null, generationId: null, createdAt: 1 },
+      { id: "a", chatId: "saved", role: "assistant", content: [{ type: "text", text: "a", citations: null }], status: "done", requestedModel: "claude-sonnet-5-5", servingModel: "claude-sonnet-5-5", stopReason: "end_turn", refusal: null, error: null, generationId: null, createdAt: 2 },
     ]);
     expect(store.getChat("saved").settings.model).toBe("claude-sonnet-5-5");
   });
@@ -410,15 +396,6 @@ describe("ChatStore", () => {
     expect(store.settingsKnown("fresh")).toBe(false);
     store.setDefaultSettings({});
     expect(store.settingsKnown("fresh")).toBe(true);
-  });
-
-  it("never fabricates client timings for a reply this client did not send", () => {
-    const store = new ChatStore({ schedule: (cb) => setTimeout(cb, 0) as unknown as number, cancel: (h) => clearTimeout(h) });
-    store.seedChat("c", "C", [
-      { id: "a", chatId: "c", role: "assistant", content: [{ type: "text", text: "a", citations: null }], status: "done", requestedModel: "claude-sonnet-5-5", servingModel: "claude-sonnet-5-5", stopReason: "end_turn", refusal: null, error: null, timings: { server: { received: 1 } }, generationId: null, createdAt: 2 },
-    ]);
-    store.markClientTiming("a", "firstPaint");
-    expect(store.getMessage("a")?.timings?.client).toBeUndefined();
   });
 
   it("queues messages in order, hands them out one at a time, and lets one be removed", () => {
@@ -479,7 +456,6 @@ describe("forks in the store", () => {
     stopReason: null,
     refusal: null,
     error: null,
-    timings: null,
     generationId: null,
     createdAt: 1,
     ...extra,

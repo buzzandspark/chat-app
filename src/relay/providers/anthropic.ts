@@ -8,8 +8,7 @@ export class AnthropicProvider implements Provider {
   private client: Anthropic;
 
   constructor(client?: Anthropic) {
-    // maxRetries 0: the relay owns retry policy and the client's reconnect
-    // loop; a silent SDK retry would skew the latency breakdown.
+    // maxRetries 0: the relay owns retry policy and the client's reconnect loop.
     this.client = client ?? new Anthropic({ maxRetries: 0, timeout: 10 * 60 * 1000 });
   }
 

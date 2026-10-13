@@ -4,7 +4,6 @@ import type {
   RefusalInfo,
   RelayError,
   StopReason,
-  Timings,
   UsageSummary,
 } from "@shared/types";
 import type { StoredContentBlock } from "@shared/blocks";
@@ -34,13 +33,10 @@ export interface MessageSnapshot {
   stopReason: string | null;
   refusal: RefusalInfo | null;
   error: RelayError | null;
-  timings: Timings | null;
   generationId: string | null;
   /** The last producer seq the saved content covers; a client ahead of it keeps its own text. */
   lastSeq?: number | null;
 }
-
-export type ServerTimings = NonNullable<Timings["server"]>;
 
 export type RelayEventBody =
   | {
@@ -80,7 +76,6 @@ export type RelayEventBody =
       stopReason: StopReason | null;
       servingModel: string;
       usage: UsageSummary;
-      timings: ServerTimings;
     }
   | { type: "stopped"; servingModel: string | null; usage: UsageSummary | null }
   | { type: "interrupted"; reason: InterruptedReason; message?: string }

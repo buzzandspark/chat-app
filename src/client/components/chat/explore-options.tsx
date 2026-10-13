@@ -212,7 +212,7 @@ export function ExploreOptionsIsland({ chatId, message, isFork, editing }: { cha
           ref={buttonRef}
           shown={busy || found}
           count={shownCount}
-          requestedAt={message?.timings?.client?.sent ?? message?.createdAt ?? 0}
+          requestedAt={message?.createdAt ?? 0}
           now={now}
           state={state}
           onOpen={onOpen}

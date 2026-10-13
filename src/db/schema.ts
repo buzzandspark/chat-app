@@ -6,7 +6,6 @@ import type {
   MessageStatus,
   RefusalInfo,
   RelayError,
-  Timings,
   UserRole,
 } from "@shared/types";
 import type { ForkOption } from "@shared/forks";
@@ -161,7 +160,6 @@ export const messages = sqliteTable(
     refusal: text("refusal", { mode: "json" }).$type<RefusalInfo>(),
     error: text("error", { mode: "json" }).$type<RelayError>(),
     generationId: text("generation_id"),
-    timings: text("timings", { mode: "json" }).$type<Timings>(),
     /** The effort a reply was asked with; a fork repeats it so the prompt cache holds. */
     /** ThinkingOptions, or the older `{ harder }` shape: read it through normalizeThinking. */
     thinking: text("thinking", { mode: "json" }).$type<unknown>(),

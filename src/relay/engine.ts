@@ -17,7 +17,6 @@ import { CONTEXT_FULL_RE, isAbortError, toRelayError } from "./anthropic/errors"
 import type { HistoryMessage } from "./anthropic/history";
 import {
   createAccumulator,
-  hadDeclinedAttempt,
   normalizeEvent,
   resolveServingModel,
   type NormalizableEvent,
@@ -25,7 +24,7 @@ import {
 } from "./anthropic/parse-stream";
 import { priceIterations, summarize, type UsageRow } from "./anthropic/pricing";
 import { GUEST_MAX_TOKENS, MAX_TOKENS } from "./anthropic/thinking-config";
-import type { MessageSnapshot, RelayEvent, RelayEventBody, ServerTimings } from "./events";
+import type { MessageSnapshot, RelayEvent, RelayEventBody } from "./events";
 import { ProviderStatusError, sleep } from "./providers/replay";
 import { isBillableProvider, type Provider, type ProviderRequest } from "./providers/types";
 import { BudgetExceededError, PromptTooLongError, QuotaExceededError, QuotaManager } from "./quota";
@@ -158,7 +157,6 @@ interface FinalState {
   interruptedReason?: InterruptedReason;
   servingModel: string | null;
   stopReason: string | null;
-  timings: ServerTimings;
   rows: UsageRow[];
   error?: RelayError;
   /** Override for the usage rows' `estimated` flag (a stop after the final usage frame is exact). */
@@ -175,12 +173,10 @@ interface Active {
   controller: AbortController;
   abortReason: AbortReason | null;
   acc: StreamAccumulator;
-  startedAt: number;
   /** When the upstream's message_start arrived: output is generated from here, so a stop's estimate never counts waits before it. */
   messageStartAt: number | null;
   lastEventAt: number | null;
   firstTokenAt: number | null;
-  firstRelayedAt: number | null;
   relayed: number;
   partialTimer: ReturnType<typeof setInterval> | null;
   promise: Promise<void>;
@@ -371,7 +367,6 @@ export class Engine {
             requestedModel: input.model,
             thinking: input.thinking,
             generationId: input.generationId,
-            timings: { server: { received: this.now() } },
             createdAt: now,
             updatedAt: now,
           })
@@ -413,11 +408,9 @@ export class Engine {
       controller: new AbortController(),
       abortReason: null,
       acc: createAccumulator(),
-      startedAt: this.now(),
       messageStartAt: null,
       lastEventAt: null,
       firstTokenAt: null,
-      firstRelayedAt: null,
       relayed: 0,
       partialTimer: null,
       promise: Promise.resolve(),
@@ -569,7 +562,6 @@ export class Engine {
       stopReason: message.stopReason,
       refusal: message.refusal ?? null,
       error: message.error ?? null,
-      timings: message.timings ?? null,
       generationId: message.generationId,
       lastSeq: message.lastSeq,
     };
@@ -609,12 +601,11 @@ export class Engine {
   }
 
   private async run(active: Active, input: StartInput): Promise<void> {
-    const timings: ServerTimings = { received: active.startedAt };
     try {
       if (input.gate) await input.gate.catch(() => {});
       if (active.slot) await active.slot;
       if (active.controller.signal.aborted) {
-        this.finishAborted(active, active.abortReason ?? "stop", timings);
+        this.finishAborted(active, active.abortReason ?? "stop");
         return;
       }
       const history = this.loadHistory(active.chatId, active.messageId);
@@ -639,17 +630,17 @@ export class Engine {
         const refused = await this.fitGuestPrompt(active, provider, request);
         // A send refused for good spent nothing, so it keeps nothing either; a retryable one keeps its rows for the retry to replace.
         if (refused && !refused.retryable) {
-          this.discard(active, refused, timings);
+          this.discard(active, refused);
           return;
         }
         if (refused) {
-          this.finishError(active, refused, timings);
+          this.finishError(active, refused);
           return;
         }
       }
 
       for (let attempt = 0; ; attempt++) {
-        const error = await this.attempt(active, provider, request, timings);
+        const error = await this.attempt(active, provider, request);
         if (!error) break;
         // Before the API has begun a message nothing is lost, so a retryable failure is sent again.
         const retry = input.retry;
@@ -658,34 +649,34 @@ export class Engine {
           continue;
         }
         if (error.kind === "network" && active.acc.apiMessageId) {
-          this.finishInterrupted(active, "upstream", timings, error.message);
+          this.finishInterrupted(active, "upstream", error.message);
           return;
         }
-        this.finishError(active, error, timings);
+        this.finishError(active, error);
         return;
       }
 
       if (active.controller.signal.aborted) {
-        this.finishAborted(active, active.abortReason ?? "stop", timings);
+        this.finishAborted(active, active.abortReason ?? "stop");
         return;
       }
       if (!active.acc.messageStopped && active.acc.stopReason === null) {
         // The upstream stream ended without a terminal frame: connection lost.
-        this.finishInterrupted(active, "upstream", timings, "The connection to the model dropped");
+        this.finishInterrupted(active, "upstream", "The connection to the model dropped");
         return;
       }
-      this.finishDone(active, timings);
+      this.finishDone(active);
     } catch (err) {
       if (active.controller.signal.aborted || isAbortError(err)) {
-        this.finishAborted(active, active.abortReason ?? "stop", timings);
+        this.finishAborted(active, active.abortReason ?? "stop");
         return;
       }
-      this.finishError(active, toRelayError(err), timings);
+      this.finishError(active, toRelayError(err));
     }
   }
 
   /** One upstream request relayed to its end: a failure comes back classified, an abort propagates. */
-  private async attempt(active: Active, provider: Provider, request: ProviderRequest, timings: ServerTimings): Promise<RelayError | null> {
+  private async attempt(active: Active, provider: Provider, request: ProviderRequest): Promise<RelayError | null> {
     try {
       const stream = provider.stream(request, { signal: active.controller.signal });
       const iterator = stream[Symbol.asyncIterator]();
@@ -705,7 +696,6 @@ export class Engine {
         for (const body of bodies) {
           if ((body.type === "text_delta" || body.type === "thinking_delta") && active.firstTokenAt === null) {
             active.firstTokenAt = this.now();
-            timings.upstreamFirstToken = active.firstTokenAt;
           }
           if (body.type === "error") return body.error;
           if (body.type === "message_start") active.messageStartAt ??= active.lastEventAt;
@@ -717,10 +707,6 @@ export class Engine {
           // Metered as it streams; at the cap every running reply of the user stops.
           if ((body.type === "text_delta" || body.type === "thinking_delta") && active.billable && this.quota.meter(active.id, body.text.length)) {
             this.stopAtCap(active.userId);
-          }
-          if ((body.type === "text_delta" || body.type === "thinking_delta") && active.firstRelayedAt === null) {
-            active.firstRelayedAt = this.now();
-            timings.firstRelayed = active.firstRelayedAt;
           }
           if (
             active.faults.interruptAfterEvents !== undefined &&
@@ -800,11 +786,10 @@ export class Engine {
       .run();
   }
 
-  private finishDone(active: Active, timings: ServerTimings): void {
+  private finishDone(active: Active): void {
     const acc = active.acc;
     const servingModel = resolveServingModel(acc) ?? active.requestedModel;
-    timings.done = this.now();
-    timings.declinedAttempt = hadDeclinedAttempt(acc);
+    const doneAt = this.now();
     const rows = this.free(active, this.priceFinal(active, servingModel));
     const usage = summarize(rows, false);
     const refused = acc.stopReason === "refusal";
@@ -812,12 +797,12 @@ export class Engine {
     const content = toContentBlocks(acc);
     // Only real streams teach the estimator; a scripted pace would skew what stopped replies are billed.
     if (active.billable && active.firstTokenAt !== null && !refused) {
-      this.tps.record(servingModel, usage.outputTokens, timings.done - active.firstTokenAt);
+      this.tps.record(servingModel, usage.outputTokens, doneAt - active.firstTokenAt);
     }
     this.settle(
       active,
-      { content, status, generationStatus: "done", servingModel, stopReason: acc.stopReason, timings, rows },
-      { type: "done", stopReason: acc.stopReason, servingModel, usage, timings },
+      { content, status, generationStatus: "done", servingModel, stopReason: acc.stopReason, rows },
+      { type: "done", stopReason: acc.stopReason, servingModel, usage },
     );
     if (status === "done" && this.afterDone) {
       try {
@@ -836,61 +821,57 @@ export class Engine {
     }
   }
 
-  private finishAborted(active: Active, reason: AbortReason, timings: ServerTimings): void {
+  private finishAborted(active: Active, reason: AbortReason): void {
     if (reason === "cap") {
-      this.finishError(active, { kind: "quota_exceeded", message: "You've reached your spending cap", retryable: false }, timings);
+      this.finishError(active, { kind: "quota_exceeded", message: "You've reached your spending cap", retryable: false });
       return;
     }
     if (reason === "too_long") {
-      this.finishError(active, { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 }, timings);
+      this.finishError(active, { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 });
       return;
     }
     if (reason === "stop") {
       const servingModel = resolveServingModel(active.acc);
-      timings.done = this.now();
       // A stop that lands after the final usage frame has exact numbers; only an earlier one estimates.
       const exact = active.acc.stopReason !== null;
       const rows = exact ? this.free(active, this.priceFinal(active, servingModel ?? active.requestedModel)) : this.estimateRows(active, servingModel ?? active.requestedModel);
       const usage = rows.length ? summarize(rows, !exact) : null;
       this.settle(
         active,
-        { content: toContentBlocks(active.acc), status: "stopped", generationStatus: "stopped", servingModel, stopReason: null, timings, rows, estimated: !exact },
+        { content: toContentBlocks(active.acc), status: "stopped", generationStatus: "stopped", servingModel, stopReason: null, rows, estimated: !exact },
         { type: "stopped", servingModel, usage },
       );
       return;
     }
     if (reason === "idle") {
-      this.finishInterrupted(active, "upstream", timings, `No data from the model for ${Math.round(this.upstreamIdleMs / 1000)} s`);
+      this.finishInterrupted(active, "upstream", `No data from the model for ${Math.round(this.upstreamIdleMs / 1000)} s`);
       return;
     }
-    this.finishInterrupted(active, reason === "shutdown" ? "shutdown" : "crash", timings);
+    this.finishInterrupted(active, reason === "shutdown" ? "shutdown" : "crash");
   }
 
-  private finishInterrupted(active: Active, reason: InterruptedReason, timings: ServerTimings, message?: string): void {
+  private finishInterrupted(active: Active, reason: InterruptedReason, message?: string): void {
     const servingModel = resolveServingModel(active.acc);
-    timings.done = this.now();
     const rows = this.estimateRows(active, servingModel ?? active.requestedModel);
     this.settle(
       active,
-      { content: toContentBlocks(active.acc), status: "interrupted", generationStatus: "interrupted", interruptedReason: reason, servingModel, stopReason: null, timings, rows },
+      { content: toContentBlocks(active.acc), status: "interrupted", generationStatus: "interrupted", interruptedReason: reason, servingModel, stopReason: null, rows },
       { type: "interrupted", reason, message },
     );
   }
 
-  private finishError(active: Active, error: RelayError, timings: ServerTimings): void {
+  private finishError(active: Active, error: RelayError): void {
     const servingModel = resolveServingModel(active.acc);
-    timings.done = this.now();
     const rows = active.acc.apiMessageId ? this.estimateRows(active, servingModel ?? active.requestedModel) : [];
     this.settle(
       active,
-      { content: toContentBlocks(active.acc), status: "error", generationStatus: "error", servingModel, stopReason: null, timings, rows, error },
+      { content: toContentBlocks(active.acc), status: "error", generationStatus: "error", servingModel, stopReason: null, rows, error },
       { type: "error", error },
     );
   }
 
   /** Ends a refused guest send with its error and removes the rows its start wrote; nothing was spent. */
-  private discard(active: Active, error: RelayError, timings: ServerTimings): void {
-    timings.done = this.now();
+  private discard(active: Active, error: RelayError): void {
     const ids = active.insertedUserMessageId ? [active.messageId, active.insertedUserMessageId] : [active.messageId];
     try {
       this.db.transaction((tx) => {
@@ -1003,7 +984,6 @@ export class Engine {
           stopReason: final.stopReason,
           refusal: active.acc.refusal,
           error: final.error ?? null,
-          timings: { server: final.timings },
           // The terminal event is appended right after this write and takes the next seq.
           lastSeq: this.coveredSeq(active) + 1,
           updatedAt: now,

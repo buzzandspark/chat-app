@@ -4,7 +4,6 @@ import { toContentBlocks } from "./accumulate";
 import {
   accumulatedText,
   createAccumulator,
-  hadDeclinedAttempt,
   normalizeEvent,
   resolveServingModel,
   type NormalizableEvent,
@@ -49,7 +48,7 @@ describe("normalizeEvent", () => {
     expect(resolveServingModel(acc)).toBe(model);
   });
 
-  it("pre-output fallback: invisible boundary, serving model from the block, declined attempt flagged", () => {
+  it("pre-output fallback: invisible boundary, serving model from the block", () => {
     const { acc, out } = run(
       eventsOf({
         model: "claude-opus-4-8",
@@ -62,7 +61,6 @@ describe("normalizeEvent", () => {
     const boundary = out.find((e) => e.type === "fallback_boundary");
     expect(boundary).toMatchObject({ from: model, to: "claude-opus-4-8", category: "cyber", visible: false });
     expect(resolveServingModel(acc)).toBe("claude-opus-4-8");
-    expect(hadDeclinedAttempt(acc)).toBe(true);
     const blocks = toContentBlocks(acc);
     expect(blocks[0]!.type).toBe("fallback");
     expect(blocks[1]).toMatchObject({ type: "text", text: "served by fallback" });
@@ -86,7 +84,6 @@ describe("normalizeEvent", () => {
     const boundary = out.find((e) => e.type === "fallback_boundary");
     expect(boundary).toMatchObject({ visible: true, to: "claude-opus-4-8" });
     expect(accumulatedText(acc)).toBe("before after");
-    expect(hadDeclinedAttempt(acc)).toBe(false);
     expect(acc.usage.iterations).toHaveLength(2);
     expect(toContentBlocks(acc).map((b) => b.type)).toEqual(["text", "fallback", "text"]);
   });
@@ -102,7 +99,6 @@ describe("normalizeEvent", () => {
     const { acc, out } = run(events);
     expect(out.some((e) => e.type === "fallback_boundary")).toBe(false);
     expect(resolveServingModel(acc)).toBe("claude-opus-4-8");
-    expect(hadDeclinedAttempt(acc)).toBe(false);
   });
 
   it("refusal with null category and explanation after partial text", () => {

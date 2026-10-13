@@ -50,7 +50,7 @@ beforeEach(() => {
 });
 
 describe("Engine", () => {
-  it("runs a generation to done, persists content, usage, and timings", async () => {
+  it("runs a generation to done, persists content and usage", async () => {
     const inp = input();
     expect(engine.start(inp)).toEqual({ created: true });
     const events = await collectUntilTerminal(store, inp.generationId);
@@ -62,8 +62,6 @@ describe("Engine", () => {
     expect(done.stopReason).toBe("end_turn");
     expect(done.servingModel).toBe("claude-sonnet-5-5");
     expect(done.usage.estimated).toBe(false);
-    expect(done.timings.upstreamFirstToken).toBeDefined();
-    expect(done.timings.firstRelayed).toBeDefined();
 
     const msg = db.select().from(messages).where(eq(messages.id, inp.assistantMessageId)).get()!;
     expect(msg.status).toBe("done");
@@ -268,7 +266,6 @@ describe("Engine", () => {
     const done = events[events.length - 1]!;
     if (done.type !== "done") throw new Error("expected done");
     expect(done.servingModel).toBe("claude-opus-4-8");
-    expect(done.timings.declinedAttempt).toBe(true);
     const usage = db.select().from(usageEvents).where(eq(usageEvents.generationId, inp.generationId)).all();
     expect(usage.map((u) => u.model).sort()).toEqual(["claude-opus-4-8", "claude-sonnet-5-5"]);
     const msg = db.select().from(messages).where(eq(messages.id, inp.assistantMessageId)).get()!;

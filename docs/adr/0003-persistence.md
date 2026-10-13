@@ -15,7 +15,7 @@ Notable tables and columns:
 - `users` (role `admin | user | guest`, `cost_cap_usd` nullable, `cost_spent_usd`, `is_anonymous`), `sessions`, `accounts`, `verifications`: the better-auth tables, plus the admin and anonymous plugin fields.
 - `invites`: token hash, expiry, `used_at`, `revoked_at`.
 - `chats` (with `forked_from`, `fork_position`, `pinned`, `tab_hidden`).
-- `messages`: `position`, `content`, `status`, `requested_model`, `serving_model`, `stop_reason`, `refusal`, `error`, `timings`, `last_seq`, `fork_options`.
+- `messages`: `position`, `content`, `status`, `requested_model`, `serving_model`, `stop_reason`, `refusal`, `error`, `last_seq`, `fork_options`.
 - `generations`: `status`, `interrupted_reason`, `iterations` (`usage.iterations`: usage per API iteration, e.g. a fallback), `provider`, `scenario`.
 - `usage_events`: one row per iteration with model, tokens, cost, and `estimated`.
 
