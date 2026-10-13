@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BusyError } from "@relay/engine";
-import { createForks, ForkStartError } from "@relay/forks";
+import { createForks, ForkError, ForkStartError } from "@relay/forks";
 import { BudgetExceededError } from "@relay/quota";
 import { requireUser } from "@server/current-user";
 import { POST } from "./route";
@@ -21,7 +21,7 @@ const STARTED = { chatId: crypto.randomUUID(), generationId: crypto.randomUUID()
 
 function fork(): Promise<Response> {
   const forks = [1, 2].map((i) => ({ title: `Option ${i}`, prompt: `Explore ${i}`, chatId: crypto.randomUUID(), generationId: crypto.randomUUID(), userMessageId: crypto.randomUUID(), assistantMessageId: crypto.randomUUID() }));
-  const request = new NextRequest("http://localhost/api/chats/p1/fork", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ forks }) });
+  const request = new NextRequest("http://localhost/api/chats/p1/fork", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messageId: crypto.randomUUID(), forks }) });
   return POST(request, { params: Promise.resolve({ id: "p1" }) });
 }
 
@@ -52,5 +52,17 @@ describe("POST /api/chats/[id]/fork refused by a guest limit", () => {
     const res = await fork();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ forks: [STARTED], failed: { error: "rate_limited", retryAfterMs: 30_000 } });
+  });
+});
+
+describe("POST /api/chats/[id]/fork on a spent reply", () => {
+  it("passes the explored reply to createForks and answers its refusal with 409", async () => {
+    vi.mocked(createForks).mockImplementationOnce(() => {
+      throw new ForkError("spent");
+    });
+    const res = await fork();
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "spent" });
+    expect(vi.mocked(createForks).mock.lastCall?.[1].messageId).toEqual(expect.any(String));
   });
 });

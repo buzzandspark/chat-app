@@ -1,13 +1,13 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Db } from "@db/client";
-import { chats, generations, messages } from "@db/schema";
+import { chats, generations, messages, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import type { HistoryMessage } from "./anthropic/history";
 import { buildRequest } from "./anthropic/request";
 import { BusyError, Engine, type StartInput } from "./engine";
-import { createForks, declareWinner, deleteForks, duplicateChat, ForkError, type ForkRequest } from "./forks";
+import { createForks, declareWinner, deleteForks, duplicateChat, ForkError, ForkStartError, type ForkRequest } from "./forks";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { scenarioScript, type ScenarioName } from "./scenarios";
@@ -38,28 +38,31 @@ function fork(title = "Option"): ForkRequest {
   return { chatId: uuidv7(), generationId: uuidv7(), userMessageId: uuidv7(), assistantMessageId: uuidv7(), title, prompt: `Explore ${title}` };
 }
 
+async function turn(chatId: string, text: string, extra: Partial<StartInput> = {}): Promise<void> {
+  const inp: StartInput = {
+    generationId: uuidv7(),
+    chatId,
+    userId: USER,
+    userRole: "user",
+    userMessageId: uuidv7(),
+    assistantMessageId: uuidv7(),
+    text,
+    model: "claude-opus-5-5",
+    thinking: { harder: true },
+    ...extra,
+  };
+  engine.start(inp);
+  await collectUntilTerminal(store, inp.generationId);
+}
+
 async function parentChat(turns = 1, extra: Partial<StartInput> = {}): Promise<string> {
   const chatId = uuidv7();
-  for (let i = 0; i < turns; i++) {
-    const inp: StartInput = {
-      generationId: uuidv7(),
-      chatId,
-      userId: USER,
-      userRole: "user",
-      userMessageId: uuidv7(),
-      assistantMessageId: uuidv7(),
-      text: `question ${i}`,
-      model: "claude-opus-5-5",
-      thinking: { harder: true },
-      ...extra,
-    };
-    engine.start(inp);
-    await collectUntilTerminal(store, inp.generationId);
-  }
+  for (let i = 0; i < turns; i++) await turn(chatId, `question ${i}`, extra);
   return chatId;
 }
 
 const deps = () => ({ db, engine, store, gateMs: 2000 });
+const lastRow = (chatId: string) => db.select().from(messages).where(eq(messages.chatId, chatId)).orderBy(desc(messages.position)).get()!.id;
 
 beforeEach(() => {
   db = createTestDb();
@@ -74,7 +77,7 @@ describe("createForks", () => {
   it("copies every parent row, then asks the parent's model and effort the prompt as the first own turn", async () => {
     const parentId = await parentChat(2);
     const forks = [fork("A"), fork("B")];
-    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks });
     expect(started.map((s) => s.chatId)).toEqual(forks.map((f) => f.chatId));
     await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
 
@@ -107,7 +110,7 @@ describe("createForks", () => {
     const parentId = await parentChat();
     const forks = [fork("A"), fork("B"), fork("C")];
     firstGeneration = forks[0]!.generationId;
-    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks });
     // Every fork has its rows, buffer and `started` event at once.
     for (const s of started) expect(store.get(s.generationId)!.events[0]!.type).toBe("started");
     await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
@@ -119,7 +122,7 @@ describe("createForks", () => {
   it("a fork's first request equals the parent's last request in everything but the appended turns", async () => {
     const parentId = await parentChat(2);
     const [f] = [fork("A")];
-    const [started] = createForks(deps(), { userId: USER, userRole: "user", parentId, forks: [f!] });
+    const [started] = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks: [f!] });
     await collectUntilTerminal(store, started!.generationId);
 
     const history = (chatId: string, before: string): HistoryMessage[] => {
@@ -152,7 +155,7 @@ describe("createForks", () => {
   it("gives each fork of a guest's fan-out half a running slot and starts the ones that do not fit as slots free up", async () => {
     seedUser(db, "g1", { role: "guest", costCapUsd: 1 });
     const parentId = await parentChat(1, { userId: "g1", userRole: "guest" });
-    const started = createForks(deps(), { userId: "g1", userRole: "guest", parentId, forks: ["A", "B", "C", "D", "E", "F"].map((t) => fork(t)) });
+    const started = createForks(deps(), { userId: "g1", userRole: "guest", parentId, messageId: lastRow(parentId), forks: ["A", "B", "C", "D", "E", "F"].map((t) => fork(t)) });
     expect(started).toHaveLength(6);
     const send = (): StartInput => ({ generationId: uuidv7(), chatId: uuidv7(), userId: "g1", userRole: "guest", userMessageId: uuidv7(), assistantMessageId: uuidv7(), text: "hi", model: "claude-haiku-5-5", thinking: { harder: false } });
     expect(() => engine.start(send())).toThrow(BusyError);
@@ -166,20 +169,57 @@ describe("createForks", () => {
   it("refuses another user's chat, a fork of a fork, and more than the cap", async () => {
     const parentId = await parentChat();
     seedUser(db, "u2");
-    expect(() => createForks(deps(), { userId: "u2", userRole: "user", parentId, forks: [fork()] })).toThrow(ForkError);
-    const [first] = createForks(deps(), { userId: USER, userRole: "user", parentId, forks: [fork()] });
+    expect(() => createForks(deps(), { userId: "u2", userRole: "user", parentId, messageId: lastRow(parentId), forks: [fork()] })).toThrow(ForkError);
+    const [first] = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks: [fork()] });
     await collectUntilTerminal(store, first!.generationId);
-    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId: first!.chatId, forks: [fork()] })).toThrow(/is_fork/);
+    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId: first!.chatId, messageId: lastRow(first!.chatId), forks: [fork()] })).toThrow(/is_fork/);
     const nine = Array.from({ length: 9 }, (_, i) => fork(`F${i}`));
-    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId, forks: [...nine, fork("ten")] })).toThrow(/too_many/);
-    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks: nine });
+    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks: [...nine, fork("ten")] })).toThrow(/too_many/);
+    await turn(parentId, "next question");
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks: nine });
     await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
     expect(db.select().from(chats).where(eq(chats.forkedFrom, parentId)).all()).toHaveLength(10);
   });
 
+  it("explores a reply once: a retry with the same ids returns its forks, new ids are refused as spent", async () => {
+    const parentId = await parentChat();
+    const messageId = lastRow(parentId);
+    const options = ["A", "B", "C"].map((t) => ({ title: t, prompt: `Explore ${t}` }));
+    db.update(messages).set({ forkOptions: options }).where(eq(messages.id, messageId)).run();
+    const forks = options.map((o) => fork(o.title));
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId, forks });
+    await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
+    const calls = callsSeen.length;
+
+    expect(createForks(deps(), { userId: USER, userRole: "user", parentId, messageId, forks })).toEqual(started);
+    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId, messageId, forks: options.map((o) => fork(o.title)) })).toThrow(/spent/);
+    expect(callsSeen).toHaveLength(calls);
+    expect(db.select().from(chats).where(eq(chats.forkedFrom, parentId)).all()).toHaveLength(3);
+  });
+
+  it("leaves the options unspent when the first fork is refused", async () => {
+    const parentId = await parentChat();
+    const messageId = lastRow(parentId);
+    const options = [{ title: "A", prompt: "Explore A" }];
+    db.update(messages).set({ forkOptions: options }).where(eq(messages.id, messageId)).run();
+    db.update(users).set({ costCapUsd: 0 }).where(eq(users.id, USER)).run();
+    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId, messageId, forks: [fork()] })).toThrow(ForkStartError);
+    expect(db.select().from(messages).where(eq(messages.id, messageId)).get()!.forkOptions).toEqual(options);
+  });
+
+  it("refuses a reply that is not the parent's last finished row", async () => {
+    const parentId = await parentChat(2);
+    const firstReply = db.select().from(messages).where(eq(messages.chatId, parentId)).orderBy(asc(messages.position)).all()[1]!;
+    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: firstReply.id, forks: [fork()] })).toThrow(/stale/);
+    const streaming = turn(parentId, "more");
+    expect(() => createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks: [fork()] })).toThrow(/stale/);
+    await streaming;
+    expect(db.select().from(chats).where(eq(chats.forkedFrom, parentId)).all()).toHaveLength(0);
+  });
+
   it("a scenario reply forks as a scripted reply; deleting the parent leaves the fork standing", async () => {
     const parentId = await parentChat(1, { scenario: "normal" });
-    const [started] = createForks(deps(), { userId: USER, userRole: "user", parentId, forks: [fork()] });
+    const [started] = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks: [fork()] });
     await collectUntilTerminal(store, started!.generationId);
     expect(db.select().from(generations).where(eq(generations.id, started!.generationId)).get()!.scenario).toBe("normal");
     db.delete(chats).where(eq(chats.id, parentId)).run();
@@ -191,7 +231,7 @@ describe("createForks", () => {
   it("declareWinner keeps the fork alone with its history and deletes the main chat and the other forks", async () => {
     const parentId = await parentChat(2);
     const forks = [fork("A"), fork("B")];
-    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks });
     await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
     const winner = forks[1]!.chatId;
     expect(await declareWinner(db, engine, "nobody", winner)).toBeNull();
@@ -209,7 +249,7 @@ describe("createForks", () => {
     expect(db.select().from(messages).where(eq(messages.chatId, winner)).orderBy(asc(messages.position)).all()).toEqual(rowsBefore);
     expect(db.select().from(messages).where(eq(messages.chatId, parentId)).all()).toHaveLength(0);
     // Standing alone, it can be forked again.
-    const [again] = createForks(deps(), { userId: USER, userRole: "user", parentId: winner, forks: [fork("C")] });
+    const [again] = createForks(deps(), { userId: USER, userRole: "user", parentId: winner, messageId: lastRow(winner), forks: [fork("C")] });
     await collectUntilTerminal(store, again!.generationId);
     expect(db.select().from(chats).where(eq(chats.id, again!.chatId)).get()!.forkedFrom).toBe(winner);
   });
@@ -217,7 +257,7 @@ describe("createForks", () => {
   it("deleteForks removes every fork of a main chat and keeps the main chat", async () => {
     const parentId = await parentChat();
     const forks = [fork("A"), fork("B")];
-    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks });
     await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
     expect(await deleteForks(db, engine, "nobody", parentId)).toBeNull();
     expect(await deleteForks(db, engine, USER, forks[0]!.chatId)).toBeNull();
@@ -231,7 +271,7 @@ describe("createForks", () => {
     const parentId = await parentChat();
     const other = await parentChat();
     const forks = [fork("A"), fork("B")];
-    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, forks });
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks });
     await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
     expect(await deleteForks(db, engine, USER, parentId, true)).toEqual({ deleted: [...forks.map((f) => f.chatId), parentId] });
     expect(db.select().from(chats).where(eq(chats.userId, USER)).all().map((c) => c.id)).toEqual([other]);

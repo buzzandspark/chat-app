@@ -1,4 +1,4 @@
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages } from "@db/schema";
 import { MAX_FORKS } from "@shared/forks";
@@ -22,6 +22,8 @@ export interface CreateForksInput {
   userId: string;
   userRole: UserRole;
   parentId: string;
+  /** The reply whose options are explored: the parent's last row, finished. */
+  messageId: string;
   forks: ForkRequest[];
 }
 
@@ -31,7 +33,7 @@ export interface StartedFork {
   assistantMessageId: string;
 }
 
-export type ForkRefusal = "not_found" | "is_fork" | "too_many";
+export type ForkRefusal = "not_found" | "is_fork" | "too_many" | "spent" | "stale";
 
 export class ForkError extends Error {
   constructor(public code: ForkRefusal) {
@@ -63,26 +65,34 @@ export interface ForkDeps {
   gateMs?: number;
 }
 
-/** Fork 1 goes first alone so its request writes the cache entry for the parent's final reply; the rest start once the API has begun that message. */
+/**
+ * Fork 1 goes first alone so its request writes the cache entry for the parent's final reply; the rest start once the API has begun that message.
+ * Idempotent on the forks' ids: a retry returns the forks that request already started.
+ */
 export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFork[] {
   const { db, engine, store } = deps;
   const now = new Date(deps.now?.() ?? Date.now());
   const parent = db.select().from(chats).where(and(eq(chats.id, input.parentId), eq(chats.userId, input.userId))).get();
   if (!parent) throw new ForkError("not_found");
   if (parent.forkedFrom) throw new ForkError("is_fork");
+  const made = startedBefore(db, parent.id, input.forks);
+  if (made.length > 0) return made;
   const existing = db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, parent.id)).all().length;
   if (existing + input.forks.length > MAX_FORKS) throw new ForkError("too_many");
 
   const rows = db.select().from(messages).where(eq(messages.chatId, parent.id)).orderBy(asc(messages.position)).all();
-  const lastReply = [...rows].reverse().find((r) => r.role === "assistant");
-  const model = input.userRole === "guest" ? GUEST_MODEL : isModelId(lastReply?.requestedModel) ? lastReply.requestedModel : DEFAULT_MODEL;
-  const thinking: ThinkingOptions = lastReply?.thinking ?? { harder: false };
-  const lastGeneration = lastReply?.generationId
+  const lastReply = rows.at(-1);
+  if (lastReply?.id !== input.messageId || lastReply.role !== "assistant" || lastReply.status !== "done") throw new ForkError("stale");
+  // Null means never detected (a declared winner's reply), which stays forkable; empty means spent.
+  if (lastReply.forkOptions?.length === 0) throw new ForkError("spent");
+  const model = input.userRole === "guest" ? GUEST_MODEL : isModelId(lastReply.requestedModel) ? lastReply.requestedModel : DEFAULT_MODEL;
+  const thinking: ThinkingOptions = lastReply.thinking ?? { harder: false };
+  const lastGeneration = lastReply.generationId
     ? db.select({ scenario: generations.scenario }).from(generations).where(eq(generations.id, lastReply.generationId)).get()
     : undefined;
   // A scenario reply forks as a scripted reply too: never a live prompt out of a script.
   const scenario = lastGeneration?.scenario ? "normal" : undefined;
-  const forkPosition = (rows.at(-1)?.position ?? -1) + 1;
+  const forkPosition = lastReply.position + 1;
 
   const started: StartedFork[] = [];
   let gate: Promise<void> | undefined;
@@ -144,11 +154,27 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
       throw new ForkStartError(err, started);
     }
     started.push({ chatId: fork.chatId, generationId: fork.generationId, assistantMessageId: fork.assistantMessageId });
-    if (i === 0) gate = upstreamBegun(store, fork.generationId, deps.gateMs ?? FORK_GATE_MS);
+    if (i > 0) return;
+    // The options are spent once fork 1 runs: the button goes away and stays away. Nothing awaits between the check above and here.
+    db.update(messages).set({ forkOptions: [] }).where(eq(messages.id, lastReply.id)).run();
+    gate = upstreamBegun(store, fork.generationId, deps.gateMs ?? FORK_GATE_MS);
   });
-  // The options are spent: the button goes away and stays away.
-  if (lastReply) db.update(messages).set({ forkOptions: [] }).where(eq(messages.id, lastReply.id)).run();
   return started;
+}
+
+/** The requested forks that already exist under this parent with their own generation, in request order. */
+function startedBefore(db: Db, parentId: string, forks: ForkRequest[]): StartedFork[] {
+  const ids = forks.map((f) => f.generationId);
+  const found = db
+    .select({ id: generations.id, chatId: generations.chatId, messageId: generations.messageId })
+    .from(generations)
+    .innerJoin(chats, eq(chats.id, generations.chatId))
+    .where(and(inArray(generations.id, ids), eq(chats.forkedFrom, parentId)))
+    .all();
+  return forks.flatMap((f) => {
+    const g = found.find((r) => r.id === f.generationId && r.chatId === f.chatId);
+    return g ? [{ chatId: g.chatId, generationId: g.id, assistantMessageId: g.messageId }] : [];
+  });
 }
 
 export interface Duplicate {

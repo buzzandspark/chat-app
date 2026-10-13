@@ -13,6 +13,8 @@ import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
 
 const Body = z.object({
+  /** The reply whose options are explored. */
+  messageId: z.string().uuid(),
   forks: z
     .array(
       ForkOptionBody.extend({
@@ -34,7 +36,7 @@ function failure(err: unknown): Response {
   throw err;
 }
 
-/** Forks the chat once per option; the model and effort come from the parent's last reply, never the body. */
+/** Forks the chat once per option; the model and effort come from the parent's last reply, never the body. Idempotent on the forks' ids. */
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[id]/fork">): Promise<Response> {
   try {
     const user = await requireUser();
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[
     }
     const { engine, store } = getRelay();
     try {
-      const forks = createForks({ db: getDb(), engine, store }, { userId: user.id, userRole: user.role, parentId: id, forks: parsed.data.forks });
+      const forks = createForks({ db: getDb(), engine, store }, { userId: user.id, userRole: user.role, parentId: id, messageId: parsed.data.messageId, forks: parsed.data.forks });
       return Response.json({ forks } satisfies ForkResponse, { headers: { "cache-control": "no-store" } });
     } catch (err) {
       if (err instanceof ForkError) {

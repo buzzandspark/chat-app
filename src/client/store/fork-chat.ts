@@ -1,4 +1,5 @@
 "use client";
+import type { ForkRequest } from "@relay/forks";
 import { busyText } from "@client/components/chat/rate-limit";
 import { readJson, type ApiError, type DuplicateResponse, type ForkResponse } from "@shared/api";
 import { MAX_FORKS, type ForkOption } from "@shared/forks";
@@ -17,6 +18,26 @@ export interface ForkOutcome {
 
 const OFFLINE = "You're offline. Try again when you're connected.";
 
+/** Each reply's last unanswered or refused Explore: sending the same options again reuses its ids, so the route answers a retry with the forks it already started. */
+const attempts = new Map<string, { key: string; forks: ForkRequest[] }>();
+
+function forkRequests(messageId: string, options: readonly ForkOption[]): ForkRequest[] {
+  const chosen = options.slice(0, MAX_FORKS);
+  const key = JSON.stringify(chosen.map((o) => [o.title, o.prompt]));
+  const kept = attempts.get(messageId);
+  if (kept?.key === key) return kept.forks;
+  const forks = chosen.map((o) => ({
+    chatId: uuidv7(),
+    generationId: uuidv7(),
+    userMessageId: uuidv7(),
+    assistantMessageId: uuidv7(),
+    title: o.title,
+    prompt: o.prompt,
+  }));
+  attempts.set(messageId, { key, forks });
+  return forks;
+}
+
 /** A refused fork, in words: the route's 409 carries why in its error code. */
 async function refusal(res: Response): Promise<string> {
   if (res.status === 402) return CAP;
@@ -28,6 +49,8 @@ async function refusal(res: Response): Promise<string> {
     const body: Partial<ApiError> = await readJson<ApiError>(res).catch(() => ({}));
     if (body.error === "too_many") return `This chat already has ${MAX_FORKS} forks.`;
     if (body.error === "is_fork") return "A fork can't be forked again.";
+    if (body.error === "spent") return "These options were already explored.";
+    if (body.error === "stale") return "This reply is no longer the latest one.";
   }
   return "Couldn't fork this chat. Try again.";
 }
@@ -42,17 +65,10 @@ export async function forkChat(
   /** Just before the forks are listed, which is when the tab strip appears. */
   onListed?: () => void,
 ): Promise<ForkOutcome> {
-  const forks = options.slice(0, MAX_FORKS).map((o) => ({
-    chatId: uuidv7(),
-    generationId: uuidv7(),
-    userMessageId: uuidv7(),
-    assistantMessageId: uuidv7(),
-    title: o.title,
-    prompt: o.prompt,
-  }));
+  const forks = forkRequests(messageId, options);
   let res: Response;
   try {
-    res = await fetch(`/api/chats/${chatId}/fork`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ forks }) });
+    res = await fetch(`/api/chats/${chatId}/fork`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ messageId, forks }) });
   } catch {
     return { ok: false, error: OFFLINE };
   }
@@ -60,6 +76,7 @@ export async function forkChat(
   const data = await readJson<ForkResponse>(res);
   const first = data.forks[0];
   if (!first) return { ok: false, error: "Couldn't start the forks. Try again." };
+  attempts.delete(messageId);
   store.updateMessage(messageId, { options: [], optionsStream: null });
   onListed?.();
   const sidebar = getSidebarStore();
