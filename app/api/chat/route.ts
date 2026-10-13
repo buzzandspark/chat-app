@@ -89,7 +89,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       created = outcome.created;
     } catch (err) {
       if (err instanceof QuotaExceededError) {
-        return jsonError(402, { error: "quota_exceeded", spentUsd: err.spentUsd, capUsd: err.capUsd });
+        return jsonError(402, { error: err.reached ? "quota_exceeded" : "quota_short", spentUsd: err.spentUsd, capUsd: err.capUsd });
       }
       if (err instanceof BudgetExceededError || err instanceof BusyError) return tooMany(err.retryAfterMs);
       if (err instanceof ForbiddenError) return jsonError(403, { error: "forbidden" });

@@ -75,6 +75,8 @@ type ErrorKind =
   | "session"
   | "forbidden"
   | "quota_exceeded"
+  /** Spend is under the cap, but not by enough for a reply's input and full output. */
+  | "quota_short"
   | "context_full"
   | "bad_request"
   | "network"

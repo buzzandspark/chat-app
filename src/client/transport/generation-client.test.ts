@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RelayEvent } from "@relay/events";
 import { encodeSse } from "@relay/sse";
 import { ChatStore, textOf } from "../store/chat-store";
+import { errorText } from "../store/announcer";
 import { GenerationClient } from "./generation-client";
 
 type Handler = (url: string, init?: RequestInit) => Promise<Response> | Response;
@@ -260,6 +261,14 @@ describe("GenerationClient", () => {
     const m = await settle(assistantMessageId);
     expect(m.status).toBe("error");
     expect(m.error?.kind).toBe("quota_exceeded");
+  });
+
+  it("tells a reply refused for room under the cap from one refused at the cap", async () => {
+    const client = makeClient(() => new Response(JSON.stringify({ error: "quota_short", spentUsd: 4.5, capUsd: 5 }), { status: 402 }));
+    const { assistantMessageId } = client.send({ chatId: "c1", text: "q", model: "claude-sonnet-5-5", thinking: { harder: false } });
+    const m = await settle(assistantMessageId);
+    expect(m.error).toMatchObject({ kind: "quota_short", retryable: false });
+    expect(errorText(m.error)).toBe("Not enough left under your spending cap for a full reply.");
   });
 
   it("gives up after max attempts and marks offline", async () => {

@@ -17,6 +17,11 @@ export class QuotaExceededError extends Error {
     super("quota_exceeded");
     this.name = "QuotaExceededError";
   }
+
+  /** False when spend is still under the cap and only the reply's reservation does not fit beside it. */
+  get reached(): boolean {
+    return this.spentUsd >= this.capUsd;
+  }
 }
 
 export class PromptTooLongError extends Error {

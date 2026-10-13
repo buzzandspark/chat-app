@@ -526,8 +526,8 @@ export class GenerationClient {
     const retryAfterHeader = Number(res.headers.get("retry-after"));
     const retryAfterMs = typeof body.retryAfterMs === "number" ? body.retryAfterMs : Number.isFinite(retryAfterHeader) ? retryAfterHeader * 1000 : undefined;
     const kind =
-      body.error === "quota_exceeded"
-        ? "quota_exceeded"
+      body.error === "quota_exceeded" || body.error === "quota_short"
+        ? body.error
         : body.error === "rate_limited"
           ? "rate_limited"
           : body.error === "replace_gone" || body.error === "replace_running"
@@ -544,7 +544,9 @@ export class GenerationClient {
     const message =
       kind === "quota_exceeded"
         ? "You've reached your spending cap"
-        : kind === "rate_limited"
+        : kind === "quota_short"
+          ? "Not enough left under your spending cap for a full reply"
+          : kind === "rate_limited"
           ? "Rate limited"
           : body.error === "replace_gone"
             ? "This chat has changed since you opened it"

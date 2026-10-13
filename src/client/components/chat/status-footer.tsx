@@ -152,6 +152,7 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
         break;
       case "auth":
       case "quota_exceeded":
+      case "quota_short":
         break;
       default:
         offer = e?.retryable ? retry : null;

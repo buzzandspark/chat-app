@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BusyError, MissingUserMessageError, type StartOutcome } from "@relay/engine";
-import { BudgetExceededError } from "@relay/quota";
+import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES } from "@relay/scenarios";
 import { requireUser } from "@server/current-user";
 import { getLimiters } from "@server/ratelimit";
@@ -78,6 +78,21 @@ describe("POST /api/chat refused by a guest limit", () => {
     const res = await send("guest", {});
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("10");
+  });
+});
+
+describe("POST /api/chat refused by the spending cap", () => {
+  it("says whether the cap is reached or only too close for a full reply", async () => {
+    start.mockImplementationOnce(() => {
+      throw new QuotaExceededError(5, 5);
+    });
+    expect(await (await send("user", {})).json()).toEqual({ error: "quota_exceeded", spentUsd: 5, capUsd: 5 });
+    start.mockImplementationOnce(() => {
+      throw new QuotaExceededError(4.5, 5);
+    });
+    const short = await send("user", {});
+    expect(short.status).toBe(402);
+    expect(await short.json()).toEqual({ error: "quota_short", spentUsd: 4.5, capUsd: 5 });
   });
 });
 

@@ -40,6 +40,8 @@ export function errorText(error: RelayError | null | undefined): string {
       return "Guests can't send messages right now.";
     case "quota_exceeded":
       return "You've reached your spending cap.";
+    case "quota_short":
+      return "Not enough left under your spending cap for a full reply.";
     case "context_full":
       return "This chat is too long to continue.";
     case "network":
