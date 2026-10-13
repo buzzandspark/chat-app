@@ -52,6 +52,13 @@ export class BusyError extends Error {
     this.name = "BusyError";
   }
 }
+/** A retry (no text) names a user message the chat does not have. */
+export class MissingUserMessageError extends Error {
+  constructor() {
+    super("retry without an existing user message");
+    this.name = "MissingUserMessageError";
+  }
+}
 
 export interface ProviderContext {
   userId: string;
@@ -318,7 +325,7 @@ export class Engine {
           .where(eq(messages.id, input.userMessageId))
           .get();
         if (!userRow) {
-          if (input.text === undefined) throw new Error("retry without an existing user message");
+          if (input.text === undefined) throw new MissingUserMessageError();
           tx.insert(messages)
             .values({
               id: input.userMessageId,

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BusyError } from "@relay/engine";
+import { BusyError, MissingUserMessageError } from "@relay/engine";
 import { BudgetExceededError } from "@relay/quota";
 import { SCENARIO_NAMES } from "@relay/scenarios";
 import { requireUser } from "@server/current-user";
@@ -86,5 +86,16 @@ describe("POST /api/chat send rate", () => {
     expect(refused.status).toBe(429);
     expect(await refused.json()).toMatchObject({ error: "rate_limited" });
     for (let i = 0; i < 20; i++) expect((await send("user", {})).status).not.toBe(429);
+  });
+});
+
+describe("POST /api/chat retrying a reply", () => {
+  it("answers a retry whose user message is gone with 409 missing_user_message", async () => {
+    start.mockImplementationOnce(() => {
+      throw new MissingUserMessageError();
+    });
+    const res = await send("user", { text: undefined });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "missing_user_message" });
   });
 });
