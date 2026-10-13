@@ -1,3 +1,4 @@
+-- A migration that rebuilds `chats` or `messages` must drop these triggers first and recreate them after.
 ALTER TABLE `messages` ADD `search_owner` text;--> statement-breakpoint
 -- The search index gains the owner's id (hex: one token no word shares), so a search reads one user's postings,
 -- and 2- and 3-letter prefix indexes.

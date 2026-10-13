@@ -204,4 +204,10 @@ describe("the search owner migration", () => {
     expect(sqlite.prepare("SELECT count(*) FROM messages_fts WHERE messages_fts MATCH 'quokka OR numbat'").pluck().get()).toBe(0);
     integrityCheck();
   });
+  // A rebuild of `chats` or `messages` drops the triggers on it; one that forgets to recreate them fails here.
+  it("leaves every search trigger in place after all migrations", () => {
+    applyMigrations(sqlite);
+    const triggers = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name").pluck().all();
+    expect(triggers).toEqual(["chats_search_owner_au", "messages_fts_ad", "messages_fts_ai", "messages_fts_au", "messages_search_text_au"]);
+  });
 });
