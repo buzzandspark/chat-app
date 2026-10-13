@@ -24,6 +24,16 @@ test.describe("mobile", () => {
     await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
   });
 
+  test("tapping Send keeps the message field focused, so the keyboard stays up", async ({ page }) => {
+    await openNewChat(page);
+    const box = page.getByRole("textbox", { name: "Message" });
+    await box.tap();
+    await box.fill("hello");
+    await page.getByRole("button", { name: "Send message" }).tap();
+    await expect(page.locator('[data-role="user"]').last()).toContainText("hello");
+    await expect(box).toBeFocused();
+  });
+
   test("the open sidebar is a modal dialog that takes focus and hands it back; closed it is inert", async ({ page }) => {
     await openNewChat(page);
     const aside = sidebar(page);

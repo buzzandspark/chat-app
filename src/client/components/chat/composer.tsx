@@ -134,6 +134,7 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string; draftId: st
   const value = editing ? editText : draft;
   const setValue = (text: string) => (editing ? setEditText(text) : setDraft(key, text));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const keepFocus = useRef(false);
   const desktop = useIsDesktop();
   const hasHover = useHasHover();
   const enterSends = desktop && hasHover;
@@ -297,7 +298,16 @@ export const Composer = forwardRef<ComposerHandle, { chatId: string; draftId: st
                   variant="default"
                   className={cn("rounded-full", (!value.trim() || overLimit) && "bg-muted text-muted-foreground disabled:opacity-100")}
                   disabled={!value.trim() || overLimit}
-                  onClick={submit}
+                  // Keeps focus (and a phone's keyboard) on the message: the tap would otherwise move it to the button.
+                  onPointerDown={() => {
+                    keepFocus.current = document.activeElement === textareaRef.current;
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    submit();
+                    if (keepFocus.current) textareaRef.current?.focus();
+                    keepFocus.current = false;
+                  }}
                 >
                   <ArrowUp />
                 </IconButton>
