@@ -20,7 +20,7 @@ export function ftsQuery(userId: string, q: string): string {
     const prefix = t.length >= 2 && (t.length <= 3 || i === tokens.length - 1);
     return `"${t.replace(/"/g, '""')}"${prefix ? "*" : ""}`;
   });
-  return terms.length > 0 ? `search_owner:${Buffer.from(userId).toString("hex")} AND (${terms.join(" ")})` : "";
+  return terms.length > 0 ? `search_owner:${Buffer.from(userId).toString("hex")} AND search_text:(${terms.join(" ")})` : "";
 }
 
 /**

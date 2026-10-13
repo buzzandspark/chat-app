@@ -63,6 +63,11 @@ describe("GET /api/chats/search", () => {
     expect(await search("!! ??")).toEqual([]);
   });
 
+  it("matches message text only, never the caller's hex id in the index (\"me\" is 6d65)", async () => {
+    expect(await search("6d")).toEqual([]);
+    expect(await search("react 6d6")).toEqual([]);
+  });
+
   it("searches the caller's own messages only, and follows a chat to a new owner", async () => {
     expect((await search("mine")).length).toBe(0);
     vi.mocked(requireUser).mockResolvedValue({ id: "other", role: "user", email: "other@example.com", name: "Other" });
@@ -81,7 +86,7 @@ describe("GET /api/chats/search", () => {
 
 describe("ftsQuery", () => {
   it("scopes to the owner and quotes every token", () => {
-    expect(ftsQuery("u1", 'th "x y hooks quest')).toBe('search_owner:7531 AND ("th"* """x"* "y" "hooks" "quest"*)');
+    expect(ftsQuery("u1", 'th "x y hooks quest')).toBe('search_owner:7531 AND search_text:("th"* """x"* "y" "hooks" "quest"*)');
     expect(ftsQuery("u1", "   ")).toBe("");
   });
 });
