@@ -5,11 +5,11 @@ import { env } from "@shared/env";
 export const CLIENT_ADDRESS_HEADER = "x-chat-client-address";
 
 export function trustedIpHeader(): string | undefined {
-  return process.env.TRUSTED_IP_HEADER?.trim().toLowerCase() || undefined;
+  return env.TRUSTED_IP_HEADER;
 }
 
 export function trustProxyHops(): number {
-  return Number(process.env.TRUST_PROXY_HOPS ?? (env.isProd ? 1 : 0));
+  return env.TRUST_PROXY_HOPS ?? (env.isProd ? 1 : 0);
 }
 
 /**

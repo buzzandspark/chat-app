@@ -10,6 +10,10 @@ import { proxy } from "@/proxy";
 import { GET, POST } from "./route";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@shared/env", async (importOriginal) => {
+  const { env } = await importOriginal<typeof import("@shared/env")>();
+  return { env: { ...env, TRUSTED_IP_HEADER: "x-real-ip" } };
+});
 const ctx = vi.hoisted(() => ({ db: null as Db | null, headers: new Headers() }));
 vi.mock("@db/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@db/client")>()),
@@ -40,14 +44,12 @@ const g = globalThis as unknown as { __chatLimiters?: ReturnType<typeof getLimit
 beforeEach(() => {
   ctx.db = createTestDb();
   nextIp++;
-  vi.stubEnv("TRUSTED_IP_HEADER", "x-real-ip");
   api.getSession.mockClear().mockResolvedValue(null);
   api.signInAnonymous.mockClear();
 });
 afterEach(() => {
   for (const limiter of Object.values(g.__chatLimiters ?? {})) limiter.stopSweeper();
   delete g.__chatLimiters;
-  vi.unstubAllEnvs();
 });
 
 describe("GET /api/guest", () => {

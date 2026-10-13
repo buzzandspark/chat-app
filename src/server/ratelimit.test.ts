@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+const address = vi.hoisted(() => ({ header: undefined as string | undefined, hops: undefined as number | undefined }));
+vi.mock("@shared/env", async (importOriginal) => {
+  const { env } = await importOriginal<typeof import("@shared/env")>();
+  return { env: Object.defineProperties({ ...env }, { TRUSTED_IP_HEADER: { get: () => address.header }, TRUST_PROXY_HOPS: { get: () => address.hops } }) };
+});
 
 import { clientIp, clientKeys, getLimiters, refuseGuestRewrite, refuseGuestSend } from "./ratelimit";
 
@@ -26,17 +31,16 @@ describe("getLimiters", () => {
 });
 
 describe("clientIp", () => {
-  beforeEach(() => vi.stubEnv("TRUSTED_IP_HEADER", undefined));
-  afterEach(() => vi.unstubAllEnvs());
+  beforeEach(() => (address.header = undefined));
   const req = (headers: Record<string, string>) => new Request("http://x/", { headers });
 
   it("without a trusted proxy, ignores what the client says and shares one key", () => {
-    vi.stubEnv("TRUST_PROXY_HOPS", "0");
+    address.hops = 0;
     expect(clientIp(req({ "x-real-ip": "1.2.3.4", "x-forwarded-for": "5.6.7.8" }))).toBe("local");
   });
 
   it("behind one proxy, takes the entry it added, and keys IPv6 by its /64", () => {
-    vi.stubEnv("TRUST_PROXY_HOPS", "1");
+    address.hops = 1;
     expect(clientIp(req({ "x-forwarded-for": "6.6.6.6, 1.2.3.4" }))).toBe("1.2.3.4");
     expect(clientIp(req({ "x-forwarded-for": "2001:db8:aa:bb:1:2:3:4" }))).toBe("2001:db8:aa:bb::/64");
     expect(clientIp(req({ "x-forwarded-for": "2001:db8:aa:bb:9:9:9:9" }))).toBe("2001:db8:aa:bb::/64");
@@ -44,24 +48,26 @@ describe("clientIp", () => {
 });
 
 describe("clientKeys", () => {
-  beforeEach(() => vi.stubEnv("TRUST_PROXY_HOPS", "1"));
-  afterEach(() => vi.unstubAllEnvs());
+  beforeEach(() => {
+    address.header = undefined;
+    address.hops = 1;
+  });
   const keys = (headers: Record<string, string>) => clientKeys(new Request("http://x/", { headers }));
 
   it("reads the single address in TRUSTED_IP_HEADER and ignores X-Forwarded-For", () => {
-    vi.stubEnv("TRUSTED_IP_HEADER", "X-Real-IP");
+    address.header = "x-real-ip";
     expect(keys({ "x-real-ip": "1.2.3.4", "x-forwarded-for": "6.6.6.6" })).toEqual({ ip: "1.2.3.4", budgetKeys: ["ip:1.2.3.4"] });
   });
 
   it("fails closed to one shared key when the trusted header is missing, a list or not an address", () => {
-    vi.stubEnv("TRUSTED_IP_HEADER", "x-real-ip");
+    address.header = "x-real-ip";
     const unknown = { ip: "unknown", budgetKeys: ["ip:unknown"] };
     expect(keys({ "x-forwarded-for": "1.2.3.4" })).toEqual(unknown);
     for (const value of ["1.2.3.4, 5.6.7.8", "local", "", "1.2.3.4:80", "999.1.1.1", "2001:db8::g"]) expect(keys({ "x-real-ip": value })).toEqual(unknown);
   });
 
   it("falls back to TRUST_PROXY_HOPS, and fails closed with fewer entries than proxies", () => {
-    vi.stubEnv("TRUST_PROXY_HOPS", "2");
+    address.hops = 2;
     expect(keys({ "x-forwarded-for": "6.6.6.6, 1.2.3.4, 10.0.0.1" }).ip).toBe("1.2.3.4");
     expect(keys({ "x-forwarded-for": "1.2.3.4" }).ip).toBe("unknown");
     expect(keys({}).ip).toBe("unknown");
@@ -96,12 +102,11 @@ describe("clientKeys", () => {
 describe("refuseGuestSend and refuseGuestRewrite", () => {
   beforeEach(() => {
     delete g.__chatLimiters;
-    vi.stubEnv("TRUST_PROXY_HOPS", "1");
+    address.hops = 1;
   });
   afterEach(() => {
     for (const limiter of Object.values(g.__chatLimiters ?? {})) limiter.stopSweeper();
     delete g.__chatLimiters;
-    vi.unstubAllEnvs();
   });
   const from = (ip: string) => new Request("http://x/", { headers: { "x-forwarded-for": ip } });
 
