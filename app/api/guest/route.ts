@@ -1,7 +1,6 @@
-import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { getAuth } from "@auth/server";
-import { getDb, schema } from "@db/client";
+import { recordGuestStart } from "@server/guests";
 import { guestsBlocked } from "@server/instance-settings";
 import { clientKeys, getLimiters } from "@server/ratelimit";
 import { isDraining } from "@server/shutdown";
@@ -57,7 +56,7 @@ async function start(request: Request, mayCreate: boolean): Promise<Response> {
   const result = await auth.api.signInAnonymous({ headers: fresh, returnHeaders: true }).catch(() => null);
   const user = result?.response?.user;
   if (!result || !user) return redirectTo(unavailable);
-  getDb().update(schema.users).set({ lastActiveAt: new Date(), budgetKeys: keys.budgetKeys }).where(eq(schema.users.id, user.id)).run();
+  recordGuestStart(user.id, keys.budgetKeys);
   result.headers.forEach((value, key) => {
     if (key.toLowerCase() === "set-cookie") back.headers.append("set-cookie", value);
   });

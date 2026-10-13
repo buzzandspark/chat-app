@@ -15,6 +15,11 @@ export function purgeIdleGuests(now: Date = new Date(), db: Db = getDb()): numbe
     .run().changes;
 }
 
+/** A new guest's first activity, and the address keys its spend is charged to. */
+export function recordGuestStart(userId: string, budgetKeys: string[], db: Db = getDb()): void {
+  db.update(schema.users).set({ lastActiveAt: new Date(), budgetKeys }).where(eq(schema.users.id, userId)).run();
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
 export function startGuestPurge(intervalMs = 60 * 60 * 1000): void {
   if (timer) return;

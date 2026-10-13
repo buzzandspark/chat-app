@@ -49,3 +49,13 @@ export function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<voi
     tick();
   });
 }
+
+export function seedChat(db: Db, id: string, userId: string, extra: Partial<typeof schema.chats.$inferInsert> = {}): void {
+  db.insert(schema.chats).values({ id, userId, ...extra }).run();
+}
+
+export function seedMessage(db: Db, id: string, chatId: string, position: number, extra: Partial<typeof schema.messages.$inferInsert> = {}): void {
+  db.insert(schema.messages)
+    .values({ id, chatId, position, role: position % 2 === 0 ? "user" : "assistant", content: [{ type: "text", text: `message ${position}`, citations: null }], ...extra })
+    .run();
+}

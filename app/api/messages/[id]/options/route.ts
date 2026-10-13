@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
-import { getDb, schema } from "@db/client";
 import type { OptionsProgress } from "@relay/options/service";
 import { assertMayInteract, errorResponse, jsonError, requireUser } from "@server/current-user";
+import { messageForkOptions } from "@server/messages";
 import { getRelay } from "@server/relay";
 import { env } from "@shared/env";
 import type { OptionsEvent } from "@shared/forks";
@@ -13,14 +12,8 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/messages
     const user = await requireUser();
     assertMayInteract(user);
     const { id } = await ctx.params;
-    const row = getDb()
-      .select({ userId: schema.chats.userId, options: schema.messages.forkOptions })
-      .from(schema.messages)
-      .innerJoin(schema.chats, eq(schema.chats.id, schema.messages.chatId))
-      .where(eq(schema.messages.id, id))
-      .get();
-    if (!row) return jsonError(404, { error: "not_found" });
-    if (row.userId !== user.id) return jsonError(403, { error: "forbidden" });
+    const stored = messageForkOptions(user.id, id);
+    if (!stored.ok) return jsonError(stored.error === "not_found" ? 404 : 403, { error: stored.error });
     const service = getRelay().options;
     const asked = performance.now();
     const encoder = new TextEncoder();
@@ -67,7 +60,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/messages
         request.signal.addEventListener("abort", close, { once: true });
         const watched = service.watch(id, emit);
         if (!watched) {
-          send({ count: row.options?.length ?? 0, options: row.options ?? [], done: true, trace: null });
+          send({ count: stored.value?.length ?? 0, options: stored.value ?? [], done: true, trace: null });
           close();
           return;
         }

@@ -7,7 +7,7 @@ import * as schema from "./schema";
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
-interface DbHandle {
+export interface DbHandle {
   db: Db;
   sqlite: Database.Database;
   path: string;

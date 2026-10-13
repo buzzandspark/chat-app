@@ -9,7 +9,7 @@ A phone-first chat client for Claude that streams smoothly, survives disconnects
 - Next.js App Router, strict TypeScript, one Node process (ADR-0002).
 - `src/relay/`: generation engine, providers, in-memory event store, Anthropic stream parsing, Explore options and forks. No framework imports.
 - `src/db/`: Drizzle schema, SQLite client, migrations (ADR-0003).
-- `src/server/`: request-side helpers (current user, guests, rate limits, boot, shutdown).
+- `src/server/`: user-scoped data access (chats, messages, search, admin) and request-side helpers (current user, guests, rate limits, boot, shutdown). Route handlers parse, authenticate and call these or the relay; only the health probe queries the database itself.
 - `src/auth/`: better-auth setup and invites (ADR-0004).
 - `src/client/`: external chat store, transport with resume, markdown renderer, components, hooks.
 - `instrumentation.ts`: calls `src/server/boot.ts` (migrations, crash backstop, guest purge, the SIGTERM drain in `src/server/shutdown.ts`).

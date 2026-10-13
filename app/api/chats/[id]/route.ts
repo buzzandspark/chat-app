@@ -1,8 +1,6 @@
 import type { NextRequest } from "next/server";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { getDb, schema } from "@db/client";
-import { getChatWithMessages } from "@server/chats";
+import { deleteChat, getChatWithMessages, ownsChat, updateChat } from "@server/chats";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 import type { ChatResponse } from "@shared/api";
@@ -33,17 +31,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/chats/
     const { id } = await ctx.params;
     const parsed = Patch.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request" });
-    const db = getDb();
-    const result = db
-      .update(schema.chats)
-      .set({
-        ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
-        ...(parsed.data.pinned !== undefined ? { pinned: parsed.data.pinned } : {}),
-        ...(parsed.data.tabHidden !== undefined ? { tabHidden: parsed.data.tabHidden } : {}),
-      })
-      .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, user.id)))
-      .run();
-    if (result.changes === 0) return jsonError(404, { error: "not_found" });
+    if (!updateChat(user.id, id, parsed.data)) return jsonError(404, { error: "not_found" });
     return Response.json({ id, ...parsed.data }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
@@ -55,16 +43,9 @@ export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/chat
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
-    const db = getDb();
-    const owned = db
-      .select({ id: schema.chats.id })
-      .from(schema.chats)
-      .where(and(eq(schema.chats.id, id), eq(schema.chats.userId, user.id)))
-      .get();
-    if (!owned) return jsonError(404, { error: "not_found" });
-    // A reply still streaming is stopped and settled before its rows cascade away.
+    if (!ownsChat(user.id, id)) return jsonError(404, { error: "not_found" });
     await getRelay().engine.stopChat(id);
-    db.delete(schema.chats).where(eq(schema.chats.id, id)).run();
+    deleteChat(user.id, id);
     return Response.json({ id, deleted: true }, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);

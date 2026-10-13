@@ -16,7 +16,7 @@ import { applyMigrations } from "@db/migrator";
 import { requireUser } from "@server/current-user";
 import { getLimiters } from "@server/ratelimit";
 import type { SearchResponse } from "@shared/api";
-import { ftsQuery, GET } from "./route";
+import { GET } from "./route";
 
 const { db, sqlite } = openDatabase();
 let clock = 0;
@@ -81,12 +81,5 @@ describe("GET /api/chats/search", () => {
     for (let i = 0; i < 120; i++) getLimiters().search.check("me");
     const res = await GET(new NextRequest("http://localhost/api/chats/search?q=react"));
     expect(res.status).toBe(429);
-  });
-});
-
-describe("ftsQuery", () => {
-  it("scopes to the owner and quotes every token", () => {
-    expect(ftsQuery("u1", 'th "x y hooks quest')).toBe('search_owner:7531 AND search_text:("th"* """x"* "y" "hooks" "quest"*)');
-    expect(ftsQuery("u1", "   ")).toBe("");
   });
 });

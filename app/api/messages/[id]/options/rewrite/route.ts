@@ -1,11 +1,10 @@
 import type { NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { getDb, schema } from "@db/client";
 import { BusyError } from "@relay/engine";
 import { ForkOptionsBody } from "@relay/options/schema";
 import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { assertMayInteract, errorResponse, jsonError, requireUser } from "@server/current-user";
+import { checkMessageOwner } from "@server/messages";
 import { refuseGuestRewrite, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import type { RewriteResponse } from "@shared/api";
@@ -21,14 +20,8 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/message
     const { id } = await ctx.params;
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request" });
-    const row = getDb()
-      .select({ userId: schema.chats.userId })
-      .from(schema.messages)
-      .innerJoin(schema.chats, eq(schema.chats.id, schema.messages.chatId))
-      .where(eq(schema.messages.id, id))
-      .get();
-    if (!row) return jsonError(404, { error: "not_found" });
-    if (row.userId !== user.id) return jsonError(403, { error: "forbidden" });
+    const owned = checkMessageOwner(user.id, id);
+    if (!owned.ok) return jsonError(owned.error === "not_found" ? 404 : 403, { error: owned.error });
     if (user.role === "guest") {
       const refused = refuseGuestRewrite(request, user.id);
       if (refused) return refused;

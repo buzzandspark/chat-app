@@ -1,6 +1,6 @@
 import "server-only";
-import { and, asc, desc, eq } from "drizzle-orm";
-import { getDb, schema } from "@db/client";
+import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { getDb, schema, type Db } from "@db/client";
 import type { StoredContentBlock } from "@shared/blocks";
 import type { ForkOption } from "@shared/forks";
 import { normalizeThinking } from "@shared/models";
@@ -132,4 +132,54 @@ export function getChatWithMessages(
       createdAt: r.createdAt.getTime(),
     })),
   };
+}
+
+export interface ChatPatch {
+  title?: string;
+  pinned?: boolean;
+  tabHidden?: boolean;
+}
+
+/** False when the chat is not the user's. */
+export function updateChat(userId: string, chatId: string, patch: ChatPatch, db: Db = getDb()): boolean {
+  return (
+    db
+      .update(schema.chats)
+      .set(patch)
+      .where(and(eq(schema.chats.id, chatId), eq(schema.chats.userId, userId)))
+      .run().changes > 0
+  );
+}
+
+export function ownsChat(userId: string, chatId: string, db: Db = getDb()): boolean {
+  return !!db
+    .select({ id: schema.chats.id })
+    .from(schema.chats)
+    .where(and(eq(schema.chats.id, chatId), eq(schema.chats.userId, userId)))
+    .get();
+}
+
+/** Messages, generations and usage rows cascade; stop the chat's running generations first. */
+export function deleteChat(userId: string, chatId: string, db: Db = getDb()): boolean {
+  return db
+    .delete(schema.chats)
+    .where(and(eq(schema.chats.id, chatId), eq(schema.chats.userId, userId)))
+    .run().changes > 0;
+}
+
+/** Generations of the turns an Edit or Regenerate from `fromMessageId` would drop; empty if the message is not the user's. */
+export function replacedGenerationIds(userId: string, chatId: string, fromMessageId: string, db: Db = getDb()): string[] {
+  const from = db
+    .select({ position: schema.messages.position })
+    .from(schema.messages)
+    .innerJoin(schema.chats, eq(schema.chats.id, schema.messages.chatId))
+    .where(and(eq(schema.messages.id, fromMessageId), eq(schema.messages.chatId, chatId), eq(schema.chats.userId, userId)))
+    .get();
+  if (!from) return [];
+  return db
+    .select({ generationId: schema.messages.generationId })
+    .from(schema.messages)
+    .where(and(eq(schema.messages.chatId, chatId), gte(schema.messages.position, from.position)))
+    .all()
+    .flatMap((r) => (r.generationId ? [r.generationId] : []));
 }

@@ -32,8 +32,8 @@ browser ── POST /api/chat ──▶ route ──▶ relay engine ──▶ A
 
 - `src/relay/`: framework-free generation engine. A reply runs detached from the request, buffers its events in memory, and saves partial content to SQLite.
 - `src/client/`: external chat store and transport. Events apply once per animation frame, idempotent by `(generationId, seq)`; streaming lives outside React.
-- `src/db/`: Drizzle schema and migrations. `src/auth/`, `src/server/`: better-auth, guests, rate limits, boot and shutdown.
-- `app/`: Next.js App Router pages and route handlers.
+- `src/db/`: Drizzle schema and migrations. `src/server/`: user-scoped data access, guests, rate limits, boot and shutdown. `src/auth/`: better-auth.
+- `app/`: Next.js App Router pages and route handlers, which parse, authenticate and call `src/server/` or the relay; only the health probe runs SQL itself.
 
 ### Explore options: the background Haiku call
 

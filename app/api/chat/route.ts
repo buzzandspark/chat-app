@@ -1,12 +1,11 @@
 import type { NextRequest } from "next/server";
-import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
-import { getDb, schema } from "@db/client";
 import { BusyError, DrainingError, ForbiddenError, MissingUserMessageError } from "@relay/engine";
 import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { EFFORTS, GUEST_MODEL, MODEL_IDS, normalizeThinking } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
+import { replacedGenerationIds } from "@server/chats";
 import { assertMayInteract, errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
 import { refuseGuestSend, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
@@ -51,21 +50,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (!existing && body.replaceFromMessageId) {
       // Settle the replaced turns' generations first: deleting a running one's rows would strand its buffer.
       // Advisory only: the start checks the turns again after this await.
-      const db = getDb();
-      const from = db
-        .select({ position: schema.messages.position })
-        .from(schema.messages)
-        .innerJoin(schema.chats, eq(schema.chats.id, schema.messages.chatId))
-        .where(and(eq(schema.messages.id, body.replaceFromMessageId), eq(schema.messages.chatId, body.chatId), eq(schema.chats.userId, user.id)))
-        .get();
-      if (from) {
-        const victims = db
-          .select({ generationId: schema.messages.generationId })
-          .from(schema.messages)
-          .where(and(eq(schema.messages.chatId, body.chatId), gte(schema.messages.position, from.position)))
-          .all();
-        await Promise.all(victims.map((v) => (v.generationId ? engine.stopAndWait(v.generationId) : Promise.resolve())));
-      }
+      const victims = replacedGenerationIds(user.id, body.chatId, body.replaceFromMessageId);
+      await Promise.all(victims.map((id) => engine.stopAndWait(id)));
     }
     let created = false;
     try {

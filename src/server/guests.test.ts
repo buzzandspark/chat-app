@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { eq } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { users } from "@db/schema";
 import { createTestDb } from "@relay/test-utils";
-import { GUEST_IDLE_MS, purgeIdleGuests } from "./guests";
+import { GUEST_IDLE_MS, purgeIdleGuests, recordGuestStart } from "./guests";
 
 const NOW = new Date("2026-10-12T12:00:00Z");
 let db: Db;
@@ -26,5 +27,16 @@ describe("purgeIdleGuests", () => {
     user("idle-account", "user", null);
     expect(purgeIdleGuests(NOW, db)).toBe(2);
     expect(db.select({ id: users.id }).from(users).all().map((u) => u.id).sort()).toEqual(["active-guest", "idle-account"]);
+  });
+});
+
+describe("recordGuestStart", () => {
+  it("marks the guest active and stores the keys its spend is charged to", () => {
+    db = createTestDb();
+    user("guest", "guest", null);
+    recordGuestStart("guest", ["ip:10.0.0.1"], db);
+    const row = db.select({ lastActiveAt: users.lastActiveAt, budgetKeys: users.budgetKeys }).from(users).where(eq(users.id, "guest")).get();
+    expect(row?.lastActiveAt).toBeInstanceOf(Date);
+    expect(row?.budgetKeys).toEqual(["ip:10.0.0.1"]);
   });
 });
