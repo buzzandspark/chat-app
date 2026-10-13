@@ -792,3 +792,80 @@ describe("Engine: guests' running replies", () => {
     await engine.drain();
   });
 });
+
+describe("Engine: stopped and interrupted estimates", () => {
+  class FixedTps extends TpsStats {
+    constructor(private rate: number) {
+      super();
+    }
+    override get(): number {
+      return this.rate;
+    }
+  }
+  // Streams `parts` in real time, then goes silent.
+  const stalling = (model: string, parts: { kind: "text"; text: string; chunk: number; intervalMs: number }[] = []): Provider => {
+    const scripted = new ScriptedProvider({ model, ttftMs: 0, parts: [...parts, { kind: "pause", ms: 60_000 }, { kind: "text", text: "never" }] }, 1);
+    return { name: "anthropic", stream: scripted.stream.bind(scripted) };
+  };
+  const outputTokens = (generationId: string) => db.select().from(usageEvents).where(eq(usageEvents.generationId, generationId)).get()!.outputTokens;
+
+  it("ends a silent upstream's estimate at its last event, not when the silence is noticed", async () => {
+    engine = new Engine({ db, store, providers: () => stalling("claude-sonnet-5-5", [{ kind: "text", text: "hi", chunk: 2, intervalMs: 0 }]), tps: new FixedTps(1000), upstreamIdleMs: 300 });
+    const inp = input();
+    engine.start(inp);
+    expect((await collectUntilTerminal(store, inp.generationId)).at(-1)).toMatchObject({ type: "interrupted", reason: "upstream" });
+    // 300 ms of silence would be 300 tokens.
+    expect(outputTokens(inp.generationId)).toBeLessThan(50);
+  });
+
+  it("estimates a stop from message_start, never counting the wait before the request", async () => {
+    engine = new Engine({ db, store, providers: () => stalling("claude-opus-5-5"), tps: new FixedTps(1000) });
+    const inp = input({ model: "claude-opus-5-5", gate: new Promise((resolve) => setTimeout(resolve, 300)) });
+    engine.start(inp);
+    await waitFor(() => store.get(inp.generationId)?.events.some((e) => e.type === "message_start") ?? false);
+    await engine.stopAndWait(inp.generationId);
+    expect(store.get(inp.generationId)!.events.at(-1)).toMatchObject({ type: "stopped" });
+    expect(outputTokens(inp.generationId)).toBeLessThan(50);
+  });
+
+  it("settles a guest reply cut off by a crash at no more than max_tokens of output", async () => {
+    seedUser(db, "g1", { role: "guest", costCapUsd: 1, budgetKeys: ["ip:g1"] });
+    const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 100, ip48: 100, all: 100 }, () => 0) });
+    engine = makeEngine(0, { quota });
+    const inp = input({ userId: "g1", userRole: "guest", model: "claude-haiku-5-5" });
+    engine.start(inp);
+    await collectUntilTerminal(store, inp.generationId);
+    db.update(generations).set({ status: "running" }).where(eq(generations.id, inp.generationId)).run();
+    db.update(messages).set({ content: [{ type: "text", text: "word ".repeat(20_000), citations: null }] }).where(eq(messages.id, inp.assistantMessageId)).run();
+    store.evict(inp.generationId);
+    engine.resume(inp.generationId, "g1");
+    const crash = db.select().from(usageEvents).where(eq(usageEvents.generationId, inp.generationId)).all().find((u) => u.estimated);
+    expect(crash?.outputTokens).toBe(8192);
+  });
+
+  it("settles a guest reply cut off after streaming within its hold, so within the cap, however long it streamed or stalled", async () => {
+    // "hello" holds 4101 prompt tokens at $0.125 / M plus 8192 output tokens at $0.50 / M: about $0.0046.
+    const cap = 0.0047;
+    for (const id of ["g1", "g2"]) seedUser(db, id, { role: "guest", costCapUsd: cap, budgetKeys: [`ip:${id}`] });
+    const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 100, ip48: 100, all: 100 }, () => 0) });
+    // At this rate 100 ms of streaming is 10,000 tokens, past max_tokens.
+    const text = [{ kind: "text" as const, text: "x".repeat(30), chunk: 1, intervalMs: 10 }];
+    engine = new Engine({ db, store, quota, providers: () => stalling("claude-haiku-5-5", text), tps: new FixedTps(100_000), upstreamIdleMs: 200 });
+    const guest = (userId: string) => input({ userId, userRole: "guest", model: "claude-haiku-5-5", scenario: undefined });
+
+    const idle = guest("g1");
+    engine.start(idle);
+    expect((await collectUntilTerminal(store, idle.generationId)).at(-1)).toMatchObject({ type: "interrupted" });
+    const stopped = guest("g2");
+    engine.start(stopped);
+    await waitFor(() => (store.get(stopped.generationId)?.events.filter((e) => e.type === "text_delta").length ?? 0) >= 15);
+    await engine.stopAndWait(stopped.generationId);
+
+    for (const [inp, id] of [[idle, "g1"], [stopped, "g2"]] as const) {
+      expect(outputTokens(inp.generationId)).toBe(8192);
+      const spent = db.select().from(users).where(eq(users.id, id)).get()!.costSpentUsd;
+      expect(spent).toBeGreaterThan(0);
+      expect(spent).toBeLessThanOrEqual(cap);
+    }
+  });
+});

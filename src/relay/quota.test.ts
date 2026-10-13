@@ -124,6 +124,12 @@ describe("QuotaManager: guests", () => {
     quota.admit("g1", "c", "claude-haiku-5-5", 0);
   });
 
+  it("clamps an estimate to what one call can bill: max_tokens of output and, for a guest, the prompt limit", () => {
+    const estimate = { inputTokens: 100_000, outputTokens: 50_000, cacheReadTokens: 0, cacheWriteTokens: 0 };
+    expect(quota.bounded(db, "g1", estimate)).toEqual({ ...estimate, inputTokens: 60_000, outputTokens: 8192 });
+    expect(quota.bounded(db, "u1", estimate)).toEqual({ ...estimate, outputTokens: 16_000 });
+  });
+
   it("charges a guest's spend to its address and to every guest's budget, and only to the user's spend otherwise", () => {
     db.transaction((tx) => quota.spend(tx, "g1", 0.03));
     quota.settle("u1", "x", 0.5);

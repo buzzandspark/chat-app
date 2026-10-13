@@ -17,7 +17,7 @@ export interface OrphanRow {
 
 /**
  * Marks a generation whose process died as interrupted and settles a cost estimated from its saved text at CHARS_PER_TOKEN,
- * thinking counted as output. A non-billable run gets its usage row at cost zero and never touches spend, so a restart mid-scenario cannot eat a cap.
+ * thinking counted as output, clamped to what one call can bill. A non-billable run gets its usage row at cost zero and never touches spend, so a restart mid-scenario cannot eat a cap.
  */
 export function settleOrphan(tx: SpendDb, row: OrphanRow, now: Date, quota: QuotaManager): number {
   tx.update(generations).set({ status: "interrupted", interruptedReason: "crash", endedAt: now }).where(eq(generations.id, row.id)).run();
@@ -39,7 +39,7 @@ export function settleOrphan(tx: SpendDb, row: OrphanRow, now: Date, quota: Quot
     }
   }
   const model = servingModel ?? row.requestedModel;
-  const tokens = { inputTokens: Math.ceil(inputChars / CHARS_PER_TOKEN), outputTokens: Math.ceil(outputChars / CHARS_PER_TOKEN), cacheReadTokens: 0, cacheWriteTokens: 0 };
+  const tokens = quota.bounded(tx, row.userId, { inputTokens: Math.ceil(inputChars / CHARS_PER_TOKEN), outputTokens: Math.ceil(outputChars / CHARS_PER_TOKEN), cacheReadTokens: 0, cacheWriteTokens: 0 });
   const costUsd = isBillableProvider(row.provider) ? costOf(model, tokens) : 0;
   tx.insert(usageEvents)
     .values({ id: uuidv7(), generationId: row.id, userId: row.userId, model, iterationType: "message", ...tokens, costUsd, estimated: true, createdAt: now })

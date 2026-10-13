@@ -101,7 +101,7 @@ Guest spend is also charged to shared daily budgets, kept in the database so the
 | `GUEST_IP48_USD_PER_DAY` | 3 | guests from one IPv6 /48 |
 | `GUEST_ALL_USD_PER_DAY` | 10 | all guests |
 
-Each budget fills with spend and drains continuously at its daily rate. A guest is charged to the address that created it. While a guest call runs it holds its worst-case cost (its prompt at the cache-write rate plus every output token it may use) against the guest's cap and each of its budgets, so neither the cap nor a budget is ever exceeded. A reply, fork or option rewrite that does not fit gets "Busy right now" with the wait (a budget) or the spent-budget message (the cap), and Explore skips detection.
+Each budget fills with spend and drains continuously at its daily rate. A guest is charged to the address that created it. While a guest call runs it holds its worst-case cost (its prompt at the cache-write rate plus every output token it may use) against the guest's cap and each of its budgets, and a stopped or interrupted reply is never charged more output than that, so neither the cap nor a budget is exceeded. The one exception is a reply cut off by a crash or SIGKILL, estimated at boot from its saved text: it can pass its hold by under a cent. A reply, fork or option rewrite that does not fit gets "Busy right now" with the wait (a budget) or the spent-budget message (the cap), and Explore skips detection.
 
 - a guest runs at most 2 replies at once, and guests together 50; a fork of an Explore fan-out takes half a reply's place, and forks past that wait their turn
 - a guest runs at most 2 Explore calls (detection or rewrite) at once, and guests together 50

@@ -24,7 +24,7 @@ import {
   type StreamAccumulator,
 } from "./anthropic/parse-stream";
 import { priceIterations, summarize, type UsageRow } from "./anthropic/pricing";
-import { GUEST_MAX_TOKENS } from "./anthropic/thinking-config";
+import { GUEST_MAX_TOKENS, MAX_TOKENS } from "./anthropic/thinking-config";
 import type { MessageSnapshot, RelayEvent, RelayEventBody, ServerTimings } from "./events";
 import { ProviderStatusError, sleep } from "./providers/replay";
 import { isBillableProvider, type Provider, type ProviderRequest } from "./providers/types";
@@ -172,6 +172,9 @@ interface Active {
   abortReason: AbortReason | null;
   acc: StreamAccumulator;
   startedAt: number;
+  /** When the upstream's message_start arrived: output is generated from here, so a stop's estimate never counts waits before it. */
+  messageStartAt: number | null;
+  lastEventAt: number | null;
   firstTokenAt: number | null;
   firstRelayedAt: number | null;
   relayed: number;
@@ -181,6 +184,7 @@ interface Active {
   /** False for scripted and replayed runs: no reservation, zero-cost usage rows, no TPS sample. */
   billable: boolean;
   guest: boolean;
+  maxTokens: number;
   /** Half slots a billable guest run takes: two for a reply, one for a fork. Zero for everyone else. */
   units: number;
   /** False while a guest's fork waits for a slot; `slot` settles once it holds one or is aborted. */
@@ -393,6 +397,8 @@ export class Engine {
       abortReason: null,
       acc: createAccumulator(),
       startedAt: this.now(),
+      messageStartAt: null,
+      lastEventAt: null,
       firstTokenAt: null,
       firstRelayedAt: null,
       relayed: 0,
@@ -401,6 +407,7 @@ export class Engine {
       faults: input.faults ?? {},
       billable,
       guest,
+      maxTokens: guest ? GUEST_MAX_TOKENS : MAX_TOKENS,
       units,
       holding,
       slot: null,
@@ -665,6 +672,7 @@ export class Engine {
         }
         if (step.done) return null;
         const raw = step.value;
+        active.lastEventAt = this.now();
         if (active.controller.signal.aborted) return null;
         const bodies = normalizeEvent(raw, active.acc);
         for (const body of bodies) {
@@ -673,6 +681,7 @@ export class Engine {
             timings.upstreamFirstToken = active.firstTokenAt;
           }
           if (body.type === "error") return body.error;
+          if (body.type === "message_start") active.messageStartAt ??= active.lastEventAt;
           this.append(active, body);
           if (body.type === "message_start" && active.billable && !this.quota.started(active.id, body.model, body)) {
             active.abortReason = "too_long";
@@ -903,13 +912,14 @@ export class Engine {
     return active.billable ? rows : rows.map((r) => ({ ...r, costUsd: 0 }));
   }
 
-  // Input tokens are exact from message_start; output is elapsed time times measured tokens/s,
-  // because billed output includes full thinking while only its summary is visible.
+  // Input tokens are exact from message_start; output is elapsed time times measured tokens/s, because billed output includes
+  // full thinking while only its summary is visible. A silent upstream generated nothing after its last event, and no request bills past max_tokens.
   private estimateRows(active: Active, servingModel: string): UsageRow[] {
     const u = active.acc.usage;
     if (!active.acc.apiMessageId) return [];
-    const from = active.firstTokenAt ?? active.startedAt;
-    const outputTokens = this.tps.estimateOutputTokens(servingModel, this.now() - from);
+    const from = active.firstTokenAt ?? active.messageStartAt ?? this.now();
+    const to = active.abortReason === "idle" ? (active.lastEventAt ?? from) : this.now();
+    const outputTokens = Math.min(this.tps.estimateOutputTokens(servingModel, to - from), active.maxTokens);
     return this.free(active, priceIterations(
       [
         {

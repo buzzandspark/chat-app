@@ -3,7 +3,7 @@ import type { Db } from "@db/client";
 import { users } from "@db/schema";
 import type { UserRole } from "@shared/types";
 import { costOf, ratesFor, type TokenCounts } from "./anthropic/pricing";
-import { GUEST_MAX_TOKENS } from "./anthropic/thinking-config";
+import { GUEST_MAX_TOKENS, MAX_TOKENS } from "./anthropic/thinking-config";
 import { ALL_GUESTS, SHARED_ADDRESS_KEYS, type Budgets } from "./budgets";
 
 /** Characters per token as measured on real prompts and replies, code and thinking included. */
@@ -194,6 +194,16 @@ export class QuotaManager {
     m.chars += chars;
     const user = this.account(this.db, m.userId);
     return user !== undefined && user.cap !== null && user.spent + this.liveUsd(m.userId) >= user.cap;
+  }
+
+  /** An estimate clamped to what one call can bill: max_tokens of output and, for a guest, the prompt limit. */
+  bounded(db: Pick<Db, "select">, userId: string, tokens: TokenCounts): TokenCounts {
+    const guest = this.account(db, userId)?.role === "guest";
+    return {
+      ...tokens,
+      inputTokens: guest && this.guests ? Math.min(tokens.inputTokens, this.guests.maxPromptTokens) : tokens.inputTokens,
+      outputTokens: Math.min(tokens.outputTokens, guest ? GUEST_MAX_TOKENS : MAX_TOKENS),
+    };
   }
 
   release(_userId: string, id: string): void {
