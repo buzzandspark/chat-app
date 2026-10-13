@@ -93,5 +93,6 @@ export function errorResponse(err: unknown): Response {
   unstable_rethrow(err);
   if (err instanceof HttpError) return jsonError(err.status, err.body);
   console.error("[route] unhandled", err);
+  if (env.SENTRY_DSN) void import("@sentry/node").then((Sentry) => Sentry.captureException(err));
   return jsonError(500, { error: "internal" });
 }
