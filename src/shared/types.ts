@@ -89,6 +89,10 @@ type ErrorKind =
   | "guests_blocked"
   | "unknown";
 
+/** Password lengths sign-in accepts; the invite route and form hold a new password to the same. */
+export const PASSWORD_MIN_LENGTH = 10;
+export const PASSWORD_MAX_LENGTH = 128;
+
 /** Longest user message the route accepts; the composer counts against it. */
 export const MAX_MESSAGE_CHARS = 32_000;
 

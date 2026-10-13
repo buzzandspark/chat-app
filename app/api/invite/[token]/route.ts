@@ -3,8 +3,9 @@ import { z } from "zod";
 import { redeemInvite } from "@auth/invites";
 import { errorResponse, jsonError } from "@server/current-user";
 import type { RedeemInviteResponse } from "@shared/api";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@shared/types";
 
-const Body = z.object({ password: z.string().min(10).max(200) });
+const Body = z.object({ password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH) });
 
 /** Single use; the token is never stored, only its hash. */
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/invite/[token]">): Promise<Response> {

@@ -25,3 +25,15 @@ describe("InviteForm on a dead network", () => {
     expect(push).not.toHaveBeenCalled();
   });
 });
+
+describe("InviteForm's password field", () => {
+  afterEach(cleanup);
+
+  it("holds the password to the lengths sign-in accepts, and says so", () => {
+    render(<InviteForm token="t" email="ada@example.com" />);
+    const field = screen.getByLabelText("New password");
+    expect(field).toHaveAttribute("minlength", "10");
+    expect(field).toHaveAttribute("maxlength", "128");
+    expect(screen.getByText("10 to 128 characters.")).toBeInTheDocument();
+  });
+});

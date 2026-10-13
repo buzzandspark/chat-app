@@ -6,6 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { admin, anonymous } from "better-auth/plugins";
 import { getDb, schema } from "@db/client";
 import { env } from "@shared/env";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@shared/types";
 import { CLIENT_ADDRESS_HEADER } from "@server/client-address";
 
 export const DEV_AUTH_SECRET = "dev-secret-not-for-production-0123456789";
@@ -62,7 +63,8 @@ function createAuth() {
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
-      minPasswordLength: 10,
+      minPasswordLength: PASSWORD_MIN_LENGTH,
+      maxPasswordLength: PASSWORD_MAX_LENGTH,
     },
     // better-auth's per-IP limiter (3 sign-ins per 10 s) stays on in production;
     // the e2e harness signs in several users from one address in seconds.
