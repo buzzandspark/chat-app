@@ -28,6 +28,12 @@ const REBUILD_CHATS = [
   "CREATE INDEX `chats_user_updated_idx` ON `chats` (`user_id`,`updated_at`);",
 ].join("--> statement-breakpoint\n");
 
+// The search triggers read `chats`, so a rebuild of it drops them first and recreates them after, as a real one must.
+function rebuildChats(): string {
+  const triggers = sqlite.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%chats%'").all() as { name: string; sql: string }[];
+  return [...triggers.map((t) => `DROP TRIGGER \`${t.name}\`;`), REBUILD_CHATS, ...triggers.map((t) => `${t.sql};`)].join("--> statement-breakpoint\n");
+}
+
 let dir: string;
 let sqlite: Database.Database;
 
@@ -91,7 +97,7 @@ describe("applyMigrations", () => {
   it("rebuilds a parent table without cascading into its children", () => {
     applyMigrations(sqlite);
     seed();
-    applyMigrations(sqlite, withExtraMigration(REBUILD_CHATS));
+    applyMigrations(sqlite, withExtraMigration(rebuildChats()));
 
     expect(count("chats")).toBe(1);
     expect(count("messages")).toBe(1);
@@ -106,7 +112,7 @@ describe("applyMigrations", () => {
   it("drizzle's own migrator cascades the same rebuild into the children (why it is replaced)", () => {
     applyMigrations(sqlite);
     seed();
-    migrate(drizzle(sqlite), { migrationsFolder: withExtraMigration(REBUILD_CHATS) });
+    migrate(drizzle(sqlite), { migrationsFolder: withExtraMigration(rebuildChats()) });
 
     expect(count("chats")).toBe(1);
     expect(count("messages")).toBe(0);
@@ -162,5 +168,40 @@ describe("the initial migration", () => {
     // Applying again is a no-op.
     applyMigrations(sqlite, migrationsThrough("0000_init"));
     expect(journalRows()).toBe(1);
+  });
+});
+
+describe("the search owner migration", () => {
+  const text = (t: string) => JSON.stringify([{ type: "text", text: t }]);
+  const owned = (owner: string, term: string) =>
+    sqlite.prepare("SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?").all(`search_owner:${Buffer.from(owner).toString("hex")} AND ${term}`).length;
+  const integrityCheck = () => sqlite.prepare("INSERT INTO messages_fts(messages_fts, rank) VALUES ('integrity-check', 1)").run();
+
+  it("backfills existing messages into the owner-keyed index, and its triggers keep it in step", () => {
+    applyMigrations(sqlite, migrationsThrough("0000_init"));
+    seed();
+    sqlite.prepare("UPDATE messages SET content = ? WHERE id = 'm1'").run(text("quokka sightings"));
+    applyMigrations(sqlite);
+
+    expect(sqlite.prepare("SELECT search_owner FROM messages WHERE id = 'm1'").pluck().get()).toBe("7531");
+    expect(owned("u1", "quokka")).toBe(1);
+    expect(owned("u1", '"quo"*')).toBe(1);
+    integrityCheck();
+
+    sqlite.prepare("INSERT INTO users (id, name, email, created_at, updated_at) VALUES ('u2', 'u2', 'u2@example.com', 0, 0)").run();
+    sqlite.prepare("INSERT INTO messages (id, chat_id, role, position, content, created_at, updated_at) VALUES ('m2', 'c1', 'assistant', 1, ?, 0, 0)").run(text("wombat burrows"));
+    expect(owned("u1", "wombat")).toBe(1);
+    sqlite.prepare("UPDATE messages SET content = ? WHERE id = 'm2'").run(text("numbat termites"));
+    expect(owned("u1", "wombat")).toBe(0);
+    expect(owned("u1", "numbat")).toBe(1);
+    // A guest's chats adopted by a new account move with their messages in the index.
+    sqlite.prepare("UPDATE chats SET user_id = 'u2' WHERE id = 'c1'").run();
+    expect(owned("u1", "quokka")).toBe(0);
+    expect(owned("u2", "quokka")).toBe(1);
+    integrityCheck();
+
+    sqlite.prepare("DELETE FROM chats WHERE id = 'c1'").run();
+    expect(sqlite.prepare("SELECT count(*) FROM messages_fts WHERE messages_fts MATCH 'quokka OR numbat'").pluck().get()).toBe(0);
+    integrityCheck();
   });
 });

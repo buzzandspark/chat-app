@@ -3,6 +3,7 @@ import { isIP } from "node:net";
 import { RateLimiter } from "@relay/ratelimit";
 import type { ApiError } from "@shared/api";
 import { env } from "@shared/env";
+import type { UserRole } from "@shared/types";
 import { forwardedAddress, trustedIpHeader, trustProxyHops } from "./client-address";
 
 interface Limiters {
@@ -13,6 +14,9 @@ interface Limiters {
   guestSendIp: RateLimiter;
   guestRewrite: RateLimiter;
   guestRewriteIp: RateLimiter;
+  search: RateLimiter;
+  guestSearch: RateLimiter;
+  guestSearchIp: RateLimiter;
 }
 
 const g = globalThis as unknown as { __chatLimiters?: Limiters };
@@ -33,6 +37,10 @@ export function getLimiters(): Limiters {
     guestSendIp: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(40, 6000),
     guestRewrite: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(10, 300),
     guestRewriteIp: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(30, 3000),
+    // Searches run synchronously on the one process. A debounced keystroke is at most five a second.
+    search: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(120, 10_000),
+    guestSearch: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(60, 1000),
+    guestSearchIp: env.e2e ? new RateLimiter(600, 6000) : new RateLimiter(120, 5000),
   };
   // Idle keys are dropped every ten minutes, so a day of distinct callers does not pile up in memory.
   // Started here, once with the limiters, not per call: a timer per request would never be cleared.
@@ -94,6 +102,14 @@ export function refuseGuestSend(request: Request, userId: string): Response | nu
 export function refuseGuestRewrite(request: Request, userId: string): Response | null {
   const { guestRewrite, guestRewriteIp } = getLimiters();
   return refuse(guestRewrite, guestRewriteIp, request, userId);
+}
+
+/** A search: refused while the user (and, for a guest, its address) is over its rate. */
+export function refuseSearch(request: Request, user: { id: string; role: UserRole }): Response | null {
+  const { search, guestSearch, guestSearchIp } = getLimiters();
+  if (user.role === "guest") return refuse(guestSearch, guestSearchIp, request, user.id);
+  const result = search.check(user.id);
+  return result.ok ? null : tooMany(result.retryAfterMs);
 }
 
 function refuse(perGuest: RateLimiter, perIp: RateLimiter, request: Request, userId: string): Response | null {

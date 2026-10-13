@@ -31,7 +31,7 @@ export interface SearchHit {
   chatId: string;
   title: string;
   snippet: string | null;
-  /** The first message that matched, which opening the hit scrolls to; null for a title match. */
+  /** The chat's newest matching message, which opening the hit scrolls to; null for a title match. */
   messageId: string | null;
   updatedAt: number;
 }

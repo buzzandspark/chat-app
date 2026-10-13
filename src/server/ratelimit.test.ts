@@ -7,7 +7,7 @@ vi.mock("@shared/env", async (importOriginal) => {
   return { env: Object.defineProperties({ ...env }, { TRUSTED_IP_HEADER: { get: () => address.header }, TRUST_PROXY_HOPS: { get: () => address.hops } }) };
 });
 
-import { clientIp, clientKeys, getLimiters, refuseGuestRewrite, refuseGuestSend } from "./ratelimit";
+import { clientIp, clientKeys, getLimiters, refuseGuestRewrite, refuseGuestSend, refuseSearch } from "./ratelimit";
 
 const g = globalThis as unknown as { __chatLimiters?: ReturnType<typeof getLimiters> };
 
@@ -99,7 +99,7 @@ describe("clientKeys", () => {
   });
 });
 
-describe("refuseGuestSend and refuseGuestRewrite", () => {
+describe("refuseGuestSend, refuseGuestRewrite and refuseSearch", () => {
   beforeEach(() => {
     delete g.__chatLimiters;
     address.hops = 1;
@@ -127,5 +127,15 @@ describe("refuseGuestSend and refuseGuestRewrite", () => {
     for (let i = 0; i < 20; i++) expect(refuseGuestRewrite(from("1.1.1.1"), `g${2 + (i % 2)}`)).toBeNull();
     expect(refuseGuestRewrite(from("1.1.1.1"), "g4")?.status).toBe(429);
     expect(refuseGuestRewrite(from("2.2.2.2"), "g4")).toBeNull();
+  });
+
+  it("allows a guest 60 searches a minute and an address 120, and a member 120 of its own", () => {
+    const guest = (id: string) => ({ id, role: "guest" as const });
+    for (let i = 0; i < 60; i++) expect(refuseSearch(from("1.1.1.1"), guest("g1"))).toBeNull();
+    expect(refuseSearch(from("1.1.1.1"), guest("g1"))?.status).toBe(429);
+    for (let i = 0; i < 60; i++) expect(refuseSearch(from("1.1.1.1"), guest("g2"))).toBeNull();
+    expect(refuseSearch(from("1.1.1.1"), guest("g3"))?.status).toBe(429);
+    for (let i = 0; i < 120; i++) expect(refuseSearch(from("1.1.1.1"), { id: "u1", role: "user" })).toBeNull();
+    expect(refuseSearch(from("1.1.1.1"), { id: "u1", role: "user" })?.status).toBe(429);
   });
 });

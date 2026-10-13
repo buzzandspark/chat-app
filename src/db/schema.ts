@@ -171,6 +171,8 @@ export const messages = sqliteTable(
     lastSeq: integer("last_seq"),
     /** The text blocks of `content`, kept by a trigger for the FTS5 index. */
     searchText: text("search_text"),
+    /** The chat owner's id in hex, kept by triggers so the FTS5 index can scope a search to one user. */
+    searchOwner: text("search_owner"),
     createdAt: timestamp("created_at").notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at").notNull().$defaultFn(now),
   },
