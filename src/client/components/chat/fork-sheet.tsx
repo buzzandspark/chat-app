@@ -93,8 +93,10 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
       title="Explore options"
       description={`Each option becomes its own chat, up to ${MAX_FORKS}.`}
       className="md:max-w-xl"
-      // Opens on the instruction, not Radix's first checkbox: one line there reaches every prompt.
+      // With a physical keyboard it opens on the instruction (one line there reaches every prompt); a phone
+      // keeps Radix's first checkbox, since focusing a field would raise the keyboard over the options.
       onOpenAutoFocus={(e) => {
+        if (!window.matchMedia("(hover: hover) and (min-width: 768px)").matches) return;
         e.preventDefault();
         instructionRef.current?.focus();
       }}
@@ -130,7 +132,7 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
             ref={instructionRef}
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
-            placeholder="Change every first message, e.g. ask for code examples"
+            placeholder="Assess advantages over other options"
             aria-label="Change every first message"
             maxLength={500}
             className="h-9"

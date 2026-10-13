@@ -85,13 +85,15 @@ test.describe("explore options", () => {
     await expect(aside.locator(`a[href="${parentPath}"]`)).toHaveCount(1);
   });
 
-  test("the sheet: deselect one, retitle one, rewrite all with Enter, fork the rest with Shift+Enter", async ({ page }) => {
+  test("the sheet: deselect one, retitle one, rewrite all with Enter, fork the rest with Shift+Enter", async ({ page, isMobile }) => {
     const button = await replyWithOptions(page);
     await button.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     const instruction = dialog.getByLabel("Change every first message");
-    await expect(instruction).toBeFocused();
+    // A phone opens without focusing a field, so its keyboard stays down.
+    if (isMobile) await expect(instruction).not.toBeFocused();
+    else await expect(instruction).toBeFocused();
     const checks = dialog.getByRole("checkbox");
     await expect(checks).toHaveCount(3);
     await checks.nth(2).uncheck();
