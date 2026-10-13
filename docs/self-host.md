@@ -23,7 +23,7 @@ In production the server refuses to start, and exits with code 1, when:
 
 - `BETTER_AUTH_SECRET` is unset, shorter than 16 characters, or the `.env.example` placeholder. Generate one with `openssl rand -base64 32`.
 - `BETTER_AUTH_URL` is unset. Set it to the URL users reach the app at.
-- `ANTHROPIC_API_KEY` is unset and `REPLAY_MODE` is not `1`. Replay mode serves recorded replies, so a deployment asks for it explicitly.
+- `ANTHROPIC_API_KEY` is unset and `REPLAY_MODE` is not `1`. Replay mode serves scripted replies, so a deployment asks for it explicitly.
 - `ADMIN_PASSWORD` is `change-me` or shorter than 10 characters.
 - any other variable is invalid, or boot fails, for example on a migration.
 
@@ -121,11 +121,11 @@ With the defaults one guest reply holds at most about $0.012 and one Explore cal
 `scripts/mock-anthropic.mjs` answers the Anthropic API with canned replies and prints each request's model and `max_tokens`. It is not part of the Docker image.
 
 ```sh
-MOCK_DELAY_MS=200 MOCK_INPUT_TOKENS=50000 node scripts/mock-anthropic.mjs
+MOCK_DELAY_MS=200 MOCK_INPUT_TOKENS=50000 pnpm exec tsx scripts/mock-anthropic.mjs
 ANTHROPIC_BASE_URL=http://127.0.0.1:4010 ANTHROPIC_API_KEY=mock GUEST_ALL_USD_PER_DAY=0.05 pnpm dev
 ```
 
-- Chat replies replay `fixtures/claude-haiku-5-5/normal.jsonl` under the requested model.
+- Chat replies stream the Haiku `normal` scenario from `src/relay/scenarios.ts` under the requested model.
 - `MOCK_INPUT_TOKENS` and `MOCK_OUTPUT_TOKENS` set the usage every reply and Explore call reports, so each costs a known amount. `MOCK_INPUT_TOKENS` is also the count a guest's prompt gets from `count_tokens`; unset, the prompt is counted at 2.5 bytes a token.
 - `MOCK_DELAY_MS` waits between stream events, which keeps replies running long enough to hit the running limits.
 - Explore detection finds three options and a rewrite puts the instruction in front of each prompt; `MOCK_OPTIONS=truncated` cuts either answer off at `max_tokens`.

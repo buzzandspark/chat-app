@@ -20,28 +20,28 @@ export interface ProviderStreamOptions {
 
 /** Every output source yields raw Anthropic stream events, so nothing downstream knows which. */
 export interface Provider {
-  readonly name: "anthropic" | "replay" | "scripted" | "recording";
+  readonly name: "anthropic" | "scripted";
   stream(request: ProviderRequest, options: ProviderStreamOptions): AsyncIterable<NormalizableEvent>;
   /** The request's exact prompt tokens; providers that spend nothing need not count. */
   countTokens?(request: ProviderRequest, options: ProviderStreamOptions): Promise<number>;
 }
 
-/** Only the live provider (and its recorder) spends money. Keyed by name so an orphan settled from its `generations.provider` column applies the same rule as `Engine.start`. */
+/** Only the live provider spends money. Keyed by name so an orphan settled from its `generations.provider` column applies the same rule as `Engine.start`. */
 export function isBillableProvider(name: string): boolean {
-  return name === "anthropic" || name === "recording";
+  return name === "anthropic";
 }
 
 /** A thrown provider error expressed as data, as the SDK would throw it. */
-export interface FixtureThrow {
+export interface ScriptThrow {
   status: number;
   type: string;
   message: string;
   retryAfter?: number;
 }
 
-// One jsonl fixture line; t is ms since the first line. A raw API event, a control instruction
+// One timed script line; t is ms since the first line. A raw API event, a control instruction
 // (disconnect ends the stream as a dropped upstream would), or an error to throw.
-export type FixtureLine =
+export type ScriptLine =
   | { t: number; event: NormalizableEvent }
   | { t: number; control: "disconnect" }
-  | { t: number; throw: FixtureThrow };
+  | { t: number; throw: ScriptThrow };

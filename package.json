@@ -21,7 +21,6 @@
     "db:studio": "drizzle-kit studio",
     "docker:build": "docker build -t chat:local .",
     "docker:run": "docker run --rm -p 127.0.0.1:3000:3000 -v chat-data:/data --env-file .env chat:local",
-    "fixtures": "tsx scripts/make-fixtures.ts",
     "screenshots": "node scripts/dev-lock-guard.mjs screenshots && tsx scripts/screenshots.ts",
     "test:shutdown": "node scripts/dev-lock-guard.mjs test:shutdown && sh scripts/shutdown-test.sh",
     "test:cache": "CACHE_TEST=1 vitest run --project server src/relay/anthropic/cache.live.test.ts",

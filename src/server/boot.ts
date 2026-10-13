@@ -85,7 +85,7 @@ const PUBLIC_SECRETS = new Set(["change-me-to-a-long-random-string", DEV_AUTH_SE
 function deployProblem(): string | null {
   if (!env.BETTER_AUTH_URL) return "BETTER_AUTH_URL is not set. Set it to the URL users reach the app at";
   if (!env.ANTHROPIC_API_KEY && !env.replayRequested) {
-    return "ANTHROPIC_API_KEY is not set. Set it, or set REPLAY_MODE=1 to serve recorded replies";
+    return "ANTHROPIC_API_KEY is not set. Set it, or set REPLAY_MODE=1 to serve scripted replies";
   }
   if (env.BETTER_AUTH_SECRET && PUBLIC_SECRETS.has(env.BETTER_AUTH_SECRET)) {
     return "BETTER_AUTH_SECRET is a published placeholder. Generate one with openssl rand -base64 32";

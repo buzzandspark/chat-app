@@ -12,9 +12,8 @@ rm -rf .next/standalone/.next/static .next/standalone/public
 cp -r .next/static .next/standalone/.next/static
 [ -d public ] && cp -r public .next/standalone/public
 mkdir -p .next/standalone/src/db
-rm -rf .next/standalone/src/db/migrations .next/standalone/fixtures
+rm -rf .next/standalone/src/db/migrations
 cp -r src/db/migrations .next/standalone/src/db/migrations
-cp -r fixtures .next/standalone/fixtures
 mkdir -p data
 export DATABASE_PATH="${DATABASE_PATH:-$PWD/data/app.db}"
 case "$DATABASE_PATH" in /*) ;; *) export DATABASE_PATH="$PWD/$DATABASE_PATH" ;; esac

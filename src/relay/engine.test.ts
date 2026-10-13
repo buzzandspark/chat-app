@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { chats, generations, messages, spendBuckets, usageEvents, users } from "@db/schema";
@@ -5,7 +6,6 @@ import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
 import { Budgets } from "./budgets";
 import { BusyError, Engine, ForbiddenError, MissingUserMessageError, type ReplyDoneInfo, type StartInput } from "./engine";
-import { ProviderStatusError } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { TpsStats } from "./tps";
@@ -102,8 +102,8 @@ describe("Engine", () => {
       stream(_req: unknown, { signal }: { signal: AbortSignal }) {
         return (async function* () {
           const script = scenarioScript("normal", { model: "claude-sonnet-5-5", thinking: { effort: "low" }, messages: [] });
-          const { scriptToFixture } = await import("./providers/scripted");
-          const lines = scriptToFixture(script);
+          const { scriptToLines } = await import("./providers/scripted");
+          const lines = scriptToLines(script);
           const first = lines.find((l) => "event" in l);
           if (first && "event" in first) yield first.event;
           await new Promise<void>((_, reject) => signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true }));
@@ -501,7 +501,7 @@ function failingThen(failures: number, status = 500): { provider: Provider; call
     name: "anthropic",
     async *stream(req: ProviderRequest, opts: ProviderStreamOptions) {
       calls++;
-      if (left-- > 0) throw new ProviderStatusError(status, "api_error", "boom");
+      if (left-- > 0) throw Anthropic.APIError.generate(status, { type: "error", error: { type: "api_error", message: "boom" } }, undefined, new Headers());
       yield* scripted.stream(req, opts);
     },
   };

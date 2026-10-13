@@ -13,7 +13,7 @@ cp .env.example .env
 
 In `.env`, set:
 
-- `ANTHROPIC_API_KEY`: your key from console.anthropic.com. Leave it empty to run in replay mode (generated fixtures, no spend); production then also needs `REPLAY_MODE=1`.
+- `ANTHROPIC_API_KEY`: your key from console.anthropic.com. Leave it empty to run in replay mode (scripted replies, no spend); production then also needs `REPLAY_MODE=1`.
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` (8+ chars; production needs 10+ and refuses `change-me`): the admin account, created at boot if that email has none (the password applies only then).
 
 ```sh
@@ -25,7 +25,7 @@ Migrations run at boot; the database is `data/app.db`. A first visit makes you a
 ## Architecture
 
 ```
-browser ── POST /api/chat ──▶ route ──▶ relay engine ──▶ Anthropic (or replay / scripted provider)
+browser ── POST /api/chat ──▶ route ──▶ relay engine ──▶ Anthropic (or scripted provider)
    ▲                                       │
    └── SSE, resumable by seq ◀── in-memory event buffer ──▶ SQLite (rows saved every 2 s)
 ```
@@ -61,7 +61,7 @@ browser ◀── GET /api/messages/:id/options (JSON lines: count, each option 
 - **Client store first** (ADR-0005): the chat view renders from the store and server rows only seed it, so switching chats paints in the next frame.
 - **Guests and invites** (ADR-0004): visitors are capped Haiku guests; accounts are invite-only with per-user cost caps metered as replies stream.
 - **Explore options** (ADR-0006): Haiku detects alternatives in a reply; forks copy the chat and share its prompt cache.
-- **Replay harness**: scripted scenarios and generated fixtures exercise disconnects, fallbacks, refusals and errors without spending.
+- **Replay harness**: scripted scenarios exercise disconnects, fallbacks, refusals and errors without spending; replay mode answers every chat from them.
 
 Details: `docs/design-doc.md`, `docs/adr/`. Deployment and guest limits: `docs/self-host.md`.
 

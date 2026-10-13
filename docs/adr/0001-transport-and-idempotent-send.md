@@ -25,4 +25,4 @@ A chat client on a phone loses its connection constantly: the tab is backgrounde
 
 ## Consequences
 
-Every event in the system carries `(generationId, seq)`, which makes replay, dedupe, and the fixture harness share one vocabulary. Sequence numbers are the index into the in-memory buffer (ADR-0002), so resume is an array slice.
+Every event in the system carries `(generationId, seq)`, which makes replay, dedupe, and the scenario harness share one vocabulary. Sequence numbers are the index into the in-memory buffer (ADR-0002), so resume is an array slice.

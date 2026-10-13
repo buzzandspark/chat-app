@@ -38,7 +38,7 @@ export function getRelay(): RelaySingleton {
     db,
     store,
     quota,
-    providers: createProviderResolver({ replayMode: env.replayMode, record: env.record }),
+    providers: createProviderResolver({ replayMode: env.replayMode }),
     isDraining,
     afterDone: (info) => options.onReplyDone(info),
   });

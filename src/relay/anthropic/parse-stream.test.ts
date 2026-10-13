@@ -8,7 +8,7 @@ import {
   resolveServingModel,
   type NormalizableEvent,
 } from "./parse-stream";
-import { scriptToFixture, type Script } from "../providers/scripted";
+import { scriptToLines, type Script } from "../providers/scripted";
 import type { RelayEventBody } from "../events";
 
 function run(events: NormalizableEvent[]) {
@@ -19,7 +19,7 @@ function run(events: NormalizableEvent[]) {
 }
 
 function eventsOf(script: Script): NormalizableEvent[] {
-  return scriptToFixture(script).flatMap((l) => ("event" in l ? [l.event] : []));
+  return scriptToLines(script).flatMap((l) => ("event" in l ? [l.event] : []));
 }
 
 const model = "claude-sonnet-5-5";

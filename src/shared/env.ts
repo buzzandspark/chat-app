@@ -30,7 +30,6 @@ const schema = z.object({
   TRUST_PROXY_HOPS: z.preprocess(blankAsUnset, z.coerce.number().int().min(0).optional()),
   DEV_USER_ID: z.string().default("dev-user"),
   REPLAY_MODE: z.string().optional(),
-  RECORD: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
   E2E: z.string().optional(),
   E2E_ALLOW_PRODUCTION: z.string().optional(),
@@ -52,7 +51,6 @@ export const env = {
   /** A missing key or REPLAY_MODE=1 boots the whole app in replay mode; production refuses the former. */
   replayMode: flag(parsed.REPLAY_MODE) || !parsed.ANTHROPIC_API_KEY,
   replayRequested: flag(parsed.REPLAY_MODE),
-  record: flag(parsed.RECORD),
   e2e: flag(parsed.E2E),
   /** The e2e harness runs the standalone (production) server with E2E set; nothing else should. */
   e2eAllowProduction: flag(parsed.E2E_ALLOW_PRODUCTION),

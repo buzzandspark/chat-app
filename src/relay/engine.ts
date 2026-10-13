@@ -13,7 +13,7 @@ import type {
   UserRole,
 } from "@shared/types";
 import { toContentBlocks } from "./anthropic/accumulate";
-import { CONTEXT_FULL_RE, isAbortError, toRelayError } from "./anthropic/errors";
+import { isAbortError, toRelayError } from "./anthropic/errors";
 import type { HistoryMessage } from "./anthropic/history";
 import {
   createAccumulator,
@@ -25,7 +25,7 @@ import {
 import { priceIterations, summarize, type UsageRow } from "./anthropic/pricing";
 import { GUEST_MAX_TOKENS, MAX_TOKENS } from "./anthropic/thinking-config";
 import type { MessageSnapshot, RelayEvent, RelayEventBody } from "./events";
-import { ProviderStatusError, sleep } from "./providers/replay";
+import { sleep } from "./providers/scripted";
 import { isBillableProvider, type Provider, type ProviderRequest } from "./providers/types";
 import { BudgetExceededError, PromptTooLongError, QuotaExceededError, QuotaManager } from "./quota";
 import type { EventStore } from "./store";
@@ -721,7 +721,7 @@ export class Engine {
       }
     } catch (err) {
       if (active.controller.signal.aborted || isAbortError(err)) throw err;
-      return err instanceof ProviderStatusError ? statusErrorToRelay(err) : toRelayError(err);
+      return toRelayError(err);
     }
   }
 
@@ -1061,32 +1061,5 @@ function titleFrom(text: string): string {
   const line = text.trim().split("\n")[0] ?? "";
   if (!line) return "New chat";
   return line.length > 60 ? `${line.slice(0, 57).trimEnd()}…` : line;
-}
-
-function statusErrorToRelay(err: ProviderStatusError): RelayError {
-  switch (err.status) {
-    case 429:
-      return {
-        kind: "rate_limited",
-        message: err.message,
-        retryable: true,
-        retryAfterMs: (err.retryAfter ?? 15) * 1000,
-        status: 429,
-      };
-    case 529:
-      return { kind: "overloaded", message: err.message, retryable: true, retryAfterMs: 10_000, status: 529 };
-    case 401:
-    case 403:
-      return { kind: "auth", message: err.message, retryable: false, status: err.status };
-    case 413:
-      return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 };
-    case 400:
-      if (CONTEXT_FULL_RE.test(err.message)) {
-        return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 400 };
-      }
-      return { kind: "bad_request", message: err.message, retryable: false, status: 400 };
-    default:
-      return { kind: "api_error", message: err.message, retryable: err.status >= 500, status: err.status };
-  }
 }
 

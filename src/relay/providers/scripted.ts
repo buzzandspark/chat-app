@@ -1,7 +1,6 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import type { NormalizableEvent } from "../anthropic/parse-stream";
-import type { FixtureLine, FixtureThrow, Provider, ProviderRequest, ProviderStreamOptions } from "./types";
-import { replayLines } from "./replay";
+import type { Provider, ProviderRequest, ProviderStreamOptions, ScriptLine, ScriptThrow } from "./types";
 
 type ScriptPart =
   | { kind: "thinking"; text: string; chunk?: number; intervalMs?: number; signature?: string }
@@ -32,12 +31,12 @@ export interface Script {
   outputTokens?: number;
   iterations?: Anthropic.Beta.BetaUsage["iterations"];
   /** Throw this before any event, as the SDK would on a 429/529/5xx. */
-  throwBefore?: FixtureThrow;
+  throwBefore?: ScriptThrow;
 }
 
 export type ScriptFactory = (request: ProviderRequest) => Script;
 
-/** Deterministic PRNG so fixtures are reproducible for a given seed. */
+/** Deterministic PRNG so a script's pacing is reproducible for a given seed. */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -49,11 +48,10 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-// Script to fixture lines with synthetic timestamps, no sleeping. ScriptedProvider and the on-disk
-// fixtures share this, so a scenario behaves identically from memory or disk.
-export function scriptToFixture(script: Script, seed = 1): FixtureLine[] {
+/** Script to timed lines with synthetic timestamps, no sleeping. */
+export function scriptToLines(script: Script, seed = 1): ScriptLine[] {
   const rng = mulberry32(seed);
-  const lines: FixtureLine[] = [];
+  const lines: ScriptLine[] = [];
   let t = 0;
   const push = (event: NormalizableEvent) => lines.push({ t: Math.round(t), event });
 
@@ -210,17 +208,56 @@ function messageStart(model: string, inputTokens: number, seed: number): Anthrop
   } as unknown as Anthropic.Beta.BetaMessage;
 }
 
-/** Streams a script with its pacing, without touching disk. */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/** Plays timed lines with their pacing scaled by speed (1 is real time, 0 is no delays). */
+export async function* replayLines(lines: Iterable<ScriptLine>, speed: number, signal: AbortSignal): AsyncIterable<NormalizableEvent> {
+  const started = Date.now();
+  for (const line of lines) {
+    if (speed > 0) await sleep(started + line.t / speed - Date.now(), signal);
+    if (signal.aborted) return;
+    if ("event" in line) {
+      yield line.event;
+    } else if ("control" in line) {
+      if (line.control === "disconnect") return;
+    } else {
+      throw toApiError(line.throw);
+    }
+  }
+}
+
+// Real headers, or generate() returns an APIConnectionError.
+function toApiError({ status, type, message, retryAfter }: ScriptThrow) {
+  const headers = new Headers(retryAfter === undefined ? {} : { "retry-after": String(retryAfter) });
+  return Anthropic.APIError.generate(status, { type: "error", error: { type, message } }, undefined, headers);
+}
+
+/** Streams a script with its pacing. */
 export class ScriptedProvider implements Provider {
   readonly name = "scripted" as const;
   constructor(
     private script: Script | ScriptFactory,
     private speed = 1,
-    private seed = 1,
+    private seed: number | ((request: ProviderRequest) => number) = 1,
   ) {}
 
   stream(request: ProviderRequest, { signal }: ProviderStreamOptions): AsyncIterable<NormalizableEvent> {
     const script = typeof this.script === "function" ? this.script(request) : this.script;
-    return replayLines(scriptToFixture(script, this.seed), this.speed, signal);
+    const seed = typeof this.seed === "function" ? this.seed(request) : this.seed;
+    return replayLines(scriptToLines(script, seed), this.speed, signal);
   }
 }

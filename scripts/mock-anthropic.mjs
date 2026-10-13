@@ -1,7 +1,8 @@
 // A stand-in for the Anthropic API that costs nothing: point ANTHROPIC_BASE_URL at it to try spend limits.
-// Chat replies replay the Haiku `normal` fixture; Explore calls (output_config.format) get a JSON options answer.
-import fs from "node:fs";
+// Chat replies stream the Haiku `normal` scenario; Explore calls (output_config.format) get a JSON options answer. Run it with tsx.
 import http from "node:http";
+import { scriptToLines } from "../src/relay/providers/scripted.ts";
+import { scenarioScript } from "../src/relay/scenarios.ts";
 
 const port = Number(process.env.MOCK_PORT ?? 4010);
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
@@ -10,12 +11,8 @@ const outputTokens = optionalInt("MOCK_OUTPUT_TOKENS");
 const delayMs = optionalInt("MOCK_DELAY_MS") ?? 0;
 const truncated = process.env.MOCK_OPTIONS === "truncated";
 
-const fixture = fs
-  .readFileSync(new URL("../fixtures/claude-haiku-5-5/normal.jsonl", import.meta.url), "utf8")
-  .split("\n")
-  .filter((line) => line.startsWith("{"))
-  .map((line) => JSON.parse(line).event)
-  .filter(Boolean);
+const reply = scriptToLines(scenarioScript("normal", { model: "claude-haiku-5-5", thinking: { effort: "low" }, messages: [] }))
+  .flatMap((line) => ("event" in line ? [line.event] : []));
 
 const OPTIONS = [
   { title: "Resume by sequence", prompt: "Let's go with resuming by sequence number: what does the client store per generation?" },
@@ -32,7 +29,7 @@ function optionalInt(name) {
 }
 
 function chatEvents(model) {
-  return fixture.map((event) => {
+  return reply.map((event) => {
     const copy = structuredClone(event);
     if (copy.type === "message_start") {
       copy.message.model = model;

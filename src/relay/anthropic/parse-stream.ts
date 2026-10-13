@@ -6,7 +6,7 @@ import { errorEventToRelayError } from "./errors";
 
 type RawStreamEvent = Anthropic.Beta.BetaRawMessageStreamEvent;
 
-/** A mid-stream `error` carried as data (replay fixtures, raw SSE). */
+/** A mid-stream `error` carried as data (scripted streams, raw SSE). */
 interface RawErrorEvent {
   type: "error";
   error: { type?: string; message?: string };

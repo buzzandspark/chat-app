@@ -1,8 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { RelayError } from "@shared/types";
 
-/** Shared with the replay provider's classifier (engine.ts) so a fixture and the live API agree on what "context full" reads as. */
-export const CONTEXT_FULL_RE =
+const CONTEXT_FULL_RE =
   /prompt is too long|context window|too many tokens|exceeds? the (?:maximum )?context|maximum context length|input length and `?max_tokens`? exceed/i;
 
 function retryAfterMs(headers: unknown): number | undefined {
@@ -58,7 +57,7 @@ export function toRelayError(err: unknown): RelayError {
     return { kind: "network", message: "Lost the connection to Claude", retryable: true };
   }
   if (err instanceof Anthropic.APIError) {
-    // No status: the SDK threw an SSE `event: error` inside a 200 stream, `err.type` the inner type. Classify by it as a fixture's error event is,
+    // No status: the SDK threw an SSE `event: error` inside a 200 stream, `err.type` the inner type. Classify by it as a scripted error event is,
     // or a mid-stream rate_limit_error lands as a non-retryable api_error. Non-JSON data arrives as a bare string, which makeMessage would quote.
     if (err.status === undefined) {
       const body = err.error as { error?: { type?: string; message?: string } } | string | undefined;
@@ -95,7 +94,7 @@ export function toRelayError(err: unknown): RelayError {
 }
 
 /**
- * Mid-stream `error` events: carried as data (replay fixtures, raw SSE) or thrown by the SDK with no status (toRelayError).
+ * Mid-stream `error` events: carried as data (scripted streams, raw SSE) or thrown by the SDK with no status (toRelayError).
  * `headers` are the stream's response headers; a 200 rarely carries retry-after, but honour it when it does.
  */
 export function errorEventToRelayError(error: { type?: string; message?: string }, status?: number, headers?: unknown): RelayError {

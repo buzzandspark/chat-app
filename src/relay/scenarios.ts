@@ -1,4 +1,3 @@
-import type { ModelId } from "@shared/types";
 import type { Script } from "./providers/scripted";
 import type { ProviderRequest } from "./providers/types";
 import { type ScenarioName } from "./scenario-catalog";
@@ -182,8 +181,11 @@ export function scenarioScript(name: ScenarioName, request: ProviderRequest): Sc
   }
 }
 
-/** Replay fixture per model for REPLAY_MODE (the harness and local development), varied by turn. */
-export function replayFixture(model: ModelId, turn: number): string {
-  const pool = ["normal", "long_reply", "table_mid_stream", "thinking_long", "giant_code_block"] as const;
-  return `${model}/${pool[turn % pool.length]}`;
+const REPLAY_POOL = ["normal", "long_reply", "table_mid_stream", "thinking_long", "giant_code_block"] as const;
+
+/** Scenario for REPLAY_MODE (the harness and local development), varied by turn. */
+export function replayScenario(request: ProviderRequest): ScenarioName {
+  let turn = 0;
+  for (const m of request.messages) if (m.role === "assistant") turn++;
+  return REPLAY_POOL[turn % REPLAY_POOL.length] ?? "normal";
 }

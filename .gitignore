@@ -31,7 +31,6 @@ next-env.d.ts
 
 # SQLite files and harness output; nothing under data/ is tracked
 /data/
-/fixtures/recorded/
 
 /test-results/
 /playwright-report/
