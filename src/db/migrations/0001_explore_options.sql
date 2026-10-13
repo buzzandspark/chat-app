@@ -1,1 +1,0 @@
-ALTER TABLE `users` ADD `explore_options` integer DEFAULT true NOT NULL;

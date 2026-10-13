@@ -34,20 +34,6 @@ CREATE TABLE `chats` (
 --> statement-breakpoint
 CREATE INDEX `chats_user_updated_idx` ON `chats` (`user_id`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `chats_forked_from_idx` ON `chats` (`forked_from`);--> statement-breakpoint
-CREATE TABLE `feedback` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text,
-	`chat_id` text,
-	`message_id` text,
-	`body` text NOT NULL,
-	`timings` text,
-	`user_agent` text,
-	`created_at` integer NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null
-);
---> statement-breakpoint
-CREATE INDEX `feedback_created_idx` ON `feedback` (`created_at`);--> statement-breakpoint
-CREATE INDEX `feedback_user_idx` ON `feedback` (`user_id`);--> statement-breakpoint
 CREATE TABLE `generations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`chat_id` text NOT NULL,
@@ -73,6 +59,11 @@ CREATE INDEX `generations_chat_idx` ON `generations` (`chat_id`);--> statement-b
 CREATE INDEX `generations_status_idx` ON `generations` (`status`);--> statement-breakpoint
 CREATE INDEX `generations_user_idx` ON `generations` (`user_id`);--> statement-breakpoint
 CREATE INDEX `generations_message_idx` ON `generations` (`message_id`);--> statement-breakpoint
+CREATE TABLE `instance_settings` (
+	`id` integer PRIMARY KEY NOT NULL,
+	`guests_blocked` integer DEFAULT false NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `invites` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -125,6 +116,12 @@ CREATE TABLE `sessions` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `sessions_token_unique` ON `sessions` (`token`);--> statement-breakpoint
 CREATE INDEX `sessions_user_idx` ON `sessions` (`user_id`);--> statement-breakpoint
+CREATE TABLE `spend_buckets` (
+	`key` text PRIMARY KEY NOT NULL,
+	`level_usd` real DEFAULT 0 NOT NULL,
+	`updated_at` integer NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `usage_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`generation_id` text,
@@ -158,7 +155,10 @@ CREATE TABLE `users` (
 	`ban_expires` integer,
 	`cost_cap_usd` real,
 	`cost_spent_usd` real DEFAULT 0 NOT NULL,
-	`last_active_at` integer
+	`last_active_at` integer,
+	`explore_options` integer DEFAULT true NOT NULL,
+	`is_anonymous` integer DEFAULT false NOT NULL,
+	`budget_keys` text
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);--> statement-breakpoint

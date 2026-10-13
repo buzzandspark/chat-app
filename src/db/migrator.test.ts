@@ -148,6 +148,10 @@ describe("the initial migration", () => {
     expect(chatColumns).toEqual(expect.arrayContaining(["forked_from", "fork_position", "fork_order", "tab_hidden", "pinned"]));
     const messageColumns = (sqlite.pragma("table_info(messages)") as { name: string }[]).map((c) => c.name);
     expect(messageColumns).toEqual(expect.arrayContaining(["thinking", "fork_options", "search_text", "last_seq"]));
+    const userColumns = (sqlite.pragma("table_info(users)") as { name: string }[]).map((c) => c.name);
+    expect(userColumns).toEqual(expect.arrayContaining(["explore_options", "is_anonymous", "budget_keys"]));
+    expect(count("spend_buckets")).toBe(0);
+    expect(count("instance_settings")).toBe(0);
     seed();
     sqlite.prepare("UPDATE messages SET content = ? WHERE id = 'm1'").run(JSON.stringify([{ type: "text", text: "quokka sightings" }]));
     expect(sqlite.prepare("SELECT search_text FROM messages WHERE id = 'm1'").pluck().get()).toBe("quokka sightings");
@@ -158,52 +162,5 @@ describe("the initial migration", () => {
     // Applying again is a no-op.
     applyMigrations(sqlite, migrationsThrough("0000_init"));
     expect(journalRows()).toBe(1);
-  });
-});
-
-describe("0001_explore_options", () => {
-  it("turns Explore options on for the users a database already has", () => {
-    applyMigrations(sqlite, migrationsThrough("0000_init"));
-    seed();
-    applyMigrations(sqlite, migrationsThrough("0001_explore_options"));
-    expect(journalRows()).toBe(2);
-    expect(sqlite.prepare("SELECT explore_options FROM users WHERE id = 'u1'").pluck().get()).toBe(1);
-  });
-});
-
-describe("0002_drop_feedback", () => {
-  it("drops the feedback table, its rows with it, and leaves every other row alone", () => {
-    applyMigrations(sqlite, migrationsThrough("0001_explore_options"));
-    seed();
-    sqlite.prepare("INSERT INTO feedback (id, user_id, chat_id, body, created_at) VALUES (?, ?, ?, ?, ?)").run("f1", "u1", "c1", "slow", Date.now());
-    applyMigrations(sqlite, migrationsThrough("0002_drop_feedback"));
-    expect(journalRows()).toBe(3);
-    expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'feedback'").get()).toBeUndefined();
-    expect(sqlite.prepare("SELECT count(*) FROM chats").pluck().get()).toBe(1);
-    expect(sqlite.prepare("SELECT count(*) FROM messages").pluck().get()).toBe(1);
-  });
-});
-
-describe("0003_guests", () => {
-  it("adds is_anonymous, false for every existing user", () => {
-    applyMigrations(sqlite, migrationsThrough("0002_drop_feedback"));
-    seed();
-    applyMigrations(sqlite, migrationsThrough("0003_guests"));
-    expect(journalRows()).toBe(4);
-    expect(sqlite.prepare("SELECT is_anonymous FROM users").pluck().all()).toEqual(expect.arrayContaining([0]));
-    expect(sqlite.prepare("SELECT count(*) FROM users WHERE is_anonymous = 1").pluck().get()).toBe(0);
-  });
-});
-
-describe("0004_spend_buckets", () => {
-  it("adds an empty spend_buckets table and a null budget_keys for every existing user", () => {
-    applyMigrations(sqlite, migrationsThrough("0003_guests"));
-    seed();
-    applyMigrations(sqlite, migrationsThrough("0004_spend_buckets"));
-    expect(journalRows()).toBe(5);
-    expect(count("spend_buckets")).toBe(0);
-    expect(sqlite.prepare("SELECT budget_keys FROM users").pluck().all()).toEqual([null]);
-    sqlite.prepare("INSERT INTO spend_buckets (key, level_usd, updated_at) VALUES (?, ?, ?)").run("guests", 0.5, Date.now());
-    expect(() => sqlite.prepare("INSERT INTO spend_buckets (key, updated_at) VALUES (?, ?)").run("guests", Date.now())).toThrow(/UNIQUE/);
   });
 });

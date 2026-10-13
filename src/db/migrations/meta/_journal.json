@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1791594665907,
+      "when": 1791867742297,
       "tag": "0000_init",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1791766278367,
-      "tag": "0001_explore_options",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1791767174861,
-      "tag": "0002_drop_feedback",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1791820563446,
-      "tag": "0003_guests",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1791846179152,
-      "tag": "0004_spend_buckets",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1791867160256,
-      "tag": "0005_instance_settings",
       "breakpoints": true
     }
   ]
