@@ -35,6 +35,25 @@ browser ── POST /api/chat ──▶ route ──▶ relay engine ──▶ A
 - `src/db/`: Drizzle schema and migrations. `src/auth/`, `src/server/`: better-auth, guests, rate limits, boot and shutdown.
 - `app/`: Next.js App Router pages and route handlers.
 
+### Explore options: the background Haiku call
+
+```
+relay engine ── reply settles "done" ── afterDone ──▶ OptionsService (detached)
+                                                         │  skipped: fork, empty reply, Explore off, at cap, 10 forks
+                                                         ▼
+                                                 OptionsMessenger ──▶ Haiku 5.5 (own client, structured output, streamed)
+                                                         │            or scripted (scenario, replay, non-billable reply)
+                     in-memory progress ◀────────────────┴────────────▶ messages.fork_options + usage_events
+                            │
+browser ◀── GET /api/messages/:id/options (JSON lines: count, each option as it completes, final list)
+```
+
+- `src/relay/options/`: `OptionsService` gates, meters and tracks each detection; `LiveOptionsMessenger` makes one streamed structured-output call and reports the count and each completed option as they parse; `ScriptedOptionsMessenger` answers scenarios and replay mode.
+- The hook runs after the reply's rows, spend and terminal event are written and can't affect the reply; a failure only leaves it without options. Haiku sees the final reply text, never the chat history.
+- Progress lives in memory while the call runs and for a minute after; later reads come from `fork_options`.
+- Every call writes a `usage_events` row under the parent generation and counts against the user's cap; a call that breaks off is charged an estimate. Guest calls hold their worst-case cost against the budgets and run at most 2 per guest and 50 overall: detection waits for a slot, a rewrite is refused as busy.
+- `POST /api/messages/:id/options/rewrite` applies one instruction to every prompt through the same messenger; the result goes back to the sheet and isn't stored.
+
 ## Major decisions
 
 - **One long-lived process with SQLite** (ADR-0002, 0003): replies outlive their HTTP request and resume reads an in-process buffer. No serverless, no Redis.
