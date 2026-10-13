@@ -132,6 +132,8 @@ export interface StartInput {
   retry?: RetryPolicy;
   /** One fork of an Explore fan-out: for a guest it takes half a running slot and waits for one instead of failing busy. */
   fanOut?: boolean;
+  /** A fan-out fork after the first: the chat's rows are a prefix the first fork caches, so its admission prices them as cache reads. */
+  cachedPrefix?: boolean;
 }
 
 /**
@@ -274,8 +276,9 @@ export class Engine {
     if (!holding && !input.fanOut) throw new BusyError();
     // A scripted or replayed run spends nothing, so it is neither metered against the cap nor refused by it.
     // A retry's text is already in the chat; count it once.
-    const bytes = billable ? this.promptBytes(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : Buffer.byteLength(chatText)) : 0;
-    if (billable && holding) this.quota.admit(input.userId, input.generationId, input.model, bytes);
+    const prefixBytes = billable ? this.promptBytes(input.chatId, input.replaceFromMessageId) : 0;
+    const bytes = billable ? prefixBytes + (userRowExists ? 0 : Buffer.byteLength(chatText)) : 0;
+    if (billable && holding) this.quota.admit(input.userId, input.generationId, input.model, bytes, input.cachedPrefix ? prefixBytes : 0);
 
     const now = new Date(this.now());
     let conflict: ReplaceConflict | null;

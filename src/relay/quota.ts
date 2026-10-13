@@ -129,8 +129,11 @@ export class QuotaManager {
     if (waitMs !== null) throw new BudgetExceededError(waitMs);
   }
 
-  /** Refuses a call over the user's cap and, for a guest, one its budgets cannot take. `promptBytes` is the UTF-8 size of the prompt's text. */
-  admit(userId: string, id: string, model: string, promptBytes: number): void {
+  /**
+   * Refuses a call over the user's cap and, for a guest, one its budgets cannot take. `promptBytes` is the UTF-8 size of the prompt's text;
+   * `cachedBytes` of it are a prefix another running call has cached, held at the cache-read rate.
+   */
+  admit(userId: string, id: string, model: string, promptBytes: number, cachedBytes = 0): void {
     const user = this.account(this.db, userId);
     if (!user) return;
     if (this.guests && user.role === "guest") {
@@ -143,7 +146,8 @@ export class QuotaManager {
     }
     const estimatedInputTokens = Math.ceil(promptBytes / CHARS_PER_TOKEN) + 100;
     const rates = ratesFor(model, estimatedInputTokens);
-    const inputUsd = (estimatedInputTokens * rates.input) / 1_000_000;
+    const cachedTokens = Math.min(Math.floor(cachedBytes / CHARS_PER_TOKEN), estimatedInputTokens);
+    const inputUsd = ((estimatedInputTokens - cachedTokens) * rates.input + cachedTokens * rates.cacheRead) / 1_000_000;
     // Atomic in a single-threaded process: the sum and the insert happen in one tick. Every reply is metered, so a cap set mid-reply stops it.
     this.hold(user, userId, id, inputUsd + (MAX_TOKENS * rates.output) / 1_000_000, []);
     this.meters.set(id, { userId, inputUsd, outputRate: rates.output, chars: 0, reservedUsd: null, keys: [], model, promptBytes });

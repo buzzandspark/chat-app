@@ -197,6 +197,17 @@ describe("createForks", () => {
     expect(db.select().from(chats).where(eq(chats.forkedFrom, parentId)).all()).toHaveLength(3);
   });
 
+  it("admits forks after the first with the shared prefix at the cache-read rate, so ten fit a cap that ten full-rate ones would not", async () => {
+    const parentId = await parentChat();
+    // About 64k tokens of history on Opus: each fork holds its input plus 16k tokens of output against a $5 cap.
+    const first = db.select().from(messages).where(eq(messages.chatId, parentId)).orderBy(asc(messages.position)).get()!;
+    db.update(messages).set({ content: [{ type: "text", text: "x".repeat(160_000), citations: null }] }).where(eq(messages.id, first.id)).run();
+    db.update(users).set({ costCapUsd: 5 }).where(eq(users.id, USER)).run();
+    const started = createForks(deps(), { userId: USER, userRole: "user", parentId, messageId: lastRow(parentId), forks: Array.from({ length: 10 }, (_, i) => fork(`${i}`)) });
+    expect(started).toHaveLength(10);
+    await Promise.all(started.map((s) => collectUntilTerminal(store, s.generationId)));
+  });
+
   it("leaves the options unspent when the first fork is refused", async () => {
     const parentId = await parentChat();
     const messageId = lastRow(parentId);

@@ -374,7 +374,7 @@ describe("Engine", () => {
     const first = input({ text: "字".repeat(250) });
     engine.start(first);
     await collectUntilTerminal(store, first.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, first.generationId, "claude-sonnet-5-5", 750);
+    expect(admit).toHaveBeenLastCalledWith(USER, first.generationId, "claude-sonnet-5-5", 750, 0);
     expect(started).toHaveBeenCalledWith(first.generationId, "claude-sonnet-5-5", expect.objectContaining({ inputTokens: 800 }));
     const reply = db.select().from(messages).where(eq(messages.id, first.assistantMessageId)).get()!;
     const replyBytes = reply.content.reduce((n, b) => n + (b.type === "text" ? Buffer.byteLength(b.text) : b.type === "thinking" ? Buffer.byteLength(b.thinking) : 0), 0);
@@ -383,12 +383,12 @@ describe("Engine", () => {
     const next = input({ chatId: first.chatId, text: "y".repeat(250) });
     engine.start(next);
     await collectUntilTerminal(store, next.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, next.generationId, "claude-sonnet-5-5", 750 + 250 + replyBytes);
+    expect(admit).toHaveBeenLastCalledWith(USER, next.generationId, "claude-sonnet-5-5", 750 + 250 + replyBytes, 0);
 
     const regenerate = input({ chatId: first.chatId, userMessageId: next.userMessageId, text: undefined, replaceFromMessageId: next.assistantMessageId });
     engine.start(regenerate);
     await collectUntilTerminal(store, regenerate.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, regenerate.generationId, "claude-sonnet-5-5", 750 + 250 + replyBytes);
+    expect(admit).toHaveBeenLastCalledWith(USER, regenerate.generationId, "claude-sonnet-5-5", 750 + 250 + replyBytes, 0);
   });
 
   it("builds history from earlier turns and keeps a retry's existing user message", async () => {

@@ -148,6 +148,7 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
         retry: FORK_RETRY,
         gate,
         fanOut: true,
+        cachedPrefix: i > 0,
       });
     } catch (err) {
       db.delete(chats).where(eq(chats.id, fork.chatId)).run();
