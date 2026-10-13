@@ -56,7 +56,7 @@ export function SearchDialog({
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/chats/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
-        if (res.ok) setHits((await readJson<SearchResponse>(res)).hits);
+        setHits(res.ok ? (await readJson<SearchResponse>(res)).hits : []);
       } catch {
         // aborted or offline
       } finally {
