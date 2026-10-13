@@ -84,7 +84,7 @@ The client address keys rate limits and guest budgets. With `TRUSTED_IP_HEADER` 
 
 ## Cost caps
 
-Each invited user has an all-time cost cap in USD (`users.cost_cap_usd`). A send starts only if its estimated input plus every output token it may use (`max_tokens` 16,000) fits under the cap beside the same worst case of the user's running replies; otherwise it returns `quota_exceeded`. Each user runs at most 3 replies at once (Explore forks not counted) and gets "Busy right now" past that. Raise or clear the cap in the admin console.
+Each invited user has an all-time cost cap in USD (`users.cost_cap_usd`). A send starts if its estimated input fits under the cap beside what the user's running replies have used; replies stop once spend reaches the cap, so it can be passed by a little. Each user runs at most 3 replies at once (Explore forks not counted) and gets "Busy right now" past that. Raise or clear the cap in the admin console.
 
 A new user whose cap field is left blank gets `DEFAULT_COST_CAP_USD` (default 5). No cap is an explicit choice: the No cap box when creating, or `none` in Edit cap; the API takes the string `"none"` and refuses `null`. Spend under no cap is bounded only by your Anthropic account.
 

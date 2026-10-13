@@ -17,24 +17,25 @@ describe("QuotaManager (metered, cut off at the cap)", () => {
     quota = new QuotaManager(db);
   });
 
-  it("admits a reply whose input and max_tokens of output fit, at the rate its prompt is priced at, and refuses one that does not", () => {
-    // 24,750 bytes at 2.5 a token, plus 100, is 10k tokens; Haiku's $0.10 / M below 100k tokens makes that $0.001,
-    // and 16,000 output tokens at $0.50 / M another $0.008.
-    cap(0.0089);
+  it("admits a reply whose estimated input fits, at the rate its prompt is priced at, and refuses one that does not", () => {
+    // 24,750 bytes at 2.5 a token, plus 100, is 10k tokens; Haiku's $0.10 / M below 100k tokens makes that $0.001.
+    cap(0.0009);
     expect(() => quota.admit("u1", "g1", "claude-haiku-5-5", 24_750)).toThrow(QuotaExceededError);
-    cap(0.0091);
+    cap(0.0011);
     quota.admit("u1", "g1", "claude-haiku-5-5", 24_750);
   });
 
-  it("holds every running reply's worst case, so replies sent at once cannot pass the cap together", () => {
-    // An empty prompt is 100 tokens ($0.00001) plus $0.008 of output: two fit under $0.02, a third does not, however little they have streamed.
-    cap(0.02);
+  it("counts what running replies have used, not what they may still use, so a send near the cap can start", () => {
+    // An empty prompt is 100 tokens ($0.00001); 25k streamed characters are 10k output tokens, $0.005.
+    cap(0.01);
     quota.admit("u1", "g1", "claude-haiku-5-5", 0);
     quota.admit("u1", "g2", "claude-haiku-5-5", 0);
-    expect(() => quota.admit("u1", "g3", "claude-haiku-5-5", 0)).toThrow(QuotaExceededError);
-    expect(quota.spendBlock("u1")).toBeNull();
-    quota.release("u1", "g2");
+    quota.meter("g1", 25_000);
     quota.admit("u1", "g3", "claude-haiku-5-5", 0);
+    quota.meter("g2", 12_500);
+    expect(() => quota.admit("u1", "g4", "claude-haiku-5-5", 0)).not.toThrow();
+    quota.meter("g3", 12_500);
+    expect(() => quota.admit("u1", "g5", "claude-haiku-5-5", 0)).toThrow(QuotaExceededError);
   });
 
   it("meters streamed text across the user's live replies and reports the cap once they reach it", () => {

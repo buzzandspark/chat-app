@@ -81,8 +81,8 @@ function metered(m: Meter): number {
   return m.inputUsd + (Math.ceil(m.chars / CHARS_PER_TOKEN) * m.outputRate) / 1_000_000;
 }
 
-// A user's reply is admitted only while its estimated input plus max_tokens of output fits under the cap beside their running
-// replies' worst cases; it is then metered as it streams and all their replies stop once the meters reach the cap.
+// A user's reply is admitted while its estimated input fits under the cap beside what their running replies have used; it is
+// metered as it streams and all their replies stop once the meters reach the cap, so spend can pass the cap by a little.
 // A guest call instead holds its worst-case cost from the start, so neither its cap nor its budgets overshoot.
 export class QuotaManager {
   private meters = new Map<string, Meter>();
@@ -105,19 +105,9 @@ export class QuotaManager {
   }
 
   /** What the user's running calls have used so far, as metered; a guest call counts its hold. */
-  private liveUsd(userId: string): number {
+  private liveUsd(userId: string, except?: string): number {
     let usd = 0;
-    for (const m of this.meters.values()) if (m.userId === userId) usd += m.reservedUsd ?? metered(m);
-    return usd;
-  }
-
-  /** The most the user's running calls can still cost: a metered reply counts max_tokens of output. */
-  private heldUsd(userId: string, except?: string): number {
-    let usd = 0;
-    for (const [id, m] of this.meters) {
-      if (m.userId !== userId || id === except) continue;
-      usd += m.reservedUsd ?? Math.max(metered(m), m.inputUsd + (MAX_TOKENS * m.outputRate) / 1_000_000);
-    }
+    for (const [id, m] of this.meters) if (m.userId === userId && id !== except) usd += m.reservedUsd ?? metered(m);
     return usd;
   }
 
@@ -129,7 +119,7 @@ export class QuotaManager {
 
   /** Throws unless `usd` more fits under the user's cap and, for a guest, under every budget it is charged to. */
   private hold(user: { cap: number | null; spent: number }, userId: string, id: string, usd: number, keys: string[]): void {
-    if (user.cap !== null && user.spent + this.heldUsd(userId, id) + usd > user.cap) throw new QuotaExceededError(user.spent, user.cap);
+    if (user.cap !== null && user.spent + this.liveUsd(userId, id) + usd > user.cap) throw new QuotaExceededError(user.spent, user.cap);
     const waitMs = this.guests?.budgets.check(keys, (key) => this.heldOn(key, id) + usd) ?? null;
     if (waitMs !== null) throw new BudgetExceededError(waitMs);
   }
@@ -154,7 +144,7 @@ export class QuotaManager {
     const cachedTokens = Math.min(Math.floor(cachedBytes / CHARS_PER_TOKEN), estimatedInputTokens);
     const inputUsd = ((estimatedInputTokens - cachedTokens) * rates.input + cachedTokens * rates.cacheRead) / 1_000_000;
     // Atomic in a single-threaded process: the sum and the insert happen in one tick. Every reply is metered, so a cap set mid-reply stops it.
-    this.hold(user, userId, id, inputUsd + (MAX_TOKENS * rates.output) / 1_000_000, []);
+    this.hold(user, userId, id, inputUsd, []);
     this.meters.set(id, { userId, inputUsd, outputRate: rates.output, chars: 0, reservedUsd: null, keys: [], model, promptBytes });
   }
 
@@ -192,7 +182,7 @@ export class QuotaManager {
   spendBlock(userId: string): QuotaExceededError | BudgetExceededError | null {
     const user = this.account(this.db, userId);
     if (!user) return null;
-    if (user.cap !== null && user.spent + this.heldUsd(userId) >= user.cap) return new QuotaExceededError(user.spent, user.cap);
+    if (user.cap !== null && user.spent + this.liveUsd(userId) >= user.cap) return new QuotaExceededError(user.spent, user.cap);
     const waitMs = this.guests?.budgets.check(this.budgetKeys(user), (key) => this.heldOn(key)) ?? null;
     return waitMs === null ? null : new BudgetExceededError(waitMs);
   }
