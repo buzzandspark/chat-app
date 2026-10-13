@@ -4,10 +4,9 @@ import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { DropdownMenu as MenuPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useBackGesture } from "@client/hooks/use-back-gesture";
 import { useIsDesktop } from "@client/hooks/use-media-query";
+import { ResponsiveDialog } from "../ui/responsive-dialog";
 import { EFFORT_LABELS, EFFORTS, MODEL_IDS, MODELS, type Effort, type ModelId, GUEST_MODEL } from "@shared/models";
 import type { ThinkingOptions } from "@shared/types";
 
@@ -75,17 +74,20 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
   const desktop = useIsDesktop();
   const [open, setOpen] = useState(defaultOpen);
   const picked = useRef(false);
-  useBackGesture(open && !desktop, () => setOpen(false));
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const contentId = useId();
   const effortLabelId = useId();
   const info = MODELS[model];
   const effort = thinking.effort === "low" ? null : EFFORT_LABELS[thinking.effort];
 
-  const trigger = (
-    <Button variant="ghost" size="sm" className="touch-target max-w-[55vw] gap-1 text-muted-foreground" aria-label={`Model: ${info.short}${effort ? `, effort ${effort}` : ""}`}>
+  const triggerClass = "touch-target max-w-[55vw] gap-1 text-muted-foreground";
+  const triggerLabel = `Model: ${info.short}${effort ? `, effort ${effort}` : ""}`;
+  const triggerFace = (
+    <>
       <span className="truncate">{info.short}</span>
       {effort ? <span className="shrink-0 rounded-md bg-accent px-1.5 text-caption text-accent-foreground">{effort}</span> : null}
       <ChevronDown data-icon="inline-end" className="size-3.5" />
-    </Button>
+    </>
   );
 
   if (desktop) {
@@ -93,7 +95,11 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
     // keyboard reach (Tab skipped past them). The menu takes focus; arrows walk the rows and Enter/Space picks.
     return (
       <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className={triggerClass} aria-label={triggerLabel}>
+            {triggerFace}
+          </Button>
+        </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
           className="flex w-80 flex-col gap-1 px-1 py-2 outline-none"
@@ -146,12 +152,29 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
     );
   }
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent side="bottom" className="max-h-dvh overflow-y-auto rounded-t-sheet px-gutter pb-[max(env(safe-area-inset-bottom,0px),1rem)]" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <SheetHeader className="px-0">
-          <SheetTitle>Model</SheetTitle>
-        </SheetHeader>
+    <>
+      <Button
+        ref={triggerRef}
+        variant="ghost"
+        size="sm"
+        className={triggerClass}
+        aria-label={triggerLabel}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? contentId : undefined}
+        onClick={() => setOpen(true)}
+      >
+        {triggerFace}
+      </Button>
+      <ResponsiveDialog
+        id={contentId}
+        open={open}
+        onOpenChange={setOpen}
+        title="Model"
+        className="max-h-dvh overflow-y-auto"
+        returnFocus={triggerRef}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <div className="flex flex-col gap-1 py-1">
           <div role="radiogroup" aria-label="Models" className="flex flex-col gap-1">
             {MODEL_IDS.map((id) => {
@@ -204,7 +227,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
             })}
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </ResponsiveDialog>
+    </>
   );
 }

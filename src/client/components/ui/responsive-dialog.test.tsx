@@ -51,16 +51,21 @@ describe("ResponsiveDialog back gesture", () => {
     vi.restoreAllMocks();
   });
 
-  it("as a sheet below `md` it takes the back gesture; as a centred modal it leaves history alone", () => {
+  it("takes the back gesture wherever the sidebar isn't docked and leaves history alone where it is", () => {
     const push = vi.spyOn(window.history, "pushState");
-    const width = (wide: boolean) => vi.stubGlobal("matchMedia", (query: string) => ({ matches: wide, media: query, addEventListener: () => {}, removeEventListener: () => {} }));
-    width(false);
-    render(<Harness />);
-    expect(push).toHaveBeenCalledTimes(1);
-    cleanup();
-    push.mockClear();
-    width(true);
-    render(<Harness />);
-    expect(push).not.toHaveBeenCalled();
+    const viewport = (match: (query: string) => boolean) =>
+      vi.stubGlobal("matchMedia", (query: string) => ({ matches: match(query), media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+    const cases: [string, (query: string) => boolean, number][] = [
+      ["portrait phone", () => false, 1],
+      ["landscape phone: wide but too short to dock", (q) => q === "(min-width: 768px)", 1],
+      ["docked", () => true, 0],
+    ];
+    for (const [label, match, pushes] of cases) {
+      viewport(match);
+      render(<Harness />);
+      expect(push, label).toHaveBeenCalledTimes(pushes);
+      cleanup();
+      push.mockClear();
+    }
   });
 });

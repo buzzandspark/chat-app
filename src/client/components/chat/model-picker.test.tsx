@@ -144,4 +144,23 @@ describe("ModelPicker", () => {
     expect(onChange).toHaveBeenCalledWith({ thinking: { effort: "high" } });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
+
+  it("on phones, the trigger names the open sheet, and closing it returns focus to the trigger", async () => {
+    layout(false);
+    render(<ModelPicker model="claude-sonnet-5-5" thinking={{ effort: "low" }} onChange={() => {}} />);
+    const trigger = screen.getByRole("button", { name: "Model: Sonnet 5.5" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(trigger).toHaveAttribute("aria-controls", dialog.id);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    press("Escape");
+    await waitFor(() => expect(trigger).toHaveFocus());
+
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("radio", { name: /Claude Opus 5.5/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(trigger).toHaveFocus();
+  });
 });

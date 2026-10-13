@@ -3,9 +3,11 @@ import { useCallback, type ReactNode, type RefObject } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useBackGesture } from "@client/hooks/use-back-gesture";
-import { useMediaQuery } from "@client/hooks/use-media-query";
+import { useIsDesktop } from "@client/hooks/use-media-query";
 
 interface ResponsiveDialogProps {
+  /** The content's id, for a trigger outside Radix to name in `aria-controls`. */
+  id?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -19,14 +21,15 @@ interface ResponsiveDialogProps {
 }
 
 /** A bottom sheet on phones (slides from the bottom, follows the keyboard), a centred modal at `md`. */
-export function ResponsiveDialog({ open, onOpenChange, title, description, children, className, returnFocus, onOpenAutoFocus }: ResponsiveDialogProps) {
+export function ResponsiveDialog({ id, open, onOpenChange, title, description, children, className, returnFocus, onOpenAutoFocus }: ResponsiveDialogProps) {
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
-  // A sheet below `md` (as drawn), a centred modal at it: only the sheet takes the back gesture.
-  const centred = useMediaQuery("(min-width: 768px)");
-  useBackGesture(open && !centred, close);
+  // Back closes it wherever the sidebar isn't docked, including a landscape phone's centred modal.
+  const docked = useIsDesktop();
+  useBackGesture(open && !docked, close);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        id={id}
         showCloseButton
         onOpenAutoFocus={onOpenAutoFocus}
         onCloseAutoFocus={(e) => {
