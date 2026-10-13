@@ -19,12 +19,17 @@ export interface CurrentUser {
 
 // ADR-0004: validated through better-auth once per request. Without a session only the e2e harness
 // falls back to the seeded dev user; everyone else is sent to become a guest first (proxy.ts).
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+/** For pages and layouts, which can't set cookies: the daily session refresh is left to route handlers (`requireUser`). */
+export function getCurrentUser(): Promise<CurrentUser | null> {
+  return currentUser(false);
+}
+
+async function currentUser(refresh: boolean): Promise<CurrentUser | null> {
   // better-sqlite3 is synchronous, so only `connection()` tells the prerenderer this is request
   // time; it keeps the database out of the build and the shell static.
   await connection();
   const reqHeaders = await headers();
-  const session = await getAuth().api.getSession({ headers: reqHeaders });
+  const session = await getAuth().api.getSession({ headers: reqHeaders, query: { disableRefresh: !refresh } });
   if (session?.user) {
     const u = session.user as { id: string; email: string; name: string; role?: string | null; banned?: boolean | null };
     if (u.banned) return null;
@@ -84,8 +89,9 @@ export class HttpError extends Error {
   }
 }
 
+/** For route handlers, where a refreshed session's new cookie reaches the browser. */
 export async function requireUser(): Promise<CurrentUser> {
-  const user = await getCurrentUser();
+  const user = await currentUser(true);
   if (!user) throw new HttpError(401, { error: "unauthorized" });
   return user;
 }
