@@ -1,9 +1,10 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatStoreProvider } from "@client/store/context";
-import { ModalProvider, useModals } from "../../ui/modal-manager";
+import { ModalProvider, useModals } from "@client/components/ui/modal-manager";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
-import { ForkTabs, forkTabs } from ".";
+import { forkTabs } from "@client/store/forks";
+import { ForkTabs } from ".";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, prefetch: vi.fn() }) }));

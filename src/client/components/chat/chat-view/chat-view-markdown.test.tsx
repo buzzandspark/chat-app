@@ -43,9 +43,9 @@ async function mount(prepare: (store: import("@client/store/chat-store").ChatSto
   const [{ ChatView }, { ChatStoreProvider, useChatStore }, { ShellUserProvider }, { createMessageState }, { ModalProvider }] = await Promise.all([
     import("."),
     import("@client/store/context"),
-    import("../../shell/shell-user"),
+    import("@client/components/shell/shell-user"),
     import("@client/store/chat-store"),
-    import("../../ui/modal-manager"),
+    import("@client/components/ui/modal-manager"),
   ]);
   let store!: import("@client/store/chat-store").ChatStore;
   function Seed() {

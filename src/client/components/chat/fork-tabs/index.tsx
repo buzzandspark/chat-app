@@ -5,32 +5,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@client/store/hooks";
 import { prefetchChat } from "@client/store/prefetch";
-import { getSidebarStore, patchChat, setPendingChat, setTabHidden, useSidebarChats, type ChatSummary } from "@client/store/sidebar-store";
-import { chunk } from "../../ui/lazy-chunk";
-import { useModals } from "../../ui/modal-manager";
+import { forkTabs, type ForkTab } from "@client/store/forks";
+import { getSidebarStore, patchChat, setPendingChat, setTabHidden, useSidebarChats } from "@client/store/sidebar-store";
+import { chunk } from "@client/components/ui/lazy-chunk";
+import { useModals } from "@client/components/ui/modal-manager";
 import type { ForkTabMenu } from "./fork-tab-menu";
-import { ExploreOutline } from "../explore-options";
+import { ExploreOutline } from "../explore-outline";
 
 const loadTabMenu = chunk(() => import("./fork-tab-menu").then((m) => m.ForkTabMenu));
-
-export interface ForkTab {
-  id: string;
-  title: string;
-  hidden: boolean;
-}
-
-/** The strip's model: the parent first, then its forks in stored order; null when the chat is neither. */
-export function forkTabs(chats: readonly ChatSummary[], chatId: string): { parentId: string; tabs: ForkTab[] } | null {
-  const me = chats.find((c) => c.id === chatId);
-  const parentId = me?.forkedFrom ?? chatId;
-  const parent = chats.find((c) => c.id === parentId);
-  const forks = chats.filter((c) => c.forkedFrom === parentId).sort((a, b) => (a.forkOrder ?? 0) - (b.forkOrder ?? 0));
-  if (forks.length === 0) return null;
-  return {
-    parentId,
-    tabs: [{ id: parentId, title: "Main chat", hidden: Boolean(parent?.tabHidden) }, ...forks.map((f) => ({ id: f.id, title: f.title, hidden: Boolean(f.tabHidden) }))],
-  };
-}
 
 // The open tab scrolls into view, clear of the fade at the strip's end, so its × can be reached.
 const scrollOpenTabIntoView = (slot: HTMLDivElement | null) => slot?.scrollIntoView({ block: "nearest", inline: "nearest" });

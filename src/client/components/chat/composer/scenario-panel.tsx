@@ -2,8 +2,8 @@
 import { SCENARIO_NAMES, SCENARIOS, type ScenarioName } from "@relay/scenario-catalog";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { readJson, type SeedLongChatResponse } from "@shared/api";
-import type { ModalRender } from "../../ui/modal-manager";
-import { ResponsiveDialog } from "../../ui/responsive-dialog";
+import type { ModalRender } from "@client/components/ui/modal-manager";
+import { ResponsiveDialog } from "@client/components/ui/responsive-dialog";
 
 interface ScenarioDialogProps {
   open: boolean;

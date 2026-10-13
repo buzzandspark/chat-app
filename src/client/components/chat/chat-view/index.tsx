@@ -17,7 +17,7 @@ import { Composer, type ComposerHandle } from "../composer";
 import { LiveRegion } from "./live-region";
 import { ForkTabs } from "../fork-tabs";
 import { MessageList, type MessageListHandle } from "../message-list";
-import { useShellUser } from "../../shell/shell-user";
+import { useShellUser } from "@client/components/shell/shell-user";
 import { EmptyThread, ThreadSkeleton } from "../thread-skeleton";
 
 /** ADR-0005: renders from the client store at once; the server's rows arrive through `children`, a Suspense child that seeds the store. */

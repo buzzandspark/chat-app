@@ -1,6 +1,6 @@
 "use client";
 import { LogOut } from "lucide-react";
-import { IconButton } from "../ui/icon-button";
+import { IconButton } from "@client/components/ui/icon-button";
 
 /**
  * A plain POST, not the auth client (13 kB gzipped, kept off the chat route). A full navigation afterwards: the client

@@ -2,7 +2,7 @@
 import { GitFork, ListX, MoreHorizontal, Pencil, Pin, PinOff, Trash2, Trophy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { Ref } from "react";
-import { IconButton } from "../../ui/icon-button";
+import { IconButton } from "@client/components/ui/icon-button";
 
 const BUTTON =
   "size-10 shrink-0 text-muted-foreground hover:bg-foreground/10 hover:text-foreground aria-expanded:bg-foreground/10 aria-expanded:text-foreground dark:hover:bg-foreground/15 dark:aria-expanded:bg-foreground/15 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/item:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:aria-expanded:opacity-100";

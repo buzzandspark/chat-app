@@ -1,112 +1,19 @@
 "use client";
-import { ArrowUp, FlaskConical, Square, X } from "lucide-react";
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
+import { ArrowUp, Square, X } from "lucide-react";
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import { clearDraft, draftKey, setDraft, useDraft } from "./use-draft";
 import { useHasHover, useIsDesktop } from "@client/hooks/use-media-query";
 import { textOf } from "@client/store/chat-store";
 import { useChat, useChatSettingsKnown, useChatStore, useMessage } from "@client/store/hooks";
-import { useChatActions, useChatContext, type ChatSettings } from "../chat-context";
-import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
-import { EFFORT_LABELS, MODELS, type ModelId } from "@shared/models";
-import { MAX_MESSAGE_CHARS, type ThinkingOptions } from "@shared/types";
-import { ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ChunkBoundary } from "../../ui/chunk-boundary";
-import { chunk } from "../../ui/lazy-chunk";
-import { useModals } from "../../ui/modal-manager";
-import { IconButton } from "../../ui/icon-button";
+import { useChatContext } from "../chat-context";
+import { MAX_MESSAGE_CHARS } from "@shared/types";
+import { ChunkBoundary } from "@client/components/ui/chunk-boundary";
+import { IconButton } from "@client/components/ui/icon-button";
 import { ExploreOptionsIsland, UNDER_INPUT_WITH_TABS } from "../explore-options";
-import { useShellUser } from "../../shell/shell-user";
-
-// The panel's chunk (a Radix dialog) loads on intent.
-function ScenarioButton(props: Omit<ComponentProps<typeof IconButton>, "label" | "children">) {
-  return (
-    <IconButton label="Scenarios" tipSide="top" className="text-muted-foreground" {...props}>
-      <FlaskConical />
-    </IconButton>
-  );
-}
-const loadScenarioPanel = chunk(() => import("./scenario-panel"));
-
-// The button opens the panel itself, once the chunk is in; a chunk that fails is thrown to the boundary around it.
-function ScenarioPanelOnIntent() {
-  const { send } = useChatActions();
-  const { show } = useModals();
-  const router = useRouter();
-  const [failed, setFailed] = useState<{ error: unknown } | null>(null);
-  // A second press while the chunk is still on its way doesn't stack a second panel.
-  const opening = useRef(false);
-  if (failed) throw failed.error;
-  const warm = () => {
-    loadScenarioPanel().catch(() => {});
-  };
-  return (
-    <ScenarioButton
-      data-testid="scenario-panel-trigger"
-      onPointerEnter={warm}
-      onTouchStart={warm}
-      onFocus={warm}
-      onClick={() => {
-        if (opening.current) return;
-        opening.current = true;
-        loadScenarioPanel()
-          .then((m) => m.openScenarioPanel(show, send, router.push), (error: unknown) => setFailed({ error }))
-          .finally(() => {
-            opening.current = false;
-          });
-      }}
-    />
-  );
-}
-
-/** The picker's trigger as the stand-in: the chunk (Radix menu, sheet, switch) loads on intent. */
-function PickerStandIn({
-  model,
-  thinking,
-  known = true,
-  intent,
-  onPress,
-}: {
-  model: ModelId;
-  thinking: ThinkingOptions;
-  /** False until the chat's model is known: the label keeps its room but shows nothing, rather than the default. */
-  known?: boolean;
-  intent?: { warmUp: () => void };
-  onPress?: () => void;
-}) {
-  const info = MODELS[model];
-  const effort = thinking.effort === "low" ? null : EFFORT_LABELS[thinking.effort];
-  // Announce what the loaded trigger will open: the menu at `md`, the sheet (a dialog) on phones.
-  const desktop = useIsDesktop();
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="touch-target max-w-[55vw] gap-1 text-muted-foreground"
-      aria-label={known ? `Model: ${info.short}${effort ? `, effort ${effort}` : ""}` : "Model"}
-      aria-haspopup={desktop ? "menu" : "dialog"}
-      aria-disabled={!onPress || undefined}
-      {...(intent ? intentProps(intent) : {})}
-      onClick={onPress}
-    >
-      <span className={cn("truncate", !known && "invisible")}>{info.short}</span>
-      {effort && known ? <span className="shrink-0 rounded-md bg-accent px-1.5 text-caption text-accent-foreground">{effort}</span> : null}
-      <ChevronDown data-icon="inline-end" className="size-3.5" />
-    </Button>
-  );
-}
-const loadModelPicker = chunk(() => import("./model-picker").then((m) => m.ModelPicker));
-
-function ModelPickerOnIntent({ known, ...props }: { model: ModelId; thinking: ThinkingOptions; known: boolean; onChange: (patch: Partial<ChatSettings>) => void; onPicked: () => void; guest: boolean }) {
-  const intent = useIntent(loadModelPicker);
-  if (intent.failed) throw intent.failed.error;
-  if (!known) return <PickerStandIn model={props.model} thinking={props.thinking} known={false} />;
-  const ModelPicker = intent.loaded;
-  if (intent.armed && ModelPicker) return <ModelPicker {...props} defaultOpen={intent.wanted === "picker"} />;
-  return <PickerStandIn model={props.model} thinking={props.thinking} intent={intent} onPress={() => intent.press("picker")} />;
-}
+import { useShellUser } from "@client/components/shell/shell-user";
+import { ModelPickerOnIntent } from "./model-picker-trigger";
+import { ScenarioPanelOnIntent } from "./scenario-trigger";
 
 export interface ComposerHandle {
   focus: () => void;

@@ -1,7 +1,7 @@
 "use client";
 import { Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import { IconButton } from "../../ui/icon-button";
+import { IconButton } from "@client/components/ui/icon-button";
 
 const listeners = new Set<() => void>();
 function readDark(): boolean {

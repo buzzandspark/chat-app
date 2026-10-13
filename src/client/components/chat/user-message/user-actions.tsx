@@ -1,7 +1,7 @@
 "use client";
 import { Check, Copy, MoreHorizontal, Pencil } from "lucide-react";
 import { useState } from "react";
-import { IconButton } from "../../ui/icon-button";
+import { IconButton } from "@client/components/ui/icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export function UserActions({ text, onEdit, defaultOpen }: { text: string; onEdit: () => void; defaultOpen?: boolean }) {

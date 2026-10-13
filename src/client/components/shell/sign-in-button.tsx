@@ -1,7 +1,7 @@
 "use client";
 import { LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { IconButton } from "../ui/icon-button";
+import { IconButton } from "@client/components/ui/icon-button";
 
 /** A guest's way to an account, in the slot where an account's Sign out sits; it comes back here after. */
 export function SignInButton() {

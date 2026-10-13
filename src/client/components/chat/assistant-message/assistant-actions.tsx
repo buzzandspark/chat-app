@@ -2,7 +2,7 @@
 import { Check, Copy, GitFork, MoreHorizontal, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { IconButton } from "../../ui/icon-button";
+import { IconButton } from "@client/components/ui/icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { MessageState } from "@client/store/chat-store";
 import { duplicateChat } from "@client/store/fork-chat";

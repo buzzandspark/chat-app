@@ -2,8 +2,8 @@
 import { Trash2, Trophy } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
-import { openDialog } from "../../shell/load-dialogs";
-import { useModals } from "../../ui/modal-manager";
+import { openDialog } from "@client/components/shell/load-dialogs";
+import { useModals } from "@client/components/ui/modal-manager";
 
 
 export interface ForkTabMenuProps {

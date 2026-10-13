@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
 import { readJson, type SearchHit, type SearchResponse } from "@shared/api";
 import { revealSearchHit } from "@client/store/search-reveal";
-import { ResponsiveDialog } from "../../ui/responsive-dialog";
+import { ResponsiveDialog } from "@client/components/ui/responsive-dialog";
 
 /** ⌘/Ctrl+K: a sheet on phones, a modal at `md`, keyboard-safe. */
 export function SearchDialog({

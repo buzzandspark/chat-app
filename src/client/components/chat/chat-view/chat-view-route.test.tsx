@@ -3,8 +3,8 @@ import { act, cleanup, render } from "@testing-library/react";
 import { useContext } from "react";
 import { createMessageState, type ChatStore } from "@client/store/chat-store";
 import { ChatStoreProvider, useChatStore } from "@client/store/context";
-import { ModalProvider } from "../../ui/modal-manager";
-import { ShellUserProvider } from "../../shell/shell-user";
+import { ModalProvider } from "@client/components/ui/modal-manager";
+import { ShellUserProvider } from "@client/components/shell/shell-user";
 import { ChatActionsContext, ChatLiveStateContext, type ChatActions, type ChatLiveState } from "../chat-context";
 import { ChatView } from ".";
 

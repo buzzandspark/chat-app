@@ -3,7 +3,7 @@ import { Plus, Search, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, type ReactNode, type RefObject } from "react";
 import { buttonVariants } from "@/components/ui/button";
-import { IconButton, shortcutTip } from "../../ui/icon-button";
+import { IconButton, shortcutTip } from "@client/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 import { useNewChat } from "@client/hooks/use-new-chat";
 import { sidebarAria } from "./sidebar-aria";

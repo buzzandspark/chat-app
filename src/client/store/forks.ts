@@ -1,7 +1,7 @@
 "use client";
 import { MAX_FORKS, type OptionsEvent, type OptionsTrace } from "@shared/forks";
 import type { ChatStore, MessageState } from "./chat-store";
-import { getSidebarStore } from "./sidebar-store";
+import { getSidebarStore, type ChatSummary } from "./sidebar-store";
 
 export const CAP = "You've reached your spending cap.";
 
@@ -86,4 +86,23 @@ export function logOptionsTrace(kind: "detect" | "rewrite", trace: OptionsTrace,
   console.log(`user\n${trace.user}`);
   console.log("response", trace.response);
   console.groupEnd();
+}
+
+export interface ForkTab {
+  id: string;
+  title: string;
+  hidden: boolean;
+}
+
+/** The strip's model: the parent first, then its forks in stored order; null when the chat is neither. */
+export function forkTabs(chats: readonly ChatSummary[], chatId: string): { parentId: string; tabs: ForkTab[] } | null {
+  const me = chats.find((c) => c.id === chatId);
+  const parentId = me?.forkedFrom ?? chatId;
+  const parent = chats.find((c) => c.id === parentId);
+  const forks = chats.filter((c) => c.forkedFrom === parentId).sort((a, b) => (a.forkOrder ?? 0) - (b.forkOrder ?? 0));
+  if (forks.length === 0) return null;
+  return {
+    parentId,
+    tabs: [{ id: parentId, title: "Main chat", hidden: Boolean(parent?.tabHidden) }, ...forks.map((f) => ({ id: f.id, title: f.title, hidden: Boolean(f.tabHidden) }))],
+  };
 }

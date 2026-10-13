@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useIsDesktop } from "@client/hooks/use-media-query";
-import { ResponsiveDialog } from "../../ui/responsive-dialog";
+import { ResponsiveDialog } from "@client/components/ui/responsive-dialog";
 import { EFFORT_LABELS, EFFORTS, MODEL_IDS, MODELS, type Effort, type ModelId, GUEST_MODEL } from "@shared/models";
 import type { ThinkingOptions } from "@shared/types";
 

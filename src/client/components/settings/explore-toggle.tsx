@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { Switch } from "@/components/ui/switch";
-import { useShellUser } from "../shell/shell-user";
+import { useShellUser } from "@client/components/shell/shell-user";
 
 async function save(exploreOptions: boolean): Promise<boolean> {
   try {

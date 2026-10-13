@@ -1,11 +1,11 @@
 "use client";
 import { MoreHorizontal } from "lucide-react";
 import { intentProps, useIntent } from "@client/hooks/use-lazy-on-intent";
-import { IconButton } from "../../ui/icon-button";
+import { IconButton } from "@client/components/ui/icon-button";
 import type { MessageState } from "@client/store/chat-store";
 import { textOf } from "@client/store/chat-store";
-import { ChunkBoundary } from "../../ui/chunk-boundary";
-import { chunk } from "../../ui/lazy-chunk";
+import { ChunkBoundary } from "@client/components/ui/chunk-boundary";
+import { chunk } from "@client/components/ui/lazy-chunk";
 import { useChatActions } from "../chat-context";
 
 const USER_ACTION_BUTTON =

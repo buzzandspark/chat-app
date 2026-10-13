@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatStoreProvider } from "@client/store/context";
 import { getSidebarStore, type ChatSummary } from "@client/store/sidebar-store";
-import { DeleteDialog } from "./chat-dialogs";
+import { DeleteDialog } from "./delete-dialog";
 
 const push = vi.fn();
 const newChat = vi.fn();
