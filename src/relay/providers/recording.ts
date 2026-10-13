@@ -6,10 +6,13 @@ import type { Provider, ProviderRequest, ProviderStreamOptions } from "./types";
 /** Wraps a provider and records each stream as a replayable jsonl fixture. */
 export class RecordingProvider implements Provider {
   readonly name = "recording" as const;
+  readonly countTokens?: Provider["countTokens"];
   constructor(
     private inner: Provider,
     private dir: string,
-  ) {}
+  ) {
+    this.countTokens = inner.countTokens?.bind(inner);
+  }
 
   async *stream(request: ProviderRequest, options: ProviderStreamOptions): AsyncIterable<NormalizableEvent> {
     fs.mkdirSync(this.dir, { recursive: true });

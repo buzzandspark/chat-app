@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BusyError } from "@relay/engine";
-import { BudgetExceededError, PromptTooLongError } from "@relay/quota";
+import { BudgetExceededError } from "@relay/quota";
 import { SCENARIO_NAMES } from "@relay/scenarios";
 import { requireUser } from "@server/current-user";
 import { getLimiters } from "@server/ratelimit";
@@ -59,15 +59,6 @@ describe("POST /api/chat with a scenario", () => {
 });
 
 describe("POST /api/chat refused by a guest limit", () => {
-  it("answers an oversized prompt with 413 context_full", async () => {
-    start.mockImplementationOnce(() => {
-      throw new PromptTooLongError(70_000, 60_000);
-    });
-    const res = await send("guest", {});
-    expect(res.status).toBe(413);
-    expect(await res.json()).toEqual({ error: "context_full" });
-  });
-
   it("answers spent budgets with 429 and how long until they refill", async () => {
     start.mockImplementationOnce(() => {
       throw new BudgetExceededError(90_500);

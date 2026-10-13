@@ -14,17 +14,27 @@ export class AnthropicProvider implements Provider {
   }
 
   async *stream(request: ProviderRequest, { signal }: ProviderStreamOptions): AsyncIterable<NormalizableEvent> {
-    const params = buildRequest({
-      model: request.model,
-      thinking: request.thinking,
-      messages: request.messages,
-      userId: request.userId,
-      cacheTail: request.cacheTail,
-      maxTokens: request.maxTokens,
-    });
-    const stream = this.client.beta.messages.stream(params, { signal });
+    const stream = this.client.beta.messages.stream(params(request), { signal });
     for await (const event of stream) {
       yield event;
     }
   }
+
+  async countTokens(request: ProviderRequest, { signal }: ProviderStreamOptions): Promise<number> {
+    // Only the fields that shape the prompt: the endpoint refuses `fallbacks`.
+    const { model, system, messages, thinking, output_config, betas } = params(request);
+    const result = await this.client.beta.messages.countTokens({ model, system, messages, thinking, output_config, betas }, { signal });
+    return result.input_tokens;
+  }
+}
+
+function params(request: ProviderRequest) {
+  return buildRequest({
+    model: request.model,
+    thinking: request.thinking,
+    messages: request.messages,
+    userId: request.userId,
+    cacheTail: request.cacheTail,
+    maxTokens: request.maxTokens,
+  });
 }

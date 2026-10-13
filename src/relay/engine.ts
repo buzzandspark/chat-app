@@ -28,7 +28,7 @@ import { GUEST_MAX_TOKENS } from "./anthropic/thinking-config";
 import type { MessageSnapshot, RelayEvent, RelayEventBody, ServerTimings } from "./events";
 import { ProviderStatusError, sleep } from "./providers/replay";
 import { isBillableProvider, type Provider, type ProviderRequest } from "./providers/types";
-import { QuotaManager } from "./quota";
+import { BudgetExceededError, PromptTooLongError, QuotaExceededError, QuotaManager } from "./quota";
 import type { EventStore } from "./store";
 import { TpsStats } from "./tps";
 import { settleOrphan } from "./orphans";
@@ -136,7 +136,7 @@ export type ResumeOutcome =
   | { kind: "snapshot"; event: RelayEvent }
   | { kind: "not_found" };
 
-type AbortReason = "stop" | "shutdown" | "scenario" | "idle" | "cap";
+type AbortReason = "stop" | "shutdown" | "scenario" | "idle" | "cap" | "too_long";
 
 interface FinalState {
   content: StoredContentBlock[];
@@ -246,7 +246,7 @@ export class Engine {
         input.userId,
         input.generationId,
         input.model,
-        QuotaManager.estimateInputTokens(this.promptBytes(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : Buffer.byteLength(chatText))),
+        this.promptBytes(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : Buffer.byteLength(chatText)),
       );
     }
 
@@ -405,7 +405,7 @@ export class Engine {
     return { created: true };
   }
 
-  /** Budgets are checked only when a reply starts, so running guest replies are capped to bound the overshoot; a group counts once. */
+  /** Running guest replies are capped to bound the load and how many holds one guest has at once; a group counts once. */
   private admitGuestReply(userId: string, group: string): void {
     const mine = new Set<string>();
     const all = new Set<string>();
@@ -416,6 +416,20 @@ export class Engine {
       if (a.userId === userId) mine.add(a.group);
     }
     if (mine.size >= this.guestRunning.perGuest || all.size >= this.guestRunning.total) throw new BusyError();
+  }
+
+  /** A guest's prompt is counted exactly before it is sent: over the limit it is refused, and the count tightens the guest's hold. */
+  private async fitGuestPrompt(active: Active, provider: Provider, request: ProviderRequest): Promise<RelayError | null> {
+    const tokens = provider.countTokens ? await provider.countTokens(request, { signal: active.controller.signal }) : null;
+    try {
+      this.quota.fit(active.id, tokens);
+      return null;
+    } catch (err) {
+      if (err instanceof PromptTooLongError) return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 };
+      if (err instanceof QuotaExceededError) return { kind: "quota_exceeded", message: "Spending cap reached", retryable: false };
+      if (err instanceof BudgetExceededError) return { kind: "rate_limited", message: "Busy right now", retryable: true, retryAfterMs: err.retryAfterMs, status: 429 };
+      throw err;
+    }
   }
 
   /** Stops and settles every running generation of a user (admin delete or ban). */
@@ -538,6 +552,13 @@ export class Engine {
         cacheTail: input.cacheTail,
         maxTokens: active.guest ? GUEST_MAX_TOKENS : undefined,
       };
+      if (active.guest && active.billable) {
+        const refused = await this.fitGuestPrompt(active, provider, request);
+        if (refused) {
+          this.finishError(active, refused, timings);
+          return;
+        }
+      }
 
       for (let attempt = 0; ; attempt++) {
         const error = await this.attempt(active, provider, request, timings);
@@ -599,7 +620,10 @@ export class Engine {
           }
           if (body.type === "error") return body.error;
           this.append(active, body);
-          if (body.type === "message_start" && active.billable) this.quota.started(active.id, body.model, body);
+          if (body.type === "message_start" && active.billable && !this.quota.started(active.id, body.model, body)) {
+            active.abortReason = "too_long";
+            active.controller.abort(new DOMException("too_long", "AbortError"));
+          }
           // Metered as it streams; at the cap every running reply of the user stops.
           if ((body.type === "text_delta" || body.type === "thinking_delta") && active.billable && this.quota.meter(active.id, body.text.length)) {
             this.stopAtCap(active.userId);
@@ -724,6 +748,10 @@ export class Engine {
   private finishAborted(active: Active, reason: AbortReason, timings: ServerTimings): void {
     if (reason === "cap") {
       this.finishError(active, { kind: "quota_exceeded", message: "Spending cap reached", retryable: false }, timings);
+      return;
+    }
+    if (reason === "too_long") {
+      this.finishError(active, { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 }, timings);
       return;
     }
     if (reason === "stop") {

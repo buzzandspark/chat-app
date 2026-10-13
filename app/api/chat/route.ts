@@ -3,7 +3,7 @@ import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@db/client";
 import { BusyError, DrainingError, ForbiddenError } from "@relay/engine";
-import { BudgetExceededError, PromptTooLongError, QuotaExceededError } from "@relay/quota";
+import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
@@ -87,7 +87,6 @@ export async function POST(request: NextRequest): Promise<Response> {
       if (!outcome.created && outcome.reason === "replace_gone") return jsonError(409, { error: "replace_gone" });
       created = outcome.created;
     } catch (err) {
-      if (err instanceof PromptTooLongError) return jsonError(413, { error: "context_full" });
       if (err instanceof QuotaExceededError) {
         return jsonError(402, { error: "quota_exceeded", spentUsd: err.spentUsd, capUsd: err.capUsd });
       }

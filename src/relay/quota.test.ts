@@ -18,10 +18,10 @@ describe("QuotaManager (metered, cut off at the cap)", () => {
   });
 
   it("admits a reply whose input fits, at the rate its prompt is priced at, and refuses one that does not", () => {
-    // Haiku: $0.10 / M input below 100k tokens, so 10k tokens cost $0.001.
+    // 24,750 bytes at 2.5 a token, plus 100, is 10k tokens; Haiku's $0.10 / M below 100k tokens makes that $0.001.
     cap(0.0015);
-    quota.admit("u1", "g1", "claude-haiku-5-5", 10_000);
-    expect(() => quota.admit("u1", "g2", "claude-haiku-5-5", 10_000)).toThrow(QuotaExceededError);
+    quota.admit("u1", "g1", "claude-haiku-5-5", 24_750);
+    expect(() => quota.admit("u1", "g2", "claude-haiku-5-5", 24_750)).toThrow(QuotaExceededError);
   });
 
   it("meters streamed text across the user's live replies and reports the cap once they reach it", () => {
@@ -67,23 +67,54 @@ describe("QuotaManager: guests", () => {
     quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets });
   });
 
-  it("refuses a guest's oversized prompt first, then a reply over its cap, then one its spent budgets cannot take", () => {
-    budgets.debit(db, ["ip:203.0.113.7"], 1.25);
-    db.update(users).set({ costSpentUsd: 0.1 }).where(eq(users.id, "g1")).run();
-    expect(() => quota.admit("g1", "a", "claude-haiku-5-5", 60_001)).toThrow(PromptTooLongError);
-    expect(() => quota.admit("g1", "b", "claude-haiku-5-5", 60_000)).toThrow(QuotaExceededError);
-    db.update(users).set({ costSpentUsd: 0 }).where(eq(users.id, "g1")).run();
-    let refusal: unknown;
-    try {
-      quota.admit("g1", "c", "claude-haiku-5-5", 60_000);
-    } catch (err) {
-      refusal = err;
-    }
-    // $0.25 over a $1-a-day budget: a quarter of a day.
-    expect(refusal).toBeInstanceOf(BudgetExceededError);
-    expect(refusal).toMatchObject({ retryAfterMs: 6 * 3_600_000 });
+  // Haiku's worst case for a prompt of n tokens: n at the $0.125 / M cache-write rate plus 8192 output tokens at $0.50 / M.
+  const worst = (tokens: number) => (tokens * 0.125 + 8192 * 0.5) / 1_000_000;
+
+  it("holds each running call's worst case against the guest's cap, sized by its bytes until the exact count arrives", () => {
+    db.update(users).set({ costCapUsd: 0.016 }).where(eq(users.id, "g1")).run();
+    // 200 kB is bounded by the 60k limit; an empty prompt by the 4096 tokens of system prompts and framing.
+    quota.admit("g1", "a", "claude-haiku-5-5", 200_000);
+    expect(worst(60_000) + worst(4096)).toBeGreaterThan(0.016);
+    expect(() => quota.admit("g1", "b", "claude-haiku-5-5", 0)).toThrow(QuotaExceededError);
+    quota.fit("a", 10_000);
+    quota.admit("g1", "b", "claude-haiku-5-5", 0);
+    // The holds cover every token a guest call can produce, so nothing is metered.
+    expect(quota.meter("a", 10_000_000)).toBe(false);
+    quota.release("g1", "a");
+    quota.release("g1", "b");
     // None of it applies to an invited user.
-    expect(() => quota.admit("u1", "d", "claude-haiku-5-5", 90_000)).not.toThrow();
+    expect(() => quota.admit("u1", "c", "claude-haiku-5-5", 300_000)).not.toThrow();
+  });
+
+  it("refuses a prompt over the limit once counted, and cuts off the address of a dense payload", () => {
+    quota.admit("g1", "a", "claude-haiku-5-5", 200_000);
+    expect(() => quota.fit("a", 60_001)).toThrow(PromptTooLongError);
+    // Without a count the byte bound decides.
+    quota.admit("g1", "b", "claude-haiku-5-5", 60_000);
+    expect(() => quota.fit("b", null)).toThrow(PromptTooLongError);
+    expect(buckets()).toEqual({});
+    // Base64 runs about 1.05 bytes a token: two days of the address's budget, none of every guest's.
+    quota.admit("g1", "c", "claude-haiku-5-5", 70_000);
+    expect(() => quota.fit("c", 66_000)).toThrow(PromptTooLongError);
+    expect(buckets()).toEqual({ "ip:203.0.113.7": 2 });
+    expect(() => quota.admit("g1", "d", "claude-haiku-5-5", 0)).toThrow(BudgetExceededError);
+  });
+
+  it("reports a guest prompt that message_start bills over the limit", () => {
+    quota.admit("g1", "a", "claude-haiku-5-5", 0);
+    expect(quota.started("a", "claude-haiku-5-5", { inputTokens: 50_000, cacheReadTokens: 10_000, cacheWriteTokens: 0 })).toBe(true);
+    expect(quota.started("a", "claude-haiku-5-5", { inputTokens: 50_000, cacheReadTokens: 10_000, cacheWriteTokens: 1 })).toBe(false);
+  });
+
+  it("counts held calls against the guest's budgets, so they never fill past a day", () => {
+    budgets.debit(db, ["ip:203.0.113.7"], 0.99);
+    quota.admit("g1", "a", "claude-haiku-5-5", 0);
+    quota.admit("g1", "b", "claude-haiku-5-5", 0);
+    expect(0.99 + 3 * worst(4096)).toBeGreaterThan(1);
+    expect(() => quota.admit("g1", "c", "claude-haiku-5-5", 0)).toThrow(BudgetExceededError);
+    expect(quota.spendBlock("g1")).toBeNull();
+    quota.release("g1", "a");
+    quota.admit("g1", "c", "claude-haiku-5-5", 0);
   });
 
   it("charges a guest's spend to its address and to every guest's budget, and only to the user's spend otherwise", () => {

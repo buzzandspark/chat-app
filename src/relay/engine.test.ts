@@ -9,7 +9,7 @@ import { ProviderStatusError } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
 import { TpsStats } from "./tps";
-import { QuotaExceededError, QuotaManager } from "./quota";
+import { BudgetExceededError, QuotaExceededError, QuotaManager } from "./quota";
 import { scenarioScript, type ScenarioName } from "./scenarios";
 import { EventStore } from "./store";
 import { collectUntilTerminal, createTestDb, seedUser, waitFor } from "./test-utils";
@@ -348,11 +348,11 @@ describe("Engine", () => {
     const admit = vi.spyOn(quota, "admit");
     const started = vi.spyOn(quota, "started");
     engine = makeEngine(0, { quota });
-    // Three bytes a character: 250 of them are 300 tokens, not 100.
+    // Three bytes a character.
     const first = input({ text: "字".repeat(250) });
     engine.start(first);
     await collectUntilTerminal(store, first.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, first.generationId, "claude-sonnet-5-5", 300 + 100);
+    expect(admit).toHaveBeenLastCalledWith(USER, first.generationId, "claude-sonnet-5-5", 750);
     expect(started).toHaveBeenCalledWith(first.generationId, "claude-sonnet-5-5", expect.objectContaining({ inputTokens: 800 }));
     const reply = db.select().from(messages).where(eq(messages.id, first.assistantMessageId)).get()!;
     const replyBytes = reply.content.reduce((n, b) => n + (b.type === "text" ? Buffer.byteLength(b.text) : b.type === "thinking" ? Buffer.byteLength(b.thinking) : 0), 0);
@@ -361,12 +361,12 @@ describe("Engine", () => {
     const next = input({ chatId: first.chatId, text: "y".repeat(250) });
     engine.start(next);
     await collectUntilTerminal(store, next.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, next.generationId, "claude-sonnet-5-5", Math.ceil((750 + 250 + replyBytes) / 2.5) + 100);
+    expect(admit).toHaveBeenLastCalledWith(USER, next.generationId, "claude-sonnet-5-5", 750 + 250 + replyBytes);
 
     const regenerate = input({ chatId: first.chatId, userMessageId: next.userMessageId, text: undefined, replaceFromMessageId: next.assistantMessageId });
     engine.start(regenerate);
     await collectUntilTerminal(store, regenerate.generationId);
-    expect(admit).toHaveBeenLastCalledWith(USER, regenerate.generationId, "claude-sonnet-5-5", Math.ceil((750 + 250 + replyBytes) / 2.5) + 100);
+    expect(admit).toHaveBeenLastCalledWith(USER, regenerate.generationId, "claude-sonnet-5-5", 750 + 250 + replyBytes);
   });
 
   it("builds history from earlier turns and keeps a retry's existing user message", async () => {
@@ -603,11 +603,6 @@ describe("Engine: guest budgets", () => {
       interrupted: async () => expect((await runOn(endingWith({ kind: "disconnect" }), "normal")).end).toMatchObject({ type: "interrupted" }),
       error: async () =>
         expect((await runOn(endingWith({ kind: "error", error: { type: "api_error", message: "x" } }), "normal")).end).toMatchObject({ type: "error" }),
-      cap: async () => {
-        db.update(users).set({ costCapUsd: spent() + 0.0005 }).where(eq(users.id, "g1")).run();
-        expect((await runOn(fast, "long_reply")).end).toMatchObject({ type: "error", error: { kind: "quota_exceeded" } });
-        db.update(users).set({ costCapUsd: 1 }).where(eq(users.id, "g1")).run();
-      },
       crash: async () => {
         const { inp } = await runOn(fast, "normal");
         db.update(generations).set({ status: "running" }).where(eq(generations.id, inp.generationId)).run();
@@ -625,6 +620,58 @@ describe("Engine: guest budgets", () => {
       expect(ip, ending).toBeCloseTo(spent(), 12);
       expect(all, ending).toBeCloseTo(spent(), 12);
     }
+    // A reply whose worst case does not fit under the cap never starts.
+    db.update(users).set({ costCapUsd: spent() + 0.001 }).where(eq(users.id, "g1")).run();
+    expect(() => fast.start(guest("normal"))).toThrow(QuotaExceededError);
+  });
+});
+
+describe("Engine: guest prompts", () => {
+  const guestInput = (text: string) => input({ userId: "g1", userRole: "guest", model: "claude-haiku-5-5", text });
+  let quota: QuotaManager;
+  let streamed: ProviderRequest[];
+  let counted: number;
+
+  beforeEach(() => {
+    seedUser(db, "g1", { role: "guest", costCapUsd: 1, budgetKeys: ["ip:203.0.113.7"] });
+    quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 1, ip48: 3, all: 10 }, () => 0) });
+    streamed = [];
+    const scripted = new ScriptedProvider((req) => scenarioScript("normal", req), 0);
+    const live: Provider = {
+      name: "anthropic",
+      stream(req, opts) {
+        streamed.push(req);
+        return scripted.stream(req, opts);
+      },
+      countTokens: async () => counted,
+    };
+    engine = new Engine({ db, store, quota, providers: () => live });
+  });
+
+  const send = async (text: string) => {
+    const inp = guestInput(text);
+    engine.start(inp);
+    return (await collectUntilTerminal(store, inp.generationId)).at(-1);
+  };
+
+  it("counts a guest's prompt before sending it, refuses one over the limit unsent, and cuts off the address of a dense payload", async () => {
+    counted = 60_001;
+    expect(await send("A long conversation in plain words. ".repeat(6_000))).toMatchObject({ type: "error", error: { kind: "context_full" } });
+    expect(db.select().from(spendBuckets).all()).toEqual([]);
+    counted = 66_000;
+    expect(await send("x".repeat(70_000))).toMatchObject({ type: "error", error: { kind: "context_full" } });
+    expect(streamed).toHaveLength(0);
+    expect(db.select().from(users).where(eq(users.id, "g1")).get()!.costSpentUsd).toBe(0);
+    counted = 100;
+    expect(() => engine.start(guestInput("hello"))).toThrow(BudgetExceededError);
+  });
+
+  it("stops a guest reply whose message_start bills a prompt over the limit, charging what it billed", async () => {
+    quota = new QuotaManager(db, { maxPromptTokens: 500, budgets: new Budgets(db, { ip: 1, ip48: 3, all: 10 }, () => 0) });
+    engine = new Engine({ db, store, quota, providers: () => ({ name: "anthropic", stream: (req, opts) => new ScriptedProvider(scenarioScript("normal", req), 0).stream(req, opts), countTokens: async () => 100 }) });
+    // The scripted message_start bills 800 input tokens.
+    expect(await send("hello")).toMatchObject({ type: "error", error: { kind: "context_full" } });
+    expect(db.select().from(users).where(eq(users.id, "g1")).get()!.costSpentUsd).toBeGreaterThan(0);
   });
 });
 

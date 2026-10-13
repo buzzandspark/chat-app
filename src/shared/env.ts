@@ -22,8 +22,8 @@ const schema = z.object({
   GUEST_IP_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(1)),
   GUEST_IP48_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(3)),
   GUEST_ALL_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(10)),
-  /** The largest prompt a guest may send, in tokens estimated at 2.5 UTF-8 bytes each; the default keeps natural text in any script under Haiku's long-context tier at 100k. */
-  GUEST_MAX_PROMPT_TOKENS: z.preprocess(blankAsUnset, z.coerce.number().int().positive().max(100_000).default(60_000)),
+  /** The largest prompt a guest may send, counted exactly before it is sent; capped below Haiku's long-context tier at 100k tokens. */
+  GUEST_MAX_PROMPT_TOKENS: z.preprocess(blankAsUnset, z.coerce.number().int().positive().max(90_000).default(60_000)),
   DEV_USER_ID: z.string().default("dev-user"),
   REPLAY_MODE: z.string().optional(),
   RECORD: z.string().optional(),

@@ -50,6 +50,22 @@ describe("Budgets", () => {
     expect(budgets.check([])).toBeNull();
   });
 
+  it("counts what callers still hold, also on a key with no spend yet", () => {
+    budgets.debit(db, ["ip:10.0.0.1"], 0.75);
+    expect(budgets.check(["ip:10.0.0.1"], () => 0.25)).toBeNull();
+    // $0.125 over a $1-a-day budget drains in 3 hours.
+    expect(budgets.check(["ip:10.0.0.1"], () => 0.375)).toBe(3 * HOUR);
+    expect(budgets.check(["ip:10.0.0.2"], () => 1.5)).toBe(12 * HOUR);
+  });
+
+  it("fills a bucket to a number of days of its budget and never empties one that is fuller", () => {
+    budgets.fill(db, ["ip:10.0.0.1"], 2);
+    expect(budgets.check(["ip:10.0.0.1"])).toBe(24 * HOUR);
+    budgets.debit(db, ["ip48:2001:db8:1::/48"], 9);
+    budgets.fill(db, ["ip48:2001:db8:1::/48"], 2);
+    expect(db.select().from(spendBuckets).all().map((b) => b.levelUsd)).toEqual([2, 9]);
+  });
+
   it("debits inside the caller's transaction, so a rollback takes it back", () => {
     expect(() =>
       db.transaction((tx) => {

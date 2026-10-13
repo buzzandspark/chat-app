@@ -6,7 +6,7 @@ import { uuidv7 } from "@shared/id";
 import { costOf, type TokenCounts } from "../anthropic/pricing";
 import { BusyError, type ReplyDoneInfo } from "../engine";
 import { isBillableProvider } from "../providers/types";
-import { QuotaManager } from "../quota";
+import { BudgetExceededError, QuotaExceededError, QuotaManager } from "../quota";
 import { LiveOptionsMessenger, OPTIONS_MODEL, OptionsCallError, ScriptedOptionsMessenger, type DetectProgress, type MessengerResult, type OptionsMessenger } from "./messenger";
 
 /** A reply's detection as it runs: the count once known, the options complete so far, then done or failed. */
@@ -102,7 +102,12 @@ export class OptionsService {
     const startedAt = performance.now();
     if (!chat || chat.forkedFrom || !info.text.trim() || !this.exploreOn(info.userId) || this.quota.spendBlock(info.userId) || !this.canFork(info.chatId)) return null;
     const messenger = this.messenger(info.scenario, info.billable);
-    const result = await this.charged(messenger, info.userId, info.generationId, "options", () => messenger.detect(info.text, onProgress));
+    const result = await this.charged(messenger, info.userId, info.generationId, "options", Buffer.byteLength(info.text), () => messenger.detect(info.text, onProgress)).catch(
+      (err: unknown) => {
+        if (err instanceof QuotaExceededError || err instanceof BudgetExceededError) return null;
+        throw err;
+      },
+    );
     if (!result) return null;
     // A fork made before detection finished spent the options ([]); they stay spent.
     this.db.update(messages).set({ forkOptions: result.options }).where(and(eq(messages.id, info.messageId), isNull(messages.forkOptions))).run();
@@ -167,7 +172,8 @@ export class OptionsService {
       const block = this.quota.spendBlock(userId);
       if (block) throw block;
     }
-    const result = await this.charged(messenger, userId, gen?.id ?? null, "options_rewrite", () => messenger.rewrite(options, instruction));
+    const promptBytes = Buffer.byteLength(JSON.stringify(options) + instruction);
+    const result = await this.charged(messenger, userId, gen?.id ?? null, "options_rewrite", promptBytes, () => messenger.rewrite(options, instruction));
     if (!result) throw new BusyError();
     return { options: result.options, trace: result.trace ?? null };
   }
@@ -194,12 +200,24 @@ export class OptionsService {
     return this.db.select({ on: users.exploreOptions }).from(users).where(eq(users.id, userId)).get()?.on ?? true;
   }
 
-  /** Records what a call cost, an estimate when Haiku failed partway. Null, with no call, when a guest has as many running as it may. */
-  private async charged(messenger: OptionsMessenger, userId: string, generationId: string | null, iterationType: string, run: () => Promise<MessengerResult>): Promise<MessengerResult | null> {
+  /**
+   * Records what a call cost, an estimate when Haiku failed partway. Null, with no call, when a guest has as many running as it may;
+   * a guest's call holds its worst-case cost while it runs and throws when its cap or budgets cannot take that.
+   */
+  private async charged(
+    messenger: OptionsMessenger,
+    userId: string,
+    generationId: string | null,
+    iterationType: string,
+    promptBytes: number,
+    run: () => Promise<MessengerResult>,
+  ): Promise<MessengerResult | null> {
     const billable = messenger.name === "haiku";
     const guest = billable && this.isGuest(userId);
     if (guest && !this.holdSlot(userId)) return null;
+    const hold = guest ? `options:${uuidv7()}` : null;
     try {
+      if (hold) this.quota.admit(userId, hold, OPTIONS_MODEL, promptBytes);
       const result = await run();
       this.record(userId, generationId, iterationType, result.usage, billable, false);
       return result;
@@ -207,6 +225,7 @@ export class OptionsService {
       if (err instanceof OptionsCallError) this.record(userId, generationId, iterationType, err.usage, billable, true);
       throw err;
     } finally {
+      if (hold) this.quota.release(userId, hold);
       if (guest) this.freeSlot(userId);
     }
   }
