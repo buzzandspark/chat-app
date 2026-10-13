@@ -153,8 +153,9 @@ test.describe("chat route", () => {
   });
 
   test("Back to a chat deleted here shows it empty and leaves it out of the sidebar", async ({ page }, info) => {
-    const doomed = `doomed ${info.project.name}`;
-    const later = ["Y", "Z", "W", "V", "U"].map((t) => `later ${t} ${info.project.name}`);
+    const run = `${info.project.name} ${info.retry}`;
+    const doomed = `doomed ${run}`;
+    const later = ["Y", "Z", "W", "V", "U"].map((t) => `later ${t} ${run}`);
     for (const t of [doomed, ...later]) {
       await openNewChat(page);
       await sendText(page, t);
@@ -173,7 +174,8 @@ test.describe("chat route", () => {
     await sidebar(page).getByRole("button", { name: `Actions for ${doomed}` }).click();
     await page.getByRole("menuitem", { name: "Delete" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
-    await expect(page).not.toHaveURL(doomedUrl);
+    // Wait for /c to settle its address, so the next push lands after it.
+    await expect(page).toHaveURL(/\/c$/);
     for (const t of later) await openFromSidebar(t);
     for (let i = 0; i <= later.length && page.url() !== doomedUrl; i++) await page.goBack();
     await expect(page).toHaveURL(doomedUrl);

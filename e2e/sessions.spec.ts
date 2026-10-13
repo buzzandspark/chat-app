@@ -53,7 +53,7 @@ test.describe("sessions and errors", () => {
     }
     await retry.click();
     await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
-    await expect(page.getByRole("menuitem", { name: "Copy" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("menuitem", { name: "Copy", exact: true })).toBeVisible({ timeout: 15_000 });
   });
 
   test("an expired or revoked session is sent to sign in and comes back to the same chat", async ({ page, context }) => {
