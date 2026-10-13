@@ -34,8 +34,6 @@ const nextConfig: NextConfig = {
   },
   // The invite page's URL holds a password-setting token, so nothing it loads or links to may carry it in a Referer.
   // A header rather than a <meta>, so it holds before the head is parsed; it comes after the site-wide rule as last match wins.
-  // No landing page: the root opens a new chat (sign-in first, through the proxy).
-  redirects: async () => [{ source: "/", destination: "/c", permanent: false }],
   headers: () => [
     { source: "/:path*", headers: SECURITY_HEADERS },
     { source: "/api/:path*", headers: API_HEADERS },

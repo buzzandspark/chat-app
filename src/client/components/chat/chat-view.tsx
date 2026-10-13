@@ -18,7 +18,7 @@ import { LiveRegion } from "./live-region";
 import { ForkTabs } from "./fork-tabs";
 import { MessageList, type MessageListHandle } from "./message-list";
 import { useShellUser } from "../shell/shell-user";
-import { ThreadSkeleton } from "./thread-skeleton";
+import { EmptyThread, ThreadSkeleton } from "./thread-skeleton";
 
 /** ADR-0005: renders from the client store at once; the server's rows arrive through `children`, a Suspense child that seeds the store. */
 export function ChatView({ children }: { children: ReactNode }) {
@@ -201,7 +201,7 @@ export function ChatView({ children }: { children: ReactNode }) {
         <div key={chatId} className="group/chat flex min-h-0 flex-1 flex-col">
           {children}
           <ForkTabs chatId={chatId} />
-          <Thread chatId={chatId} listRef={listRef} onFollowChange={setFollowEngaged} />
+          <Thread chatId={chatId} newChat={newChatRoute} listRef={listRef} onFollowChange={setFollowEngaged} />
           <LiveRegion chatId={chatId} />
           <Composer ref={composerRef} chatId={chatId} draftId={newChatRoute && chat.messageIds.length === 0 ? "new" : chatId} />
         </div>
@@ -212,14 +212,17 @@ export function ChatView({ children }: { children: ReactNode }) {
 
 /**
  * Waits for the seed and, for a chat with rows, the Markdown chunk: bodies filling in later would shift rows below.
- * An empty seed or a failed chunk doesn't wait; rows show plain text until the renderer arrives.
+ * An empty seed or a failed chunk doesn't wait; rows show plain text until the renderer arrives. A new chat
+ * has nothing to wait for, so its server HTML already shows the empty state (the page's LCP).
  */
 function Thread({
   chatId,
+  newChat,
   listRef,
   onFollowChange,
 }: {
   chatId: string;
+  newChat: boolean;
   listRef: RefObject<MessageListHandle | null>;
   onFollowChange: (engaged: boolean) => void;
 }) {
@@ -231,6 +234,7 @@ function Thread({
   const [seededEmpty, setSeededEmpty] = useState<boolean | null>(null);
   if (seeded && seededEmpty === null) setSeededEmpty(chat.messageIds.length === 0);
   const waitForMarkdown = chat.messageIds.length > 0 && !markdownReady && !markdownFailed && !seededEmpty;
+  if (!seeded && newChat) return <EmptyThread />;
   if (!seeded || waitForMarkdown) return <ThreadSkeleton />;
   return <MessageList ref={listRef} chatId={chatId} onFollowChange={onFollowChange} />;
 }

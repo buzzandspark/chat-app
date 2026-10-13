@@ -21,7 +21,7 @@ export function useChat(chatId: string): ChatState {
   );
 }
 
-/** The server snapshot is always false: SSR renders the skeleton and React re-renders seeded before paint. */
+/** The server snapshot is always false: SSR renders the skeleton (a new chat's empty state at /c) and React re-renders seeded before paint. */
 export function useChatSeeded(chatId: string): boolean {
   const store = useChatStore();
   return useSyncExternalStore(

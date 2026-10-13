@@ -12,16 +12,18 @@ export function proxy(request: NextRequest) {
     }
     return NextResponse.next();
   }
+  // No landing page: the root opens a new chat, in one hop for a new visitor rather than through /c.
+  const root = request.nextUrl.pathname === "/";
   const hasCookie = SESSION_COOKIES.some((name) => request.cookies.has(name));
   if (!hasCookie && process.env.E2E !== "1") {
     const url = request.nextUrl.clone();
     url.pathname = "/api/guest";
     url.search = "";
-    url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+    url.searchParams.set("next", (root ? "/c" : request.nextUrl.pathname) + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
   // `/c/new` from old bookmarks and links goes to /c, where a new chat lives until its first send.
-  if (request.nextUrl.pathname === "/c/new") {
+  if (root || request.nextUrl.pathname === "/c/new") {
     const url = request.nextUrl.clone();
     url.pathname = "/c";
     return NextResponse.redirect(url, 307);
@@ -33,5 +35,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/c/:path*", "/settings", "/api/:path*"],
+  matcher: ["/", "/c/:path*", "/settings", "/api/:path*"],
 };

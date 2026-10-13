@@ -10,6 +10,7 @@ import { setPendingChat } from "@client/store/sidebar-store";
 import { useChatActions } from "./chat-context";
 import { MessageRow } from "./message-row";
 import { clearSearchHit, onSearchHit, searchHitFor } from "./search-reveal";
+import { NewChatPrompt } from "./thread-skeleton";
 
 /** A message waiting for the streaming reply to end: shown where it will land, editable, removable. */
 function QueuedRow({ item }: { item: QueuedMessage }) {
@@ -212,9 +213,7 @@ export const MessageList = forwardRef<MessageListHandle, { chatId: string; onFol
         >
           <div className="mx-auto flex w-full max-w-thread flex-col gap-5 safe-x py-4 md:py-6">
             {chat.messageIds.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center py-16 text-center text-small text-muted-foreground">
-                Ask anything. Replies keep streaming even if you switch apps.
-              </div>
+              <NewChatPrompt />
             ) : (
               chat.messageIds.map((id) => (
                 <Fragment key={id}>
