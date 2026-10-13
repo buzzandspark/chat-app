@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BusyError, MissingUserMessageError } from "@relay/engine";
+import { BusyError, MissingUserMessageError, type StartOutcome } from "@relay/engine";
 import { BudgetExceededError } from "@relay/quota";
 import { SCENARIO_NAMES } from "@relay/scenarios";
 import { requireUser } from "@server/current-user";
@@ -20,8 +20,9 @@ vi.mock("@server/current-user", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@server/current-user")>()),
   requireUser: vi.fn(),
 }));
-const start = vi.hoisted(() => vi.fn(() => ({ created: true })));
-vi.mock("@server/relay", () => ({ getRelay: vi.fn(() => ({ engine: { owner: () => null, start, resume: () => ({ kind: "gone" }) }, store: { has: () => false } })) }));
+const start = vi.hoisted(() => vi.fn((): StartOutcome => ({ created: true })));
+const owner = vi.hoisted(() => vi.fn((): string | null => null));
+vi.mock("@server/relay", () => ({ getRelay: vi.fn(() => ({ engine: { owner, start, resume: () => ({ kind: "gone" }) }, store: { has: () => false } })) }));
 vi.mock("@server/instance-settings", () => ({ guestsBlocked: () => false }));
 
 function send(role: UserRole, extra: Record<string, unknown>): Promise<Response> {
@@ -98,5 +99,16 @@ describe("POST /api/chat retrying a reply", () => {
     const res = await send("user", { text: undefined });
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "missing_user_message" });
+  });
+});
+
+describe("POST /api/chat for an existing generation", () => {
+  it("refuses to attach anyone but the generation's owner", async () => {
+    owner.mockReturnValue("someone-else");
+    start.mockReturnValueOnce({ created: false, reason: "exists" });
+    const res = await send("user", {});
+    owner.mockReturnValue(null);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "forbidden" });
   });
 });
