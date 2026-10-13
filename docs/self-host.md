@@ -80,7 +80,7 @@ The client address keys rate limits and guest budgets. With `TRUSTED_IP_HEADER` 
 
 ## Cost caps
 
-Each invited user has an all-time cost cap in USD (`users.cost_cap_usd`). Over the cap, sends return `quota_exceeded`. Raise or clear the cap in the admin console.
+Each invited user has an all-time cost cap in USD (`users.cost_cap_usd`). A send starts only if its estimated input plus every output token it may use (`max_tokens` 16,000) fits under the cap beside the same worst case of the user's running replies; otherwise it returns `quota_exceeded`. Each user runs at most 3 replies at once (Explore forks not counted) and gets "Busy right now" past that. Raise or clear the cap in the admin console.
 
 A new user whose cap field is left blank gets `DEFAULT_COST_CAP_USD` (default 5). No cap is an explicit choice: the No cap box when creating, or `none` in Edit cap; the API takes the string `"none"` and refuses `null`. Spend under no cap is bounded only by your Anthropic account.
 
@@ -110,7 +110,7 @@ Each budget fills with spend and drains continuously at its daily rate. A guest 
 - an address whose guest sends an over-long prompt of machine payload (under 1.2 bytes of UTF-8 a token, such as base64) has its budget filled to two days' worth, which refuses its guests for about a day
 - a guest sends at most 12 replies, forks or declared winners a minute and an address 40; a guest rewrites Explore options at most 10 times a minute and an address 30
 
-With the defaults one guest reply holds at most about $0.012 and one Explore call about $0.007. Guests together spend at most about twice `GUEST_ALL_USD_PER_DAY` in any 24 hours (a full budget, then a day of draining) and about 30 times it in a 30-day month: $20 and $300 with the defaults. Set a monthly spend limit on the API key's workspace in the Anthropic Console as a backstop. Invited users have none of these limits beyond their own cost cap.
+With the defaults one guest reply holds at most about $0.012 and one Explore call about $0.007. Guests together spend at most about twice `GUEST_ALL_USD_PER_DAY` in any 24 hours (a full budget, then a day of draining) and about 30 times it in a 30-day month: $20 and $300 with the defaults. Set a monthly spend limit on the API key's workspace in the Anthropic Console as a backstop. Invited users have none of these limits beyond their own cost cap and running limit.
 
 ## Trying the limits without spending
 

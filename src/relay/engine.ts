@@ -45,7 +45,7 @@ export class ForbiddenError extends Error {
     this.name = "ForbiddenError";
   }
 }
-/** A guest has as many replies running as it may, or guests together do. */
+/** A user has as many replies running as they may, or guests together do. */
 export class BusyError extends Error {
   constructor(public retryAfterMs = 10_000) {
     super("Too many replies running; try again in a moment");
@@ -105,6 +105,8 @@ export interface EngineOptions {
   afterDone?: (info: ReplyDoneInfo) => void;
   /** Live replies running at once for one guest and for all guests together; a fork of a fan-out takes half of one. */
   guestRunning?: { perGuest: number; total: number };
+  /** Live replies running at once for one invited user or admin; forks of a fan-out do not count. */
+  userRunning?: number;
 }
 
 export interface StartInput {
@@ -187,7 +189,7 @@ interface Active {
   maxTokens: number;
   /** The user message this start wrote, which a refused guest send removes again. */
   insertedUserMessageId: string | null;
-  /** Half slots a billable guest run takes: two for a reply, one for a fork. Zero for everyone else. */
+  /** Half slots a billable run takes: two for a reply, one for a guest's fork, none for an invited user's fork. */
   units: number;
   /** False while a guest's fork waits for a slot; `slot` settles once it holds one or is aborted. */
   holding: boolean;
@@ -210,6 +212,7 @@ export class Engine {
   private isDraining: () => boolean;
   private afterDone: ((info: ReplyDoneInfo) => void) | null;
   private guestRunning: { perGuest: number; total: number };
+  private userRunning: number;
   private active = new Map<string, Active>();
   /** Owners of refused guest sends whose rows are gone, while their buffers last. */
   private discarded = new Map<string, string>();
@@ -228,6 +231,7 @@ export class Engine {
     this.isDraining = options.isDraining ?? (() => false);
     this.afterDone = options.afterDone ?? null;
     this.guestRunning = options.guestRunning ?? { perGuest: 2, total: 50 };
+    this.userRunning = options.userRunning ?? 3;
   }
 
   /** Idempotent on `generationId`: a duplicate returns `created: false`. */
@@ -263,8 +267,8 @@ export class Engine {
     });
     const billable = isBillableProvider(provider.name);
     const guest = input.userRole === "guest";
-    const units = billable && guest ? (input.fanOut ? 1 : 2) : 0;
-    const holding = units === 0 || this.fits(input.userId, units);
+    const units = !billable ? 0 : !input.fanOut ? 2 : guest ? 1 : 0;
+    const holding = units === 0 || this.fits(input.userId, guest, units);
     if (!holding && !input.fanOut) throw new BusyError();
     // A scripted or replayed run spends nothing, so it is neither metered against the cap nor refused by it.
     // A retry's text is already in the chat; count it once.
@@ -436,16 +440,17 @@ export class Engine {
     return { created: true };
   }
 
-  /** Whether `units` more half slots fit under the guest's share and all guests' together. */
-  private fits(userId: string, units: number): boolean {
+  /** Whether `units` more half slots fit under the user's share and, for a guest, all guests' together. */
+  private fits(userId: string, guest: boolean, units: number): boolean {
     let mine = 0;
-    let all = 0;
+    let guests = 0;
     for (const a of this.active.values()) {
       if (!a.holding || a.units === 0) continue;
-      all += a.units;
+      if (a.guest) guests += a.units;
       if (a.userId === userId) mine += a.units;
     }
-    return mine + units <= this.guestRunning.perGuest * 2 && all + units <= this.guestRunning.total * 2;
+    if (!guest) return mine + units <= this.userRunning * 2;
+    return mine + units <= this.guestRunning.perGuest * 2 && guests + units <= this.guestRunning.total * 2;
   }
 
   /** Resolves once a waiting fork holds a slot, or once it is aborted. */
@@ -464,7 +469,7 @@ export class Engine {
   /** Hands freed slots to waiting forks in the order they asked. */
   private pump(): void {
     for (const w of [...this.waiting]) {
-      if (!this.fits(w.active.userId, w.active.units)) continue;
+      if (!this.fits(w.active.userId, w.active.guest, w.active.units)) continue;
       w.active.holding = true;
       w.resolve();
     }

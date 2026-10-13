@@ -343,8 +343,7 @@ describe("Engine", () => {
   });
 
   it("stops every running reply of a user once spend reaches the cap, keeping the text so far", async () => {
-    // A reply is metered only when its user has a cap at the start. The two inputs alone ($0.0016 each) pass
-    // $0.003, so the cap drops to that only once both replies have text.
+    // The two inputs alone ($0.0016 each) pass $0.003, so the cap drops to that only once both replies have text.
     db.update(users).set({ costCapUsd: 1 }).where(eq(users.id, USER)).run();
     const slow = makeEngine(1);
     const a = input({ scenario: "long_reply" });
@@ -807,6 +806,24 @@ describe("Engine: guests' running replies", () => {
     engine.start(guest("g1"));
     engine.start(guest("g2"));
     expect(() => engine.start(guest("g3"))).toThrow(BusyError);
+    expect(engine.start(input({ scenario: "slow_tokens" }))).toEqual({ created: true });
+    await engine.drain();
+  });
+});
+
+describe("Engine: invited users' running replies", () => {
+  it("runs three live replies at once per invited user, refusing a fourth as busy, while their forks are not held back", async () => {
+    const requests: ProviderRequest[] = [];
+    const slow = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
+    engine = new Engine({ db, store, providers: () => ({ name: "anthropic", stream: (req, opts) => (requests.push(req), slow.stream(req, opts)) }) });
+    const replies = [1, 2, 3].map(() => input({ scenario: "slow_tokens" }));
+    for (const r of replies) expect(engine.start(r)).toEqual({ created: true });
+    expect(() => engine.start(input({ scenario: "slow_tokens" }))).toThrow(BusyError);
+    for (let i = 0; i < 10; i++) expect(engine.start(input({ scenario: "slow_tokens", fanOut: true }))).toEqual({ created: true });
+    await waitFor(() => requests.length === 13);
+    seedUser(db, "u2");
+    expect(engine.start(input({ userId: "u2", scenario: "slow_tokens" }))).toEqual({ created: true });
+    await engine.stopAndWait(replies[0]!.generationId);
     expect(engine.start(input({ scenario: "slow_tokens" }))).toEqual({ created: true });
     await engine.drain();
   });
