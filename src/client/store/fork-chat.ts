@@ -1,12 +1,12 @@
 "use client";
 import type { ForkRequest } from "@relay/forks";
-import { busyText } from "@client/components/chat/rate-limit";
 import { readJson, type ApiError, type DuplicateResponse, type ForkResponse } from "@shared/api";
 import { MAX_FORKS, type ForkOption } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import type { ChatStore } from "./chat-store";
 import { CAP } from "./forks";
 import { prefetchChat } from "./prefetch";
+import { busyText } from "./rate-limit";
 import { getSidebarStore, setPendingChat } from "./sidebar-store";
 
 // Loaded with the fork sheet or a reply's menu, not the chat route.

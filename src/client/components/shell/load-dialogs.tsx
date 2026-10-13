@@ -3,7 +3,7 @@ import type { ComponentType } from "react";
 import type { ChatSummary } from "@client/store/sidebar-store";
 import { chunk } from "../ui/lazy-chunk";
 import type { ModalRender } from "../ui/modal-manager";
-import type { ChatDialogProps } from "./chat-dialogs";
+import type { ChatDialogProps } from "./dialogs/chat-dialogs";
 
 /** Every dialog is in this one chunk, fetched in idle time after the page loads, so the first open waits for nothing. */
 export const loadDialogs = chunk(() => import("./dialogs"));

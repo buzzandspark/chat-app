@@ -4,8 +4,8 @@ import { useNow } from "@client/hooks/use-now";
 import { Markdown } from "@client/markdown/Markdown";
 import { createMessageState } from "@client/store/chat-store";
 import { ChatStoreProvider } from "@client/store/context";
-import { ThinkingBlock } from "../chat/thinking-block";
-import { StatusFooter } from "../chat/status-footer";
+import { ThinkingBlock } from "../chat/assistant-message/thinking-block";
+import { StatusFooter } from "../chat/assistant-message/status-footer";
 import { UserMessage } from "../chat/user-message";
 
 const SAMPLE_MD = `## Heading\n\nSome **bold** and _italic_ text with \`code\`.\n\n- one\n- two\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n\`\`\`ts\nconst x: number = 1;\n\`\`\``;

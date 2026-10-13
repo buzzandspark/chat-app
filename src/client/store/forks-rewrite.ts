@@ -1,8 +1,8 @@
 "use client";
-import { busyText } from "@client/components/chat/rate-limit";
 import { readJson, type RewriteResponse } from "@shared/api";
 import type { ForkOption } from "@shared/forks";
 import { CAP, logOptionsTrace } from "./forks";
+import { busyText } from "./rate-limit";
 
 // The fork sheet's only call, kept out of forks.ts so it loads with the sheet's chunk, not the chat route.
 
