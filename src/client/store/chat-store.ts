@@ -159,12 +159,14 @@ export function createMessageState(partial: Partial<MessageState> & Pick<Message
   };
 }
 
-/** The accumulator only omits empty blocks, which are trailing in practice, so position and index agree. */
+/** Maps stream block indexes to the positions `toClientBlocks` renders, where a fallback before any text has none. */
 function blockIndexFromContent(content: readonly StoredContentBlock[]): Map<number, number> {
   const map = new Map<number, number>();
   let pos = 0;
+  let hasText = false;
   content.forEach((b, i) => {
-    if (b.type === "text" || b.type === "thinking" || b.type === "redacted_thinking" || b.type === "fallback") map.set(i, pos++);
+    if (b.type === "text" || b.type === "thinking" || b.type === "redacted_thinking" || (b.type === "fallback" && hasText)) map.set(i, pos++);
+    if (b.type === "text" && b.text.length > 0) hasText = true;
   });
   return map;
 }

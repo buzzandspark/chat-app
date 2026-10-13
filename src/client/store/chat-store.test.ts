@@ -292,6 +292,20 @@ describe("ChatStore", () => {
       expect(textOf(store.getMessage("a1")!.blocks)).toBe("final");
     });
 
+    it("routes deltas to the right blocks after a reload when a fallback came before any text", () => {
+      const { store, runFrame } = makeStore();
+      const fallback: StoredContentBlock = { type: "fallback", from: { model: "claude-sonnet-5-5" }, to: { model: "claude-opus-4-8" }, trigger: { type: "refusal", category: "cyber" } };
+      const thinking: StoredContentBlock = { type: "thinking", thinking: "th", signature: "" };
+      store.seedChat("c1", "T", [row({ id: "a1", role: "assistant", status: "streaming", generationId: "g1", content: [fallback, thinking, text("an")], lastSeq: 5 })]);
+      store.enqueue(ev(6, { type: "thinking_delta", index: 1, text: "ink" }));
+      store.enqueue(ev(7, { type: "text_delta", index: 2, text: "swer" }));
+      runFrame();
+      expect(store.getMessage("a1")!.blocks).toEqual([
+        { type: "thinking", text: "think" },
+        { type: "text", text: "answer" },
+      ]);
+    });
+
     it("ignores a snapshot whose seq is behind the local state and applies only its status", () => {
       const { store, runFrame } = makeStore();
       seed(store);
