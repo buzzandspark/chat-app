@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, max } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, max, notExists } from "drizzle-orm";
 import type { Db } from "@db/client";
 import { chats, generations, messages, usageEvents } from "@db/schema";
 import { uuidv7 } from "@shared/id";
@@ -189,6 +189,8 @@ interface Active {
   maxTokens: number;
   /** The user message this start wrote, which a refused guest send removes again. */
   insertedUserMessageId: string | null;
+  /** True when this start created the chat, which a refused guest send removes again if nothing else is in it. */
+  createdChat: boolean;
   /** Half slots a billable run takes: two for a reply, one for a guest's fork, none for an invited user's fork. */
   units: number;
   /** False while a guest's fork waits for a slot; `slot` settles once it holds one or is aborted. */
@@ -278,6 +280,7 @@ export class Engine {
     const now = new Date(this.now());
     let conflict: ReplaceConflict | null;
     let insertedUserMessageId: string | null = null;
+    let createdChat = false;
     try {
       conflict = this.db.transaction((tx): ReplaceConflict | null => {
         const chat = tx.select().from(chats).where(eq(chats.id, input.chatId)).get();
@@ -312,6 +315,7 @@ export class Engine {
               lastMessageAt: now,
             })
             .run();
+          createdChat = true;
         } else {
           tx.update(chats)
             .set({
@@ -419,6 +423,7 @@ export class Engine {
       guest,
       maxTokens: guest ? GUEST_MAX_TOKENS : MAX_TOKENS,
       insertedUserMessageId,
+      createdChat,
       units,
       holding,
       slot: null,
@@ -888,6 +893,10 @@ export class Engine {
       this.db.transaction((tx) => {
         tx.delete(generations).where(eq(generations.id, active.id)).run();
         tx.delete(messages).where(inArray(messages.id, ids)).run();
+        if (active.createdChat) {
+          const others = tx.select({ id: messages.id }).from(messages).where(eq(messages.chatId, active.chatId));
+          tx.delete(chats).where(and(eq(chats.id, active.chatId), notExists(others))).run();
+        }
       });
     } catch (err) {
       console.error(`[engine] discarding ${active.id} failed`, err);

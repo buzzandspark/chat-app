@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { generations, messages, spendBuckets, usageEvents, users } from "@db/schema";
+import { chats, generations, messages, spendBuckets, usageEvents, users } from "@db/schema";
 import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
 import { Budgets } from "./budgets";
@@ -703,6 +703,15 @@ describe("Engine: guest prompts", () => {
     expect(engine.owner(refused.generationId)).toBe("g1");
     expect(engine.resume(refused.generationId, "g1")).toEqual({ kind: "live" });
     expect(() => engine.resume(refused.generationId, USER)).toThrow(ForbiddenError);
+  });
+
+  it("removes the chat a guest's first send created when that send is refused for good", async () => {
+    counted = 60_001;
+    const inp = guestInput("A long conversation in plain words. ".repeat(6_000));
+    engine.start(inp);
+    expect((await collectUntilTerminal(store, inp.generationId)).at(-1)).toMatchObject({ type: "error", error: { kind: "context_full" } });
+    expect(db.select().from(chats).where(eq(chats.id, inp.chatId)).all()).toEqual([]);
+    expect(engine.resume(inp.generationId, "g1")).toEqual({ kind: "live" });
   });
 
   it("stops a guest reply whose message_start bills a prompt over the limit, charging what it billed", async () => {
