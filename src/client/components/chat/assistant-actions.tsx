@@ -27,7 +27,7 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
   const [error, setError] = useState<string | null>(null);
   const store = useChatStore();
   const router = useRouter();
-  // Fork from here makes another fork of the main chat, so it's offered while the main chat has room for one.
+  // Copy from here makes another fork of the main chat, so it's offered while the main chat has room for one.
   const parentId = useChat(message.chatId).forkedFrom ?? message.chatId;
   const roomForFork = useSidebarChats().filter((c) => c.forkedFrom === parentId).length < MAX_FORKS;
   const onFork = () => {
@@ -62,7 +62,7 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
             <MoreHorizontal />
           </IconButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent align="start" className="w-max">
           <DropdownMenuItem onSelect={onCopy} className="min-h-11">
             {copied ? <Check /> : <Copy />}
             {copied ? "Copied" : "Copy"}
@@ -76,7 +76,7 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
           {roomForFork ? (
             <DropdownMenuItem onSelect={onFork} className="min-h-11">
               <GitFork />
-              Fork from here
+              Copy from here
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>

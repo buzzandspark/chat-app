@@ -113,6 +113,7 @@ describe("SidebarList forks", () => {
   afterEach(() => {
     cleanup();
     nav.pathname = "/";
+    vi.unstubAllGlobals();
   });
 
   it("marks the parent and hides its forks until it or one of them is open", () => {
@@ -138,5 +139,32 @@ describe("SidebarList forks", () => {
     expect(links).toEqual(["SQLite", "Postgres"]);
     expect(screen.getByRole("link", { name: "Postgres" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Databases, has forks" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("offers Declare winner on a fork's ⋯ and Delete forks on the parent's", async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    nav.pathname = `/c/${forkB}`;
+    render(
+      <ModalProvider>
+        <SidebarList initialChats={withForks} />
+      </ModalProvider>,
+    );
+    const items = async (name: string) => {
+      fireEvent.click(screen.getByRole("button", { name }));
+      await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
+      const out = screen.getAllByRole("menuitem").map((m) => m.textContent);
+      press("Escape");
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+      return out;
+    };
+    expect(await items("Actions for Postgres")).toEqual(["Pin", "Rename", "Declare winner", "Delete"]);
+    expect(await items("Actions for Databases")).toEqual(["Pin", "Rename", "Delete", "Delete forks", "Delete chat and forks"]);
   });
 });

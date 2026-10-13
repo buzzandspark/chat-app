@@ -1,5 +1,5 @@
 "use client";
-import { ListX, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { GitFork, ListX, MoreHorizontal, Pencil, Pin, PinOff, Trash2, Trophy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { Ref } from "react";
 import { IconButton } from "../ui/icon-button";
@@ -14,6 +14,8 @@ export function ChatItemMenu({
   onDelete,
   onTogglePin,
   onDeleteAll,
+  onDeclareWinner,
+  onDeleteForks,
   defaultOpen,
   triggerRef,
   onCloseAutoFocus,
@@ -25,6 +27,10 @@ export function ChatItemMenu({
   onTogglePin?: () => void;
   /** A main chat with forks: deletes it and every fork. */
   onDeleteAll?: () => void;
+  /** A fork: it stays alone, the main chat and the other forks are deleted. */
+  onDeclareWinner?: () => void;
+  /** A main chat with forks: deletes the forks, the main chat stays. */
+  onDeleteForks?: () => void;
   /** True when the user pressed the stand-in before this chunk had loaded. */
   defaultOpen?: boolean;
   /** The row's intent: it swaps back to the stand-in once Radix has returned focus here (useIntent's `closed`). */
@@ -38,7 +44,7 @@ export function ChatItemMenu({
           <MoreHorizontal />
         </IconButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onCloseAutoFocus={onCloseAutoFocus}>
+      <DropdownMenuContent align="end" className="w-max" onCloseAutoFocus={onCloseAutoFocus}>
         {onTogglePin ? (
           <DropdownMenuItem className="min-h-11" onSelect={onTogglePin}>
             {pinned ? <PinOff /> : <Pin />}
@@ -49,10 +55,22 @@ export function ChatItemMenu({
           <Pencil />
           Rename
         </DropdownMenuItem>
+        {onDeclareWinner ? (
+          <DropdownMenuItem className="min-h-11" onSelect={onDeclareWinner}>
+            <Trophy className="text-warning" />
+            Declare winner
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem className="min-h-11" variant="destructive" onSelect={onDelete}>
           <Trash2 />
           Delete
         </DropdownMenuItem>
+        {onDeleteForks ? (
+          <DropdownMenuItem className="min-h-11" variant="destructive" onSelect={onDeleteForks}>
+            <GitFork />
+            Delete forks
+          </DropdownMenuItem>
+        ) : null}
         {onDeleteAll ? (
           <DropdownMenuItem className="min-h-11" variant="destructive" onSelect={onDeleteAll}>
             <ListX />

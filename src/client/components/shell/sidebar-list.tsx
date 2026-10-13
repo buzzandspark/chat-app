@@ -42,6 +42,8 @@ function ChatItemMenuOnIntent({
   onDelete: () => void;
   onTogglePin: () => void;
   onDeleteAll?: () => void;
+  onDeclareWinner?: () => void;
+  onDeleteForks?: () => void;
 }) {
   if (intent.failed) throw intent.failed.error;
   const ChatItemMenu = intent.loaded;
@@ -102,6 +104,22 @@ const SidebarRow = memo(function SidebarRow({
       ),
     [chat, currentChatId, show],
   );
+  const onDeclareWinner = useCallback(
+    () =>
+      loadDialogs().then(
+        ({ DeclareWinnerDialog }) => show(({ open, close }) => <DeclareWinnerDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
+        () => {},
+      ),
+    [chat, currentChatId, show],
+  );
+  const onDeleteForks = useCallback(
+    () =>
+      loadDialogs().then(
+        ({ DeleteForksDialog }) => show(({ open, close }) => <DeleteForksDialog chat={chat} currentChatId={currentChatId} open={open} onOpenChange={(o) => !o && close()} />),
+        () => {},
+      ),
+    [chat, currentChatId, show],
+  );
   // Pin: the row moves at once; a refused request, or one that never reached the server (offline),
   // moves it back (patchChatOptimistic).
   const onTogglePin = useCallback(() => void patchChatOptimistic(getSidebarStore(), chat.id, { pinned: !chat.pinned }), [chat.id, chat.pinned]);
@@ -151,6 +169,8 @@ const SidebarRow = memo(function SidebarRow({
             onDelete={onDelete}
             onTogglePin={onTogglePin}
             onDeleteAll={forked ? onDeleteAll : undefined}
+            onDeclareWinner={chat.forkedFrom ? onDeclareWinner : undefined}
+            onDeleteForks={forked ? onDeleteForks : undefined}
           />
         </ChunkBoundary>
       </div>
