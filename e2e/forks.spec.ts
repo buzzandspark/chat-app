@@ -108,6 +108,7 @@ test.describe("explore options", () => {
     await instruction.fill("Assess performance");
     await instruction.press("Enter");
     await expect(dialog.getByLabel("First message").first()).toHaveValue(/^Assess performance/);
+    await expect(instruction).toHaveValue("");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Start 2 chats" })).toBeEnabled();
     await instruction.press("Shift+Enter");

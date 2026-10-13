@@ -46,6 +46,7 @@ export function ForkSheet({ open, onOpenChange, messageId, options, onFork }: Fo
       return;
     }
     setItems((list) => list.map((it, i) => (out.options[i] ? { ...it, ...out.options[i] } : it)));
+    setInstruction("");
   };
 
   const submit = async () => {
