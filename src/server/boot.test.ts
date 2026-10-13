@@ -12,6 +12,8 @@ vi.mock("@db/client", () => {
 vi.mock("@auth/admin-seed", () => ({ seedAdmin: vi.fn(async () => undefined) }));
 vi.mock("@relay/orphans", () => ({ settleOrphan: vi.fn() }));
 vi.mock("./shutdown", () => ({ installSignalHandlers: vi.fn(), onShutdown: vi.fn() }));
+const { sentryInit } = vi.hoisted(() => ({ sentryInit: vi.fn() }));
+vi.mock("@sentry/node", () => ({ init: sentryInit, flush: vi.fn() }));
 
 const g = globalThis as unknown as { __chatBooted?: boolean };
 
@@ -133,6 +135,15 @@ describe("boot: a deployment's configuration", () => {
     delete g.__chatBooted;
     await bootWith({ NODE_ENV: "production", ADMIN_EMAIL: "a@b.co", ADMIN_PASSWORD: "1234567890" });
     expect(runMigrations).toHaveBeenCalledOnce();
+  });
+
+  it("keeps request bodies, cookies, headers and the client address out of Sentry", async () => {
+    await bootWith({ NODE_ENV: "production", SENTRY_DSN: "https://key@sentry.example/1" });
+    expect(sentryInit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dataCollection: expect.objectContaining({ userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false }),
+      }),
+    );
   });
 
   it("leaves development and the e2e harness alone", async () => {

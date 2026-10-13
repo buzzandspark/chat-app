@@ -49,6 +49,17 @@ export async function boot(): Promise<void> {
     Sentry.init({
       dsn: env.SENTRY_DSN,
       tracesSampleRate: 0,
+      // Sentry's defaults send request bodies (passwords, messages), cookies (the session), headers and the client IP.
+      dataCollection: {
+        userInfo: false,
+        cookies: false,
+        httpHeaders: false,
+        httpBodies: [],
+        urlQueryParams: false,
+        stackFrameVariables: false,
+        genAI: { inputs: false, outputs: false },
+        databaseQueryData: false,
+      },
       environment: env.NODE_ENV,
       beforeSend: redactInviteTokens,
       beforeSendTransaction: redactInviteTokens,
