@@ -4,7 +4,7 @@ import { generations, messages, spendBuckets, usageEvents, users } from "@db/sch
 import { uuidv7 } from "@shared/id";
 import type { Db } from "@db/client";
 import { Budgets } from "./budgets";
-import { BusyError, Engine, ForbiddenError, type ReplyDoneInfo, type StartInput } from "./engine";
+import { BusyError, Engine, ForbiddenError, MissingUserMessageError, type ReplyDoneInfo, type StartInput } from "./engine";
 import { ProviderStatusError } from "./providers/replay";
 import { ScriptedProvider } from "./providers/scripted";
 import type { Provider, ProviderRequest, ProviderStreamOptions } from "./providers/types";
@@ -323,14 +323,23 @@ describe("Engine", () => {
     expect(() => engine.start(input())).toThrow(QuotaExceededError);
   });
 
+  it("refuses a retry whose user message the chat does not have with MissingUserMessageError", () => {
+    expect(() => makeEngine(0).start(input({ text: undefined }))).toThrow(MissingUserMessageError);
+    expect(db.select().from(messages).all()).toEqual([]);
+  });
+
   it("stops every running reply of a user once spend reaches the cap, keeping the text so far", async () => {
-    // Room for the input and a few hundred characters of output, not for two long replies.
-    db.update(users).set({ costCapUsd: 0.003 }).where(eq(users.id, USER)).run();
+    // A reply is metered only when its user has a cap at the start. The two inputs alone ($0.0016 each) pass
+    // $0.003, so the cap drops to that only once both replies have text.
+    db.update(users).set({ costCapUsd: 1 }).where(eq(users.id, USER)).run();
     const slow = makeEngine(1);
     const a = input({ scenario: "long_reply" });
     const b = input({ scenario: "long_reply" });
     slow.start(a);
     slow.start(b);
+    const hasText = (id: string) => store.get(id)?.events.some((e) => e.type === "text_delta") ?? false;
+    await waitFor(() => hasText(a.generationId) && hasText(b.generationId));
+    db.update(users).set({ costCapUsd: 0.003 }).where(eq(users.id, USER)).run();
     const ended = await Promise.all([a, b].map((inp) => collectUntilTerminal(store, inp.generationId)));
     for (const [i, inp] of [a, b].entries()) {
       const events = ended[i]!;
