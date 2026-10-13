@@ -103,7 +103,7 @@ Guest spend is also charged to shared daily budgets, kept in the database so the
 | --- | --- | --- |
 | `GUEST_IP_USD_PER_DAY` | 1 | guests from one address (an IPv4 address or an IPv6 /64) |
 | `GUEST_IP48_USD_PER_DAY` | 3 | guests from one IPv6 /48 |
-| `GUEST_ALL_USD_PER_DAY` | 10 | all guests |
+| `GUEST_ALL_USD_PER_DAY` | 100 | all guests |
 
 Each budget fills with spend and drains continuously at its daily rate. A guest is charged to the address that created it. While a guest call runs it holds its worst-case cost (its prompt at the cache-write rate plus every output token it may use) against the guest's cap and each of its budgets, and a stopped or interrupted reply is never charged more output than that, so neither the cap nor a budget is exceeded. The one exception is a reply cut off by a crash or SIGKILL, estimated at boot from its saved text: it can pass its hold by under a cent. A reply, fork or option rewrite that does not fit gets "Busy right now" with the wait (a budget) or the spent-budget message (the cap), and Explore skips detection.
 
@@ -114,7 +114,7 @@ Each budget fills with spend and drains continuously at its daily rate. A guest 
 - an address whose guest sends an over-long prompt of machine payload (under 1.2 bytes of UTF-8 a token, such as base64) has its budget filled to two days' worth, which refuses its guests for about a day
 - a guest sends at most 12 replies, forks or declared winners a minute and an address 40; a guest rewrites Explore options at most 10 times a minute and an address 30
 
-With the defaults one guest reply holds at most about $0.012 and one Explore call about $0.007. Guests together spend at most about twice `GUEST_ALL_USD_PER_DAY` in any 24 hours (a full budget, then a day of draining) and about 30 times it in a 30-day month: $20 and $300 with the defaults. Set a monthly spend limit on the API key's workspace in the Anthropic Console as a backstop. Invited users have none of these limits beyond their own cost cap and running limit.
+With the defaults one guest reply holds at most about $0.012 and one Explore call about $0.007. Guests together spend at most about twice `GUEST_ALL_USD_PER_DAY` in any 24 hours (a full budget, then a day of draining) and about 30 times it in a 30-day month: $200 and $3,000 with the defaults. Set a monthly spend limit on the API key's workspace in the Anthropic Console as a backstop. Invited users have none of these limits beyond their own cost cap and running limit.
 
 ## Trying the limits without spending
 

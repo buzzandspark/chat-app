@@ -21,7 +21,7 @@ const schema = z.object({
   /** USD a day that the guests from one address (an IPv6 /64), from one IPv6 /48, and all guests together may spend. */
   GUEST_IP_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(1)),
   GUEST_IP48_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(3)),
-  GUEST_ALL_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(10)),
+  GUEST_ALL_USD_PER_DAY: z.preprocess(blankAsUnset, z.coerce.number().positive().default(100)),
   /** The largest prompt a guest may send, counted exactly before it is sent; capped below Haiku's long-context tier at 100k tokens. */
   GUEST_MAX_PROMPT_TOKENS: z.preprocess(blankAsUnset, z.coerce.number().int().positive().max(90_000).default(60_000)),
   /** The header the proxy sets to the one client address (x-real-ip on Railway). */
