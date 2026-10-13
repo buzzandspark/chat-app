@@ -120,7 +120,7 @@ describe("OptionsService", () => {
     expect(live.asked).toEqual([]);
   });
 
-  it("caps a guest's running Haiku calls at two and all guests' at a total: past that a detection is skipped and a rewrite is busy", async () => {
+  it("caps a guest's running Haiku calls at two and all guests' at a total: past that a detection waits for a slot and a rewrite is busy", async () => {
     db.update(users).set({ role: "guest" }).where(eq(users.id, USER)).run();
     seedUser(db, "g2", { role: "guest" });
     const live = fakeLive(20);
@@ -132,8 +132,8 @@ describe("OptionsService", () => {
     const last = service.rewrite("g2", message, TWO, "shorter");
     expect(await service.rewrite("g2", message, TWO, "longer").catch((e: unknown) => e)).toBeInstanceOf(BusyError);
     await last;
-    expect(await Promise.all(replies.map((r) => service.awaitOptions(r.messageId, 1000)))).toEqual([TWO, TWO, null]);
-    expect(live.asked).toEqual(["A or B", "A or B", "shorter"]);
+    expect(await Promise.all(replies.map((r) => service.awaitOptions(r.messageId, 1000)))).toEqual([TWO, TWO, TWO]);
+    expect(live.asked).toEqual(["A or B", "A or B", "shorter", "A or B"]);
     expect((await service.rewrite(USER, message, TWO, "again")).options).toHaveLength(2);
   });
 

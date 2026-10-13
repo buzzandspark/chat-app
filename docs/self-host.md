@@ -104,7 +104,7 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:4010 ANTHROPIC_API_KEY=mock GUEST_ALL_USD_PE
 ```
 
 - Chat replies replay `fixtures/claude-haiku-5-5/normal.jsonl` under the requested model.
-- `MOCK_INPUT_TOKENS` and `MOCK_OUTPUT_TOKENS` set the usage every reply and Explore call reports, so each costs a known amount.
+- `MOCK_INPUT_TOKENS` and `MOCK_OUTPUT_TOKENS` set the usage every reply and Explore call reports, so each costs a known amount. `MOCK_INPUT_TOKENS` is also the count a guest's prompt gets from `count_tokens`; unset, the prompt is counted at 2.5 bytes a token.
 - `MOCK_DELAY_MS` waits between stream events, which keeps replies running long enough to hit the running limits.
 - Explore detection finds three options and a rewrite puts the instruction in front of each prompt; `MOCK_OPTIONS=truncated` cuts either answer off at `max_tokens`.
 - `MOCK_PORT` (default 4010) and `MOCK_HOST` (default 127.0.0.1) set where it listens. For the app in Docker, run it with `MOCK_HOST=0.0.0.0` and point `ANTHROPIC_BASE_URL` at `http://host.docker.internal:4010` (on Linux, also pass `--add-host=host.docker.internal:host-gateway` to `docker run`).

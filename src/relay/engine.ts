@@ -177,6 +177,8 @@ interface Active {
   /** False while a guest's fork waits for a slot; `slot` settles once it holds one or is aborted. */
   holding: boolean;
   slot: Promise<void> | null;
+  /** A waiting fork's prompt size: it is admitted against the cap once it holds a slot, not while it waits. */
+  admitBytes: number | null;
 }
 
 /** A generation runs as a detached promise that outlives the response. */
@@ -246,15 +248,9 @@ export class Engine {
     const holding = units === 0 || this.fits(input.userId, units);
     if (!holding && !input.fanOut) throw new BusyError();
     // A scripted or replayed run spends nothing, so it is neither metered against the cap nor refused by it.
-    if (billable) {
-      // A retry's text is already in the chat; count it once.
-      this.quota.admit(
-        input.userId,
-        input.generationId,
-        input.model,
-        this.promptBytes(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : Buffer.byteLength(chatText)),
-      );
-    }
+    // A retry's text is already in the chat; count it once.
+    const bytes = billable ? this.promptBytes(input.chatId, input.replaceFromMessageId) + (userRowExists ? 0 : Buffer.byteLength(chatText)) : 0;
+    if (billable && holding) this.quota.admit(input.userId, input.generationId, input.model, bytes);
 
     const now = new Date(this.now());
     let conflict: ReplaceConflict | null;
@@ -397,6 +393,7 @@ export class Engine {
       units,
       holding,
       slot: null,
+      admitBytes: billable && !holding ? bytes : null,
     };
     this.active.set(active.id, active);
     if (!holding) active.slot = this.slotFor(active);
@@ -448,17 +445,31 @@ export class Engine {
     }
   }
 
-  /** A guest's prompt is counted exactly before it is sent: over the limit it is refused, and the count tightens the guest's hold. */
+  /** A guest's prompt is counted exactly before it is sent (a waiting fork takes its hold first): over the limit it is refused, and the count tightens the hold. */
   private async fitGuestPrompt(active: Active, provider: Provider, request: ProviderRequest): Promise<RelayError | null> {
-    const tokens = provider.countTokens ? await provider.countTokens(request, { signal: active.controller.signal }) : null;
     try {
-      this.quota.fit(active.id, tokens);
+      if (active.admitBytes !== null) this.quota.admit(active.userId, active.id, request.model, active.admitBytes);
+      this.quota.fit(active.id, await this.countPrompt(active, provider, request));
       return null;
     } catch (err) {
       if (err instanceof PromptTooLongError) return { kind: "context_full", message: "This chat is too long to continue", retryable: false, status: 413 };
       if (err instanceof QuotaExceededError) return { kind: "quota_exceeded", message: "Spending cap reached", retryable: false };
       if (err instanceof BudgetExceededError) return { kind: "rate_limited", message: "Busy right now", retryable: true, retryAfterMs: err.retryAfterMs, status: 429 };
       throw err;
+    }
+  }
+
+  /** Null when the provider cannot count, or the count fails or stalls: the reply then goes ahead on the byte bound. */
+  private async countPrompt(active: Active, provider: Provider, request: ProviderRequest): Promise<number | null> {
+    if (!provider.countTokens) return null;
+    const signals = [active.controller.signal];
+    if (this.upstreamIdleMs > 0) signals.push(AbortSignal.timeout(this.upstreamIdleMs));
+    try {
+      return await provider.countTokens(request, { signal: AbortSignal.any(signals) });
+    } catch (err) {
+      if (active.controller.signal.aborted) throw err;
+      console.error(`[engine] token count failed for ${active.id}, using the byte bound`, err);
+      return null;
     }
   }
 

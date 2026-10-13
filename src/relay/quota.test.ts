@@ -100,6 +100,13 @@ describe("QuotaManager: guests", () => {
     expect(() => quota.admit("g1", "d", "claude-haiku-5-5", 0)).toThrow(BudgetExceededError);
   });
 
+  it("never cuts off an address key many guests share for one guest's payload", () => {
+    db.update(users).set({ budgetKeys: ["ip:unknown"] }).where(eq(users.id, "g1")).run();
+    quota.admit("g1", "a", "claude-haiku-5-5", 70_000);
+    expect(() => quota.fit("a", 66_000)).toThrow(PromptTooLongError);
+    expect(buckets()).toEqual({});
+  });
+
   it("reports a guest prompt that message_start bills over the limit", () => {
     quota.admit("g1", "a", "claude-haiku-5-5", 0);
     expect(quota.started("a", "claude-haiku-5-5", { inputTokens: 50_000, cacheReadTokens: 10_000, cacheWriteTokens: 0 })).toBe(true);

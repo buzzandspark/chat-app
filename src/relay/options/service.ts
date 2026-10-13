@@ -39,6 +39,7 @@ export class OptionsService {
   private now: () => number;
   private guestRunning: { perGuest: number; total: number };
   private running = new Map<string, number>();
+  private slotWaiters: { userId: string; resolve: () => void }[] = [];
   private inflight = new Map<string, Promise<ForkOption[] | null>>();
   private traces = new Map<string, OptionsTrace>();
   private progress = new Map<string, Tracked>();
@@ -102,7 +103,7 @@ export class OptionsService {
     const startedAt = performance.now();
     if (!chat || chat.forkedFrom || !info.text.trim() || !this.exploreOn(info.userId) || this.quota.spendBlock(info.userId) || !this.canFork(info.chatId)) return null;
     const messenger = this.messenger(info.scenario, info.billable);
-    const result = await this.charged(messenger, info.userId, info.generationId, "options", Buffer.byteLength(info.text), () => messenger.detect(info.text, onProgress)).catch(
+    const result = await this.charged(messenger, info.userId, info.generationId, "options", Buffer.byteLength(info.text), () => messenger.detect(info.text, onProgress), true).catch(
       (err: unknown) => {
         if (err instanceof QuotaExceededError || err instanceof BudgetExceededError) return null;
         throw err;
@@ -201,8 +202,8 @@ export class OptionsService {
   }
 
   /**
-   * Records what a call cost, an estimate when Haiku failed partway. Null, with no call, when a guest has as many running as it may;
-   * a guest's call holds its worst-case cost while it runs and throws when its cap or budgets cannot take that.
+   * Records what a call cost, an estimate when Haiku failed partway. A guest with as many running as it may waits for one to end, or with
+   * `wait` false gets null and no call; a guest's call holds its worst-case cost while it runs and throws when its cap or budgets cannot take that.
    */
   private async charged(
     messenger: OptionsMessenger,
@@ -211,10 +212,12 @@ export class OptionsService {
     iterationType: string,
     promptBytes: number,
     run: () => Promise<MessengerResult>,
+    wait = false,
   ): Promise<MessengerResult | null> {
     const billable = messenger.name === "haiku";
     const guest = billable && this.isGuest(userId);
-    if (guest && !this.holdSlot(userId)) return null;
+    if (guest && wait) await this.waitSlot(userId);
+    else if (guest && !this.holdSlot(userId)) return null;
     const hold = guest ? `options:${uuidv7()}` : null;
     try {
       if (hold) this.quota.admit(userId, hold, OPTIONS_MODEL, promptBytes);
@@ -240,10 +243,20 @@ export class OptionsService {
     return true;
   }
 
+  private waitSlot(userId: string): Promise<void> {
+    if (this.holdSlot(userId)) return Promise.resolve();
+    return new Promise((resolve) => this.slotWaiters.push({ userId, resolve }));
+  }
+
   private freeSlot(userId: string): void {
     const left = (this.running.get(userId) ?? 1) - 1;
     if (left > 0) this.running.set(userId, left);
     else this.running.delete(userId);
+    this.slotWaiters = this.slotWaiters.filter((w) => {
+      if (!this.holdSlot(w.userId)) return true;
+      w.resolve();
+      return false;
+    });
   }
 
   private isGuest(userId: string): boolean {

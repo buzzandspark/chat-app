@@ -673,6 +673,24 @@ describe("Engine: guest prompts", () => {
     expect(await send("hello")).toMatchObject({ type: "error", error: { kind: "context_full" } });
     expect(db.select().from(users).where(eq(users.id, "g1")).get()!.costSpentUsd).toBeGreaterThan(0);
   });
+
+  it("sends a guest's prompt on the byte bound when the count fails or stalls", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    let count: (signal: AbortSignal) => Promise<number> = () => Promise.reject(new Error("overloaded"));
+    const scripted = new ScriptedProvider((req) => scenarioScript("normal", req), 0);
+    engine = new Engine({
+      db,
+      store,
+      quota,
+      upstreamIdleMs: 50,
+      providers: () => ({ name: "anthropic", stream: (req, opts) => (streamed.push(req), scripted.stream(req, opts)), countTokens: (_req, opts) => count(opts.signal) }),
+    });
+    expect(await send("hello")).toMatchObject({ type: "done" });
+    count = (signal) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason)));
+    expect(await send("hello")).toMatchObject({ type: "done" });
+    expect(streamed).toHaveLength(2);
+    quiet.mockRestore();
+  });
 });
 
 describe("Engine: guests' running replies", () => {
@@ -726,6 +744,17 @@ describe("Engine: guests' running replies", () => {
     expect((await collectUntilTerminal(store, waiting.generationId)).at(-1)).toMatchObject({ type: "stopped" });
     expect(requests).toHaveLength(1);
     await engine.drain();
+  });
+
+  it("holds a waiting fork's worst case against the cap only once it has a slot", async () => {
+    // Each fork's worst case is about $0.0046: two fit under the cap, three do not.
+    db.update(users).set({ costCapUsd: 0.01 }).where(eq(users.id, "g1")).run();
+    const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 100, ip48: 100, all: 100 }, () => 0) });
+    const scripted = new ScriptedProvider((req) => scenarioScript("normal", req), 1);
+    engine = new Engine({ db, store, quota, providers: () => ({ name: "anthropic", stream: scripted.stream.bind(scripted) }), guestRunning: { perGuest: 1, total: 10 } });
+    const forks = [1, 2, 3].map(() => guest("g1", { fanOut: true, scenario: "normal" }));
+    for (const fork of forks) expect(engine.start(fork)).toEqual({ created: true });
+    for (const fork of forks) expect((await collectUntilTerminal(store, fork.generationId)).at(-1)).toMatchObject({ type: "done" });
   });
 
   it("holds all guests together to the total", async () => {

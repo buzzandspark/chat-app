@@ -101,7 +101,8 @@ async function stream(res, events) {
 
 const server = http.createServer(async (req, res) => {
   const path = new URL(req.url ?? "/", "http://mock").pathname;
-  if (req.method !== "POST" || path !== "/v1/messages") return apiError(res, 404, "not_found_error", `${req.method} ${path} is not mocked`);
+  const count = path === "/v1/messages/count_tokens";
+  if (req.method !== "POST" || (path !== "/v1/messages" && !count)) return apiError(res, 404, "not_found_error", `${req.method} ${path} is not mocked`);
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   let body;
@@ -109,6 +110,11 @@ const server = http.createServer(async (req, res) => {
     body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
     return apiError(res, 400, "invalid_request_error", "body is not JSON");
+  }
+  if (count) {
+    const tokens = inputTokens ?? Math.ceil(Buffer.byteLength(JSON.stringify([body.system, body.messages])) / 2.5);
+    res.writeHead(200, { "content-type": "application/json" });
+    return res.end(JSON.stringify({ input_tokens: tokens }));
   }
   if (!body.stream) return apiError(res, 400, "invalid_request_error", "the mock answers streaming requests only");
   const options = body.output_config?.format !== undefined;

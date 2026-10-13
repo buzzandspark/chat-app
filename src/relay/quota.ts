@@ -4,7 +4,7 @@ import { users } from "@db/schema";
 import type { UserRole } from "@shared/types";
 import { costOf, ratesFor, type TokenCounts } from "./anthropic/pricing";
 import { GUEST_MAX_TOKENS } from "./anthropic/thinking-config";
-import { ALL_GUESTS, type Budgets } from "./budgets";
+import { ALL_GUESTS, SHARED_ADDRESS_KEYS, type Budgets } from "./budgets";
 
 /** Characters per token as measured on real prompts and replies, code and thinking included. */
 export const CHARS_PER_TOKEN = 2.5;
@@ -72,9 +72,8 @@ function worstCaseUsd(model: string, promptTokens: number): number {
   return (promptTokens * Math.max(rates.input, rates.cacheWrite) + GUEST_MAX_TOKENS * rates.output) / 1_000_000;
 }
 
-// A user's reply starts while its estimated input fits under the cap; message_start swaps in the exact input cost and output is metered as it
-// streams. Once spend plus the user's live meters reach the cap, all their replies stop, so the cap can overshoot by about one delta per stream.
-// A guest call instead holds its worst-case cost from the start, its exact prompt count shrinks the hold, and so neither its cap nor its budgets overshoot.
+// A user's reply is metered as it streams and all their replies stop at the cap, which can overshoot by about one delta per stream.
+// A guest call instead holds its worst-case cost from the start, so neither its cap nor its budgets overshoot.
 export class QuotaManager {
   private meters = new Map<string, Meter>();
   constructor(
@@ -138,7 +137,7 @@ export class QuotaManager {
   }
 
   /**
-   * A guest call's exact prompt, from the token-counting endpoint (null when the provider cannot count, which falls back to the byte bound).
+   * A guest call's exact prompt, from the token-counting endpoint (null when it could not be counted, which falls back to the byte bound).
    * Throws PromptTooLongError over the guest limit, after filling the address's budget when the prompt is a dense payload.
    */
   fit(id: string, promptTokens: number | null): void {
@@ -148,7 +147,8 @@ export class QuotaManager {
     if (tokens > this.guests.maxPromptTokens) {
       if (promptTokens !== null && m.promptBytes / promptTokens < PAYLOAD_BYTES_PER_TOKEN) {
         const guests = this.guests;
-        this.db.transaction((tx) => guests.budgets.fill(tx, m.keys.filter((k) => k.startsWith("ip:")), PAYLOAD_PENALTY_DAYS));
+        const own = m.keys.filter((k) => k.startsWith("ip:") && !SHARED_ADDRESS_KEYS.has(k));
+        this.db.transaction((tx) => guests.budgets.fill(tx, own, PAYLOAD_PENALTY_DAYS));
       }
       throw new PromptTooLongError(tokens, this.guests.maxPromptTokens);
     }

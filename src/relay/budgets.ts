@@ -7,6 +7,9 @@ const DAY_MS = 86_400_000;
 /** The budget every guest shares; a guest's own keys are on its user row. */
 export const ALL_GUESTS = "guests";
 
+/** Address keys many guests share when the client address is not known: never penalised for one guest's payload. */
+export const SHARED_ADDRESS_KEYS: ReadonlySet<string> = new Set(["ip:local", "ip:unknown"]);
+
 /** USD a day for each kind of key: `ip:`, `ip48:` and ALL_GUESTS. */
 export interface BudgetRates {
   ip: number;
