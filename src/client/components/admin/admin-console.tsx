@@ -119,7 +119,7 @@ export function AdminConsole({
     setBusy(false);
     if (!res?.ok) {
       setGuestsBlocked(!blocked);
-      setNotice("Could not change guest access.");
+      setNotice("Couldn't change guest access. Try again.");
     }
   };
 

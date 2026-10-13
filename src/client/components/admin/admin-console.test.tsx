@@ -44,7 +44,7 @@ describe("AdminConsole on a dead network", () => {
     renderConsole();
     fireEvent.click(screen.getByRole("switch", { name: "Block guests" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not change guest access.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't change guest access. Try again.");
     expect(screen.getByRole("switch", { name: "Block guests" })).not.toBeChecked();
     expect(screen.getByRole("switch", { name: "Block guests" })).toBeEnabled();
   });
