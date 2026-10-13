@@ -72,7 +72,7 @@ describe("ModelPicker", () => {
     input.remove();
   });
 
-  it("on desktop, the effort rows are a radio group the arrows reach after the models, and picking one keeps the menu open", async () => {
+  it("on desktop, the effort rows are a radio group the arrows reach after the models, and picking one closes the menu", async () => {
     layout(true);
     const onChange = vi.fn();
     render(<ModelPicker model="claude-haiku-5-5" thinking={{ effort: "low" }} onChange={onChange} />);
@@ -96,15 +96,13 @@ describe("ModelPicker", () => {
     expect(screen.getByRole("menuitemradio", { name: /^Low/ })).toHaveAttribute("aria-checked", "true");
     press("Enter");
     expect(onChange).toHaveBeenLastCalledWith({ thinking: { effort: "medium" } });
-    fireEvent.click(screen.getByRole("menuitemradio", { name: /^High/ }));
-    expect(onChange).toHaveBeenLastCalledWith({ thinking: { effort: "high" } });
-    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   });
 
   it("shows a non-default effort on the trigger", () => {
     layout(true);
     const { rerender } = render(<ModelPicker model="claude-opus-5-5" thinking={{ effort: "medium" }} onChange={() => {}} />);
-    expect(screen.getByRole("button", { name: "Model: Opus 5.5, effort medium" })).toHaveTextContent("Opus 5.5medium");
+    expect(screen.getByRole("button", { name: "Model: Opus 5.5, effort Medium" })).toHaveTextContent("Opus 5.5Medium");
     rerender(<ModelPicker model="claude-opus-5-5" thinking={{ effort: "low" }} onChange={() => {}} />);
     expect(screen.getByRole("button", { name: "Model: Opus 5.5" })).toHaveTextContent(/^Opus 5.5$/);
   });
@@ -128,7 +126,7 @@ describe("ModelPicker", () => {
     expect(onChange).toHaveBeenCalledWith({ model: "claude-opus-5-5" });
   });
 
-  it("on phones, picking an effort in the sheet keeps it open; arrows move within the effort group", async () => {
+  it("on phones, picking an effort closes the sheet; arrows move within the effort group", async () => {
     layout(false);
     const onChange = vi.fn();
     render(<ModelPicker model="claude-sonnet-5-5" thinking={{ effort: "medium" }} onChange={onChange} defaultOpen />);
@@ -144,6 +142,6 @@ describe("ModelPicker", () => {
     expect(radios[0]).toHaveFocus();
     fireEvent.click(screen.getByRole("radio", { name: /^High/ }));
     expect(onChange).toHaveBeenCalledWith({ thinking: { effort: "high" } });
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });

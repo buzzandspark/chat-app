@@ -62,7 +62,7 @@ interface ModelPickerProps {
   onChange: (patch: { model?: ModelId; thinking?: ThinkingOptions }) => void;
   /** True when the user pressed the stand-in before this chunk had loaded. */
   defaultOpen?: boolean;
-  /** Called instead of returning focus to the trigger when the menu closes because a model was picked. */
+  /** Called instead of returning focus to the trigger when the menu closes because a model or effort was picked. */
   onPicked?: () => void;
   /** A guest: only Haiku can be picked; the other models show greyed out, with a note to sign in. */
   guest?: boolean;
@@ -78,7 +78,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
   useBackGesture(open && !desktop, () => setOpen(false));
   const effortLabelId = useId();
   const info = MODELS[model];
-  const effort = thinking.effort === "low" ? null : EFFORT_LABELS[thinking.effort].toLowerCase();
+  const effort = thinking.effort === "low" ? null : EFFORT_LABELS[thinking.effort];
 
   const trigger = (
     <Button variant="ghost" size="sm" className="touch-target max-w-[55vw] gap-1 text-muted-foreground" aria-label={`Model: ${info.short}${effort ? `, effort ${effort}` : ""}`}>
@@ -97,7 +97,7 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
         <DropdownMenuContent
           align="start"
           className="flex w-80 flex-col gap-1 px-1 py-2 outline-none"
-          // A picked model sends focus on to the input, ready to type; Escape or a click away returns it to the trigger.
+          // A pick sends focus on to the input, ready to type; Escape or a click away returns it to the trigger.
           onCloseAutoFocus={(e) => {
             if (!picked.current || !onPicked) return;
             picked.current = false;
@@ -130,9 +130,8 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
               <MenuPrimitive.RadioItem
                 key={e}
                 value={e}
-                onSelect={(event) => {
-                  // Picking an effort keeps the menu open.
-                  event.preventDefault();
+                onSelect={() => {
+                  picked.current = true;
                   onChange({ thinking: { effort: e } });
                 }}
                 className={cn(ROW, rowTone(e === thinking.effort))}
@@ -192,8 +191,10 @@ export function ModelPicker({ model, thinking, onChange, defaultOpen = false, on
                   aria-checked={selected}
                   tabIndex={selected ? 0 : -1}
                   onKeyDown={onRadioKeyDown}
-                  // Picking an effort keeps the sheet open.
-                  onClick={() => onChange({ thinking: { effort: e } })}
+                  onClick={() => {
+                    onChange({ thinking: { effort: e } });
+                    setOpen(false);
+                  }}
                   className={cn(ROW, rowTone(selected))}
                 >
                   <RowText title={EFFORT_LABELS[e]} blurb={EFFORT_BLURBS[e]} />

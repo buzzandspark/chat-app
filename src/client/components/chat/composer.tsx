@@ -77,7 +77,7 @@ function PickerStandIn({
   onPress?: () => void;
 }) {
   const info = MODELS[model];
-  const effort = thinking.effort === "low" ? null : EFFORT_LABELS[thinking.effort].toLowerCase();
+  const effort = thinking.effort === "low" ? null : EFFORT_LABELS[thinking.effort];
   // Announce what the loaded trigger will open: the menu at `md`, the sheet (a dialog) on phones.
   const desktop = useIsDesktop();
   return (
