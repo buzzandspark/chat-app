@@ -94,7 +94,7 @@ export interface EngineOptions {
   upstreamIdleMs?: number;
   isDraining?: () => boolean;
   afterDone?: (info: ReplyDoneInfo) => void;
-  /** Live replies running at once for one guest and for all guests together. */
+  /** Live replies running at once for one guest and for all guests together; a fork of a fan-out takes half of one. */
   guestRunning?: { perGuest: number; total: number };
 }
 
@@ -119,8 +119,8 @@ export interface StartInput {
   cacheTail?: boolean;
   /** Re-send a request that fails before the API begins a message, with exponential backoff. */
   retry?: RetryPolicy;
-  /** Starts that share a group (one Explore fan-out) count as one of a guest's running replies. */
-  group?: string;
+  /** One fork of an Explore fan-out: for a guest it takes half a running slot and waits for one instead of failing busy. */
+  fanOut?: boolean;
 }
 
 /**
@@ -172,7 +172,11 @@ interface Active {
   /** False for scripted and replayed runs: no reservation, zero-cost usage rows, no TPS sample. */
   billable: boolean;
   guest: boolean;
-  group: string;
+  /** Half slots a billable guest run takes: two for a reply, one for a fork. Zero for everyone else. */
+  units: number;
+  /** False while a guest's fork waits for a slot; `slot` settles once it holds one or is aborted. */
+  holding: boolean;
+  slot: Promise<void> | null;
 }
 
 /** A generation runs as a detached promise that outlives the response. */
@@ -189,6 +193,7 @@ export class Engine {
   private afterDone: ((info: ReplyDoneInfo) => void) | null;
   private guestRunning: { perGuest: number; total: number };
   private active = new Map<string, Active>();
+  private waiting: { active: Active; resolve: () => void }[] = [];
 
   constructor(options: EngineOptions) {
     this.db = options.db;
@@ -237,10 +242,11 @@ export class Engine {
     });
     const billable = isBillableProvider(provider.name);
     const guest = input.userRole === "guest";
-    const group = input.group ?? input.generationId;
+    const units = billable && guest ? (input.fanOut ? 1 : 2) : 0;
+    const holding = units === 0 || this.fits(input.userId, units);
+    if (!holding && !input.fanOut) throw new BusyError();
     // A scripted or replayed run spends nothing, so it is neither metered against the cap nor refused by it.
     if (billable) {
-      if (guest) this.admitGuestReply(input.userId, group);
       // A retry's text is already in the chat; count it once.
       this.quota.admit(
         input.userId,
@@ -388,9 +394,12 @@ export class Engine {
       faults: input.faults ?? {},
       billable,
       guest,
-      group,
+      units,
+      holding,
+      slot: null,
     };
     this.active.set(active.id, active);
+    if (!holding) active.slot = this.slotFor(active);
     this.append(active, {
       type: "started",
       chatId: input.chatId,
@@ -405,17 +414,38 @@ export class Engine {
     return { created: true };
   }
 
-  /** Running guest replies are capped to bound the load and how many holds one guest has at once; a group counts once. */
-  private admitGuestReply(userId: string, group: string): void {
-    const mine = new Set<string>();
-    const all = new Set<string>();
+  /** Whether `units` more half slots fit under the guest's share and all guests' together. */
+  private fits(userId: string, units: number): boolean {
+    let mine = 0;
+    let all = 0;
     for (const a of this.active.values()) {
-      if (!a.guest || !a.billable) continue;
-      if (a.group === group) return;
-      all.add(a.group);
-      if (a.userId === userId) mine.add(a.group);
+      if (!a.holding || a.units === 0) continue;
+      all += a.units;
+      if (a.userId === userId) mine += a.units;
     }
-    if (mine.size >= this.guestRunning.perGuest || all.size >= this.guestRunning.total) throw new BusyError();
+    return mine + units <= this.guestRunning.perGuest * 2 && all + units <= this.guestRunning.total * 2;
+  }
+
+  /** Resolves once a waiting fork holds a slot, or once it is aborted. */
+  private slotFor(active: Active): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        active.controller.signal.removeEventListener("abort", done);
+        this.waiting = this.waiting.filter((w) => w.active !== active);
+        resolve();
+      };
+      this.waiting.push({ active, resolve: done });
+      active.controller.signal.addEventListener("abort", done, { once: true });
+    });
+  }
+
+  /** Hands freed slots to waiting forks in the order they asked. */
+  private pump(): void {
+    for (const w of [...this.waiting]) {
+      if (!this.fits(w.active.userId, w.active.units)) continue;
+      w.active.holding = true;
+      w.resolve();
+    }
   }
 
   /** A guest's prompt is counted exactly before it is sent: over the limit it is refused, and the count tightens the guest's hold. */
@@ -530,6 +560,7 @@ export class Engine {
     const timings: ServerTimings = { received: active.startedAt };
     try {
       if (input.gate) await input.gate.catch(() => {});
+      if (active.slot) await active.slot;
       if (active.controller.signal.aborted) {
         this.finishAborted(active, active.abortReason ?? "stop", timings);
         return;
@@ -693,6 +724,7 @@ export class Engine {
     if (active.partialTimer) clearInterval(active.partialTimer);
     active.partialTimer = null;
     this.active.delete(active.id);
+    if (active.units > 0 && active.holding) this.pump();
   }
 
   private persistPartial(active: Active): void {

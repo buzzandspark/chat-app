@@ -83,17 +83,16 @@ Guest spend is also charged to shared daily budgets, kept in the database so the
 | `GUEST_IP48_USD_PER_DAY` | 3 | guests from one IPv6 /48 |
 | `GUEST_ALL_USD_PER_DAY` | 10 | all guests |
 
-Each budget fills with spend and drains continuously at its daily rate. While any of a guest's budgets holds more than a day's amount, the guest's new replies, forks and option rewrites get "Busy right now" with the wait, and Explore skips detection. A guest is charged to the address that created it.
+Each budget fills with spend and drains continuously at its daily rate. A guest is charged to the address that created it. While a guest call runs it holds its worst-case cost (its prompt at the cache-write rate plus every output token it may use) against the guest's cap and each of its budgets, so neither the cap nor a budget is ever exceeded. A reply, fork or option rewrite that does not fit gets "Busy right now" with the wait (a budget) or the spent-budget message (the cap), and Explore skips detection.
 
-The budgets are soft: replies already running when one fills finish and are charged. What can run at once bounds the overshoot:
-
-- a guest runs at most 2 replies at once (an Explore fan-out counts as one), and guests together 20
-- a guest runs at most 2 Explore calls (detection or rewrite) at once, and guests together 20
+- a guest runs at most 2 replies at once, and guests together 50; a fork of an Explore fan-out takes half a reply's place, and forks past that wait their turn
+- a guest runs at most 2 Explore calls (detection or rewrite) at once, and guests together 50
 - a guest reply has `max_tokens` 8192, thinking included, as does every Explore call
-- a guest prompt over `GUEST_MAX_PROMPT_TOKENS` (default 60,000, estimated at 2.5 bytes of UTF-8 a token) is refused as too long; with the default, natural text in any script stays under Haiku's long-context price tier at 100,000 tokens
+- a guest prompt is counted exactly before it is sent and refused as too long over `GUEST_MAX_PROMPT_TOKENS` (default 60,000, at most 90,000), so no guest request reaches Haiku's long-context price tier at 100,000 tokens
+- an address whose guest sends an over-long prompt of machine payload (under 1.2 bytes of UTF-8 a token, such as base64) has its budget filled to two days' worth, which refuses its guests for about a day
 - a guest sends at most 12 replies, forks or declared winners a minute and an address 40; a guest rewrites Explore options at most 10 times a minute and an address 30
 
-With the defaults one guest reply costs at most about $0.012 and one Explore call about $0.007. Text crafted to tokenize at close to a token a byte can pass the prompt cap and reach the long-context tier; such a reply is billed exactly, at up to about $0.10. Guests together spend at most about twice `GUEST_ALL_USD_PER_DAY` in any 24 hours (a full budget, then a day of draining) and about 30 times it in a 30-day month: $20 and $300 with the defaults. Set a monthly spend limit on the API key's workspace in the Anthropic Console as a backstop. Invited users have none of these limits beyond their own cost cap.
+With the defaults one guest reply holds at most about $0.012 and one Explore call about $0.007. Guests together spend at most about twice `GUEST_ALL_USD_PER_DAY` in any 24 hours (a full budget, then a day of draining) and about 30 times it in a 30-day month: $20 and $300 with the defaults. Set a monthly spend limit on the API key's workspace in the Anthropic Console as a backstop. Invited users have none of these limits beyond their own cost cap.
 
 ## Trying the limits without spending
 

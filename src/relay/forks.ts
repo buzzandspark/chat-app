@@ -85,7 +85,6 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
   const forkPosition = (rows.at(-1)?.position ?? -1) + 1;
 
   const started: StartedFork[] = [];
-  const group = uuidv7();
   let gate: Promise<void> | undefined;
   input.forks.forEach((fork, i) => {
     db.transaction((tx) => {
@@ -138,7 +137,7 @@ export function createForks(deps: ForkDeps, input: CreateForksInput): StartedFor
         cacheTail: true,
         retry: FORK_RETRY,
         gate,
-        group,
+        fanOut: true,
       });
     } catch (err) {
       db.delete(chats).where(eq(chats.id, fork.chatId)).run();

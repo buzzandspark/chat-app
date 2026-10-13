@@ -683,7 +683,7 @@ describe("Engine: guests' running replies", () => {
     for (const id of ["g1", "g2", "g3"]) seedUser(db, id, { role: "guest", costCapUsd: 1 });
   });
 
-  it("runs two live replies at once per guest, a fork fan-out counting as one, each asking for at most 8192 tokens", async () => {
+  it("runs two live replies at once per guest, a fork taking half of one and waiting for it, each asking for at most 8192 tokens", async () => {
     const requests: ProviderRequest[] = [];
     const slow = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
     const free = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
@@ -697,18 +697,34 @@ describe("Engine: guests' running replies", () => {
     engine = new Engine({ db, store, providers: (ctx) => (ctx.scenario === "normal" ? free : live), partialPersistMs: 50 });
     const first = guest("g1");
     engine.start(first);
-    engine.start(guest("g1", { group: "fan-out" }));
-    engine.start(guest("g1", { group: "fan-out" }));
+    engine.start(guest("g1", { fanOut: true }));
+    engine.start(guest("g1", { fanOut: true }));
     expect(() => engine.start(guest("g1"))).toThrow(BusyError);
+    // A third fork waits for a slot instead.
+    expect(engine.start(guest("g1", { fanOut: true }))).toEqual({ created: true });
     // Another guest, an invited user and a scripted run are not held back.
     expect(engine.start(guest("g2"))).toEqual({ created: true });
     expect(engine.start(input({ scenario: "slow_tokens" }))).toEqual({ created: true });
     expect(engine.start(guest("g1", { scenario: "normal" }))).toEqual({ created: true });
+    await waitFor(() => requests.length === 5);
+    expect(requests.filter((r) => r.userId === "g1")).toHaveLength(3);
     await engine.stopAndWait(first.generationId);
-    expect(engine.start(guest("g1"))).toEqual({ created: true });
     await waitFor(() => requests.length === 6);
     expect(requests.map((r) => [r.userId, r.maxTokens])).toEqual(expect.arrayContaining([["g1", 8192], ["g2", 8192], [USER, undefined]]));
     expect(requests.filter((r) => r.userId !== USER).every((r) => r.maxTokens === 8192)).toBe(true);
+    await engine.drain();
+  });
+
+  it("ends a fork stopped while it waits for a slot without sending it", async () => {
+    const requests: ProviderRequest[] = [];
+    const slow = new ScriptedProvider((req) => scenarioScript("slow_tokens", req), 1);
+    engine = new Engine({ db, store, providers: () => ({ name: "anthropic", stream: (req, opts) => (requests.push(req), slow.stream(req, opts)) }), guestRunning: { perGuest: 1, total: 10 } });
+    engine.start(guest("g1"));
+    const waiting = guest("g1", { fanOut: true });
+    engine.start(waiting);
+    engine.stop(waiting.generationId);
+    expect((await collectUntilTerminal(store, waiting.generationId)).at(-1)).toMatchObject({ type: "stopped" });
+    expect(requests).toHaveLength(1);
     await engine.drain();
   });
 
