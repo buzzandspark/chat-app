@@ -93,7 +93,7 @@ A fork copies every parent row into a new chat, then starts the parent's model a
 - **First paint.** Sidebar layout is decided in CSS, not by a media-query hook, so desktop cold loads have zero layout shift. The theme script runs in `<head>` before first paint.
 - **Long chats.** Rows use `content-visibility: auto`, gated on scroll anchoring that actually works (WebKit lays every row out). Thread virtualisation was not needed at measured frame times.
 - **Search** is an FTS5 index over a text shadow column maintained by triggers.
-- `e2e/perf.spec.ts` measures CLS, paint timings, frame times and click-to-thread on an emulated Pixel 7 (CPU 4x, Fast 3G) and gates them.
+- `e2e/perf.spec.ts` measures CLS, paint timings, frame times and click-to-thread on an emulated Pixel 7 (CPU 4x, Fast 3G). Its budgets gate local runs; CI (`PERF_BUDGETS=report`) records misses in the step summary and keeps the behaviour assertions blocking.
 
 ## 9. Rejected alternatives
 

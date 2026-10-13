@@ -65,7 +65,9 @@ test.describe("chat management", () => {
     await expect(aside.getByRole("region", { name: "Pinned" }).getByRole("link", { name: title })).toBeVisible();
     await aside.getByRole("listitem").filter({ has: page.getByRole("link", { name: title }) }).getByRole("button", { name: `Actions for ${title}` }).click();
     await page.getByRole("menuitem", { name: "Unpin" }).click();
-    await expect(aside.getByRole("region", { name: "Pinned" })).toHaveCount(0);
+    // Projects share one e2e database, so another project's pinned chat can keep the section alive.
+    await expect(aside.getByRole("region", { name: "Pinned" }).getByRole("link", { name: title })).toHaveCount(0);
+    await expect(aside.getByRole("link", { name: title })).toBeVisible();
   });
 
   test("clicking the header title edits it in place: Enter saves, Escape cancels", async ({ page }, info) => {

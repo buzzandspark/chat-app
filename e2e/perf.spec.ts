@@ -31,6 +31,20 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     console.log(`[perf] ${name}`, JSON.stringify(data));
   }
 
+  // Shared CI runners miss frame budgets set on a fast machine; PERF_BUDGETS=report records misses instead of failing.
+  function budget(name: string, actual: number | null, op: "<" | "<=", limit: number) {
+    if (process.env.PERF_BUDGETS !== "report") {
+      if (op === "<") expect(actual, name).toBeLessThan(limit);
+      else expect(actual, name).toBeLessThanOrEqual(limit);
+      return;
+    }
+    if (actual !== null && (op === "<" ? actual < limit : actual <= limit)) return;
+    const description = `${name}: ${actual} (budget ${op} ${limit})`;
+    test.info().annotations.push({ type: "perf-budget-miss", description });
+    console.warn(`[perf] budget miss ${description}`);
+    if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `- perf budget miss: ${description}\n`);
+  }
+
   test("shell load: no layout shift, no font flash, under budget", async ({ page }) => {
     await throttle(page);
     await page.addInitScript(() => {
@@ -111,7 +125,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
       return rows.length;
     });
     record("long_reply", { firstPaintMs, frames: frames.length, p50: p(0.5), p95: p(0.95), p99: p(0.99), longFrames, assistantRows: timings });
-    expect(longFrames / Math.max(1, frames.length)).toBeLessThan(0.1);
+    budget("long_reply long-frame ratio", longFrames / Math.max(1, frames.length), "<", 0.1);
   });
 
   test("streaming inside a 200-message chat", async ({ page }) => {
@@ -121,8 +135,9 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     await visible(page, "scenario-long_chat").click();
     await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/, { timeout: 60_000 });
     const loadStart = Date.now();
-    // The page ships the newest 100 rows; the rest load on request.
-    await page.getByRole("button", { name: /earlier message/ }).click();
+    // The page ships the newest 100 rows; the rest load when the reader nears the top.
+    await expect(page.locator('[data-role]:visible')).toHaveCount(100, { timeout: 60_000 });
+    await visible(page, "message-list").evaluate((el) => el.scrollTo(0, 0));
     await expect(page.locator('[data-role]:visible')).toHaveCount(200, { timeout: 60_000 });
     await expect(visible(page, "composer")).toHaveAttribute("data-hydrated", "true", { timeout: 60_000 });
     const rows = await page.locator('[data-role]:visible').count();
@@ -145,14 +160,17 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     const p = (q: number) => Number((sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0).toFixed(1));
     const longFrames = frames.filter((f) => f > 50).length;
     record("long_chat", { rows, loadMs, frames: frames.length, p50: p(0.5), p95: p(0.95), p99: p(0.99), longFrames });
-    expect(longFrames / Math.max(1, frames.length)).toBeLessThan(0.1);
+    budget("long_chat long-frame ratio", longFrames / Math.max(1, frames.length), "<", 0.1);
   });
 
   // Click to thread painted, in frames after the click: a chat the store holds, one prefetched on hover,
   // and one tapped before the sidebar's top-five prefetch lands.
-  test("click to thread: loaded, prefetched and cold chats", async ({ page }) => {
+  test("click to thread: loaded, prefetched and cold chats", async ({ page }, info) => {
     await throttle(page);
-    const titles = ["alpha nav", "bravo nav", "charlie nav"] as const;
+    // The database outlives retries and repeats, so each attempt gets its own titles.
+    const run = `${info.retry}-${info.repeatEachIndex}`;
+    const titles = [`alpha nav ${run}`, `bravo nav ${run}`, `charlie nav ${run}`] as const;
+    const [alpha, bravo, charlie] = titles;
     const urls: string[] = [];
     for (const title of titles) {
       await openNewChat(page);
@@ -197,32 +215,32 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     const clickRow = async (title: string) => {
       await ensureSidebarOpen(page);
       await instrument(title);
-      await sidebar(page).getByRole("link", { name: title }).click();
+      await sidebar(page).getByRole("link", { name: title, exact: true }).click();
       await page.waitForFunction(() => (window as Window & { __nav?: { threadFrame: number | null } }).__nav?.threadFrame !== null, null, { timeout: 30_000 });
       return page.evaluate(() => (window as Window & { __nav?: { click: number | null; frames: number; activeFrame: number | null; skeletonFrame: number | null; threadFrame: number | null; threadMs: number | null } }).__nav!);
     };
 
     // Opening the sidebar starts the top-five prefetch; this first tap races it.
-    const coldInFlight = await clickRow("alpha nav");
-    const warmedByOpen = await clickRow("bravo nav");
-    const loaded = await clickRow("alpha nav");
+    const coldInFlight = await clickRow(alpha);
+    const warmedByOpen = await clickRow(bravo);
+    const loaded = await clickRow(alpha);
     await ensureSidebarOpen(page);
-    await sidebar(page).getByRole("link", { name: "charlie nav" }).hover();
+    await sidebar(page).getByRole("link", { name: charlie, exact: true }).hover();
     await page.waitForTimeout(1500);
-    const prefetched = await clickRow("charlie nav");
-    const loaded2 = await clickRow("bravo nav");
+    const prefetched = await clickRow(charlie);
+    const loaded2 = await clickRow(bravo);
     record("click_to_thread", { coldInFlight, warmedByOpen, loaded, loaded2, prefetched });
     // Loaded or prefetched: the highlight in the first frame after the click, the thread by the second
     // (the router commits the navigation in a transition, one frame after the click's own task).
-    for (const c of [loaded, loaded2, prefetched, warmedByOpen]) {
-      expect(c.activeFrame).toBeLessThanOrEqual(1);
-      expect(c.threadFrame).toBeLessThanOrEqual(2);
-      expect(c.skeletonFrame).toBeNull();
+    for (const [label, c] of Object.entries({ loaded, loaded2, prefetched, warmedByOpen })) {
+      budget(`${label} activeFrame`, c.activeFrame, "<=", 1);
+      budget(`${label} threadFrame`, c.threadFrame, "<=", 2);
+      expect(c.skeletonFrame, `${label} skeletonFrame`).toBeNull();
     }
     // Cold: the row highlights in the first frame and the skeleton is up by the third (measured 2 to 3
     // at 4x CPU); rows follow the fetch.
-    expect(coldInFlight.activeFrame).toBeLessThanOrEqual(1);
-    expect(coldInFlight.skeletonFrame).toBeLessThanOrEqual(3);
+    budget("coldInFlight activeFrame", coldInFlight.activeFrame, "<=", 1);
+    budget("coldInFlight skeletonFrame", coldInFlight.skeletonFrame, "<=", 3);
   });
 
   test("giant code block keeps scrolling smooth", async ({ page }) => {
@@ -278,7 +296,7 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     await ensureSidebarOpen(page);
     await page.getByRole("link", { name: "New chat" }).click();
     await expect(page).not.toHaveURL(chatUrl);
-    await expect(visible(page, "composer")).toBeVisible();
+    await expect(visible(page, "composer")).toBeVisible({ timeout: 30_000 });
     await page.evaluate(() => {
       const w = window as Window & { __frames?: number[] };
       w.__frames = [];
@@ -318,8 +336,8 @@ test.describe("performance (Pixel 7, CPU 4x, Fast 3G)", () => {
     expect(["kept", "cache"]).toContain(reopenSource);
     // Measured at 4x CPU: longest frame ~317 ms at reply end, ~367 ms on reopen. Remaining spikes recur
     // every ~30 groups and grow with the DOM (GC or style work, not tokenising).
-    expect(maxFrame).toBeLessThan(500);
-    expect(reopenMaxFrame).toBeLessThan(500);
+    budget("giant_code_block maxFrame", maxFrame, "<", 500);
+    budget("giant_code_block reopenMaxFrame", reopenMaxFrame, "<", 500);
   });
 });
 

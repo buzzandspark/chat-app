@@ -21,7 +21,7 @@ test.describe("sessions and errors", () => {
     await expect(page.locator('[data-role="user"]:visible').last()).toContainText("unsent after reload");
   });
 
-  test("a lazy chunk that fails to load costs one control, not the page, and Retry brings it back", async ({ page }) => {
+  test("a lazy chunk that fails to load costs one control, not the page, and Retry brings it back", async ({ page, isMobile }) => {
     await openNewChat(page);
     await sendText(page, "still here");
     await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
@@ -46,9 +46,10 @@ test.describe("sessions and errors", () => {
     await row.getByRole("button", { name: "Actions for still here" }).click();
     await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-    if ((await sidebar(page).getAttribute("data-open")) === "true" && (await page.getByRole("button", { name: "Close sidebar" }).isVisible())) {
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    if (isMobile) {
       await page.getByRole("button", { name: "Close sidebar" }).click();
+      await expect(sidebar(page)).toHaveAttribute("data-open", "false");
     }
     await retry.click();
     await lastAssistant(page).getByRole("button", { name: "Message actions" }).click();
