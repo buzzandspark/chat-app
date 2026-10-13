@@ -69,6 +69,31 @@ test.describe("new chat", () => {
     await expect(aside.getByRole("link", { name: third })).toBeVisible();
   });
 
+  test("Back from a New chat to a chat started on /c shows that chat, and a send goes to it", async ({ page }, info) => {
+    const first = `started on c ${info.project.name}`;
+    await page.goto("/c");
+    await waitForComposer(page);
+    await sendText(page, first);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    const firstUrl = page.url();
+    await ensureSidebarOpen(page);
+    await page.getByRole("link", { name: "New chat" }).click();
+    await expect(page).toHaveURL(NEW_CHAT_URL);
+    await waitForComposer(page);
+    await expect(page.locator("[data-role]:visible")).toHaveCount(0);
+
+    await page.goBack();
+    await expect(page).toHaveURL(firstUrl);
+    await expect(page.locator('[data-role="user"]:visible')).toHaveCount(1);
+    await expect(page.locator('[data-role="user"]:visible').last()).toContainText(first);
+    const followUp = `follow up ${info.project.name}`;
+    await sendText(page, followUp);
+    await expect(lastAssistant(page)).toHaveAttribute("data-status", "done", { timeout: 30_000 });
+    await page.reload();
+    await waitForComposer(page);
+    await expect(page.locator('[data-role="user"]:visible')).toHaveText([first, followUp].map((t) => new RegExp(t)));
+  });
+
   test("the root has no landing page: it opens a new chat", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveURL(NEW_CHAT_URL);

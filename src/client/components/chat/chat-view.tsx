@@ -1,5 +1,5 @@
 "use client";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { saveLastChoice } from "@client/hooks/use-last-choice";
@@ -24,13 +24,23 @@ import { EmptyThread, ThreadSkeleton } from "./thread-skeleton";
 export function ChatView({ children }: { children: ReactNode }) {
   const params = useParams<{ id?: string }>();
   const search = useSearchParams();
+  const pathname = usePathname();
   // At /c the id is in-app New chat's `n`, or a fresh one. The router keeps a single /c view across search
   // params and restores it for every New chat, so a new `n` moves that view to the new chat. Hidden views
   // read the active route's params, so which route this view belongs to is fixed at mount.
   const fromNew = search.get("n");
+  // A first send renames /c to /c/<id> on the /c route (no `id` param); Back restores that entry into this view.
+  const fromPath = params.id === undefined ? /^\/c\/([^/]+)$/.exec(pathname)?.[1] : undefined;
+  const target = fromPath ?? fromNew;
   const [atNewChat] = useState(() => params.id === undefined);
-  const [chatId, setChatId] = useState(() => params.id ?? (fromNew && isUuid(fromNew) ? fromNew : uuidv7()));
-  if (atNewChat && fromNew && isUuid(fromNew) && fromNew !== chatId) setChatId(fromNew);
+  const [chatId, setChatId] = useState(() => params.id ?? (target && isUuid(target) ? target : uuidv7()));
+  const [editing, setEditing] = useState<EditingState | null>(null);
+  const [followEngaged, setFollowEngaged] = useState(true);
+  if (atNewChat && target && isUuid(target) && target !== chatId) {
+    setChatId(target);
+    setEditing(null);
+    setFollowEngaged(true);
+  }
   const newChatRoute = params.id === undefined;
   const { userId, guest, scenarioPanel } = useShellUser();
   const store = useChatStore();
@@ -47,10 +57,8 @@ export function ChatView({ children }: { children: ReactNode }) {
     },
     [store, chatId, userId],
   );
-  const [editing, setEditing] = useState<EditingState | null>(null);
   const composerRef = useRef<ComposerHandle>(null);
   const listRef = useRef<MessageListHandle>(null);
-  const [followEngaged, setFollowEngaged] = useState(true);
   const isEmpty = chat.seeded && chat.messageIds.length === 0;
 
   // Desktop only (a phone would pop the keyboard): focus the composer on a new chat.
