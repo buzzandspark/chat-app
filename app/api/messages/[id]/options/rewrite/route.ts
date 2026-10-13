@@ -8,6 +8,7 @@ import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { refuseGuestRewrite, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
+import type { RewriteResponse } from "@shared/api";
 import { env } from "@shared/env";
 
 const Body = z.object({ instruction: z.string().trim().min(1).max(500), options: ForkOptionsBody });
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/message
     }
     try {
       const { options, trace } = await getRelay().options.rewrite(user.id, id, parsed.data.options, parsed.data.instruction);
-      return Response.json({ options, trace: env.isProd ? null : trace }, { headers: { "cache-control": "no-store" } });
+      return Response.json({ options, trace: env.isProd ? null : trace } satisfies RewriteResponse, { headers: { "cache-control": "no-store" } });
     } catch (err) {
       if (err instanceof QuotaExceededError) return jsonError(402, { error: "quota_exceeded", spentUsd: err.spentUsd, capUsd: err.capUsd });
       if (err instanceof BudgetExceededError || err instanceof BusyError) return tooMany(err.retryAfterMs);

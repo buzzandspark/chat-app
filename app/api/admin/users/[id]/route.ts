@@ -5,6 +5,7 @@ import { getDb, schema } from "@db/client";
 import { errorResponse, jsonError, requireAdmin } from "@server/current-user";
 import { findUser } from "@server/admin";
 import { getRelay } from "@server/relay";
+import type { OkResponse } from "@shared/api";
 import { capColumn } from "@shared/cost-cap";
 import { CapFieldSchema } from "@shared/cost-cap-schema";
 
@@ -41,7 +42,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
       .where(eq(schema.users.id, id))
       .run();
     if (parsed.data.banned) db.delete(schema.sessions).where(eq(schema.sessions.userId, id)).run();
-    return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ ok: true } satisfies OkResponse, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }
@@ -55,7 +56,7 @@ export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/admi
     await getRelay().engine.stopUser(id);
     const result = getDb().delete(schema.users).where(eq(schema.users.id, id)).run();
     if (result.changes === 0) return jsonError(404, { error: "not_found" });
-    return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ ok: true } satisfies OkResponse, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

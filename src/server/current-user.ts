@@ -5,6 +5,7 @@ import { unstable_rethrow } from "next/navigation";
 import { connection } from "next/server";
 import { getAuth, SESSION_COOKIE } from "@auth/server";
 import { getDb, schema } from "@db/client";
+import type { ApiError } from "@shared/api";
 import { env } from "@shared/env";
 import type { UserRole } from "@shared/types";
 
@@ -70,7 +71,7 @@ export async function requireAdmin(): Promise<CurrentUser> {
 export class HttpError extends Error {
   constructor(
     public status: number,
-    public body: Record<string, unknown>,
+    public body: ApiError,
   ) {
     super(String(body.error ?? status));
     this.name = "HttpError";
@@ -83,7 +84,7 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-export function jsonError(status: number, body: Record<string, unknown>, headers?: Record<string, string>): Response {
+export function jsonError(status: number, body: ApiError, headers?: Record<string, string>): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store", ...headers } });
 }
 

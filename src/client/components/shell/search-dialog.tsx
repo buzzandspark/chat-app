@@ -6,16 +6,9 @@ import { useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { markNavigationClose } from "@client/hooks/use-back-gesture";
+import { readJson, type SearchHit, type SearchResponse } from "@shared/api";
 import { revealSearchHit } from "../chat/search-reveal";
 import { ResponsiveDialog } from "../ui/responsive-dialog";
-
-interface Hit {
-  chatId: string;
-  title: string;
-  snippet: string | null;
-  messageId: string | null;
-  updatedAt: number;
-}
 
 /** ⌘/Ctrl+K: a sheet on phones, a modal at `md`, keyboard-safe. */
 export function SearchDialog({
@@ -30,7 +23,7 @@ export function SearchDialog({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<Hit[]>([]);
+  const [hits, setHits] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   // Keyboard: ↑/↓ move the active hit, Enter opens it.
   const [cursor, setCursor] = useState(0);
@@ -63,7 +56,7 @@ export function SearchDialog({
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/chats/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
-        if (res.ok) setHits(((await res.json()) as { hits: Hit[] }).hits);
+        if (res.ok) setHits((await readJson<SearchResponse>(res)).hits);
       } catch {
         // aborted or offline
       } finally {
@@ -74,12 +67,12 @@ export function SearchDialog({
   };
   const visibleHits = active && !searching ? hits : [];
   const activeIndex = visibleHits.length === 0 ? -1 : Math.min(cursor, visibleHits.length - 1);
-  const opened = (hit: Hit) => {
+  const opened = (hit: SearchHit) => {
     if (hit.messageId) revealSearchHit({ chatId: hit.chatId, messageId: hit.messageId, query: query.trim() });
     markNavigationClose();
     changeOpen(false);
   };
-  const pick = (hit: Hit) => {
+  const pick = (hit: SearchHit) => {
     opened(hit);
     router.push(`/c/${hit.chatId}`);
   };

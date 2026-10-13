@@ -1,5 +1,6 @@
 "use client";
 import { busyText } from "@client/components/chat/rate-limit";
+import { readJson, type DuplicateResponse, type ForkResponse } from "@shared/api";
 import { MAX_FORKS, type ForkOption } from "@shared/forks";
 import { uuidv7 } from "@shared/id";
 import type { ChatStore } from "./chat-store";
@@ -47,7 +48,7 @@ export async function forkChat(
   }
   if (res.status === 429) return { ok: false, error: busyText(Number(res.headers.get("retry-after")) * 1000) };
   if (!res.ok) return { ok: false, error: MESSAGES[res.status] ?? `Forking failed (${res.status}). Try again.` };
-  const data = (await res.json()) as { forks: { chatId: string }[]; failed?: { error: string; retryAfterMs?: number } };
+  const data = await readJson<ForkResponse>(res);
   const first = data.forks[0];
   if (!first) return { ok: false, error: "No fork could be started." };
   store.updateMessage(messageId, { options: [], optionsStream: null });
@@ -81,7 +82,7 @@ export async function duplicateChat(store: ChatStore, router: { push: (href: str
   }
   if (res.status === 409) return { ok: false, error: `This chat already has ${MAX_FORKS} forks.` };
   if (!res.ok) return { ok: false, error: MESSAGES[res.status] ?? `Duplicating failed (${res.status}). Try again.` };
-  const dup = (await res.json()) as { chatId: string; parentId: string; title: string; forkOrder: number };
+  const dup = await readJson<DuplicateResponse>(res);
   getSidebarStore().upsert({ id: dup.chatId, title: dup.title, updatedAt: Date.now(), forkedFrom: dup.parentId, forkOrder: dup.forkOrder });
   await prefetchChat(store, dup.chatId);
   setPendingChat(dup.chatId);

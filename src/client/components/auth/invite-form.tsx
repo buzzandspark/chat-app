@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formText, signIn } from "./login-form";
 import { newChatHref } from "@client/hooks/use-new-chat";
+import { readJson, type ApiError } from "@shared/api";
 
 /** Set a password through the invite, then sign in with it (a form action; the browser checks the length). */
 export function InviteForm({ token, email }: { token: string; email: string }) {
@@ -24,7 +25,7 @@ export function InviteForm({ token, email }: { token: string; email: string }) {
       return "Setting the password failed: you seem to be offline.";
     }
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      const body: Partial<ApiError> = await readJson<ApiError>(res).catch(() => ({}));
       return body.error === "weak_password" ? "Use at least 10 characters." : "This invite could not be used.";
     }
     const result = await signIn(email, password);

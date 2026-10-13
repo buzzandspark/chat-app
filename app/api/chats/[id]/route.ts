@@ -5,6 +5,7 @@ import { getDb, schema } from "@db/client";
 import { getChatWithMessages } from "@server/chats";
 import { errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
+import type { ChatResponse } from "@shared/api";
 import { isUuid } from "@shared/id";
 
 const Patch = z
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/chats/[i
     if (!isUuid(id)) return jsonError(400, { error: "bad_request" });
     const data = getChatWithMessages(id, user.id, { limit: request.nextUrl.searchParams.get("all") === "1" ? null : undefined });
     if (!data) return jsonError(404, { error: "not_found" });
-    return Response.json(data, { headers: { "cache-control": "no-store" } });
+    return Response.json(data satisfies ChatResponse, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }

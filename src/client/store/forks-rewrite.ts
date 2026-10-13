@@ -1,6 +1,7 @@
 "use client";
 import { busyText } from "@client/components/chat/rate-limit";
-import type { ForkOption, OptionsTrace } from "@shared/forks";
+import { readJson, type RewriteResponse } from "@shared/api";
+import type { ForkOption } from "@shared/forks";
 import { CAP, logOptionsTrace } from "./forks";
 
 // The fork sheet's only call, kept out of forks.ts so it loads with the sheet's chunk, not the chat route.
@@ -17,7 +18,7 @@ export async function rewriteOptions(messageId: string, instruction: string, opt
     });
     if (res.status === 429) return { ok: false, error: busyText(Number(res.headers.get("retry-after")) * 1000) };
     if (!res.ok) return { ok: false, error: res.status === 402 ? CAP : `Could not apply the instruction (${res.status}).` };
-    const data = (await res.json()) as { options: ForkOption[]; trace?: OptionsTrace | null };
+    const data = await readJson<RewriteResponse>(res);
     // The server sends traces only in development; the check lets production builds drop the logging.
     if (process.env.NODE_ENV !== "production" && data.trace) logOptionsTrace("rewrite", data.trace, performance.now() - asked);
     // A cut-off or refused answer comes back as no options.

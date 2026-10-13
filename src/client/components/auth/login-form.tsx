@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { newChatHref } from "@client/hooks/use-new-chat";
+import { readJson, type AuthError } from "@shared/api";
 import { safeNext } from "@shared/safe-next";
 
 /** Back where sign-in was asked for; the `/c/new` alias goes straight to a new chat. */
@@ -68,7 +69,7 @@ export async function signIn(email: string, password: string): Promise<{ ok: tru
       body: JSON.stringify({ email, password }),
     });
     if (res.ok) return { ok: true };
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    const body: AuthError = await readJson<AuthError>(res).catch(() => ({}));
     return { ok: false, message: body.message ?? (res.status === 429 ? "Too many attempts. Try again in a moment." : "Sign-in failed") };
   } catch {
     return { ok: false, message: "Sign-in failed: you seem to be offline." };

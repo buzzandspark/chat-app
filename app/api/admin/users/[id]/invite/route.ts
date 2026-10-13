@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { issueInvite, revokeInvites } from "@auth/invites";
+import type { InviteResponse, OkResponse } from "@shared/api";
 import { env } from "@shared/env";
 import { errorResponse, jsonError, requireAdmin } from "@server/current-user";
 import { findUser } from "@server/admin";
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/admin/u
     const invite = issueInvite(id);
     const base = env.BETTER_AUTH_URL ?? new URL(request.url).origin;
     return Response.json(
-      { inviteUrl: `${base}/invite/${invite.token}`, expiresAt: invite.expiresAt.getTime() },
+      { inviteUrl: `${base}/invite/${invite.token}`, expiresAt: invite.expiresAt.getTime() } satisfies InviteResponse,
       { headers: { "cache-control": "no-store" } },
     );
   } catch (err) {
@@ -27,7 +28,7 @@ export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/admi
     const { id } = await ctx.params;
     if (!findUser(id)) return jsonError(404, { error: "not_found" });
     revokeInvites(id);
-    return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
+    return Response.json({ ok: true } satisfies OkResponse, { headers: { "cache-control": "no-store" } });
   } catch (err) {
     return errorResponse(err);
   }
