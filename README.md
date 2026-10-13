@@ -13,7 +13,7 @@ cp .env.example .env
 
 In `.env`, set:
 
-- `ANTHROPIC_API_KEY`: your key from console.anthropic.com. Leave it empty to run in replay mode (recorded fixtures, no spend).
+- `ANTHROPIC_API_KEY`: your key from console.anthropic.com. Leave it empty to run in replay mode (recorded fixtures, no spend); production then also needs `REPLAY_MODE=1`.
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` (8+ chars; production needs 10+ and refuses `change-me`): the admin account seeded on first boot.
 
 ```sh

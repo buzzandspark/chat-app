@@ -17,6 +17,7 @@ In production the server refuses to start, and exits with code 1, when:
 
 - `BETTER_AUTH_SECRET` is unset or is the `.env.example` placeholder. Generate one with `openssl rand -base64 32`.
 - `BETTER_AUTH_URL` is unset. Set it to the URL users reach the app at.
+- `ANTHROPIC_API_KEY` is unset and `REPLAY_MODE` is not `1`. Replay mode serves recorded replies, so a deployment asks for it explicitly.
 - `ADMIN_PASSWORD` is `change-me` or shorter than 10 characters.
 - any other variable is invalid, or boot fails, for example on a migration.
 

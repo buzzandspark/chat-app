@@ -24,6 +24,8 @@ class Exit extends Error {
 async function bootWith(vars: Record<string, string | undefined>): Promise<void> {
   vi.stubEnv("BETTER_AUTH_SECRET", "test-secret-0123456789abcdef");
   vi.stubEnv("BETTER_AUTH_URL", "https://chat.example");
+  vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+  vi.stubEnv("REPLAY_MODE", "");
   vi.stubEnv("ADMIN_PASSWORD", undefined);
   vi.stubEnv("SENTRY_DSN", "");
   vi.stubEnv("E2E", "");
@@ -104,6 +106,15 @@ describe("boot: a deployment's configuration", () => {
     expect(runMigrations).not.toHaveBeenCalled();
   });
 
+  it("refuses to start without ANTHROPIC_API_KEY unless REPLAY_MODE asks for replay", async () => {
+    await expect(bootWith({ NODE_ENV: "production", ANTHROPIC_API_KEY: undefined })).rejects.toThrow(new Exit(1));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("ANTHROPIC_API_KEY"));
+    expect(runMigrations).not.toHaveBeenCalled();
+    delete g.__chatBooted;
+    await bootWith({ NODE_ENV: "production", ANTHROPIC_API_KEY: undefined, REPLAY_MODE: "1" });
+    expect(runMigrations).toHaveBeenCalledOnce();
+  });
+
   it("refuses the published placeholder secrets", async () => {
     for (const secret of ["change-me-to-a-long-random-string", "dev-secret-not-for-production-0123456789"]) {
       delete g.__chatBooted;
@@ -125,7 +136,7 @@ describe("boot: a deployment's configuration", () => {
   });
 
   it("leaves development and the e2e harness alone", async () => {
-    const placeholders = { BETTER_AUTH_URL: undefined, BETTER_AUTH_SECRET: "change-me-to-a-long-random-string", ADMIN_PASSWORD: "change-me" };
+    const placeholders = { ANTHROPIC_API_KEY: undefined, BETTER_AUTH_URL: undefined, BETTER_AUTH_SECRET: "change-me-to-a-long-random-string", ADMIN_PASSWORD: "change-me" };
     await bootWith({ NODE_ENV: "development", ...placeholders });
     delete g.__chatBooted;
     await bootWith({ NODE_ENV: "production", E2E: "1", E2E_ALLOW_PRODUCTION: "1", ...placeholders });
