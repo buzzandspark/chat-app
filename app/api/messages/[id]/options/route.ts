@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@db/client";
 import type { OptionsProgress } from "@relay/options/service";
-import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import { assertMayInteract, errorResponse, jsonError, requireUser } from "@server/current-user";
 import { getRelay } from "@server/relay";
 import { env } from "@shared/env";
 import type { OptionsEvent } from "@shared/forks";
@@ -11,6 +11,7 @@ import type { OptionsEvent } from "@shared/forks";
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/messages/[id]/options">): Promise<Response> {
   try {
     const user = await requireUser();
+    assertMayInteract(user);
     const { id } = await ctx.params;
     const row = getDb()
       .select({ userId: schema.chats.userId, options: schema.messages.forkOptions })

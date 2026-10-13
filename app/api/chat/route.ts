@@ -7,7 +7,7 @@ import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { SCENARIO_NAMES, SCENARIOS } from "@relay/scenarios";
 import { GUEST_MODEL, MODEL_IDS } from "@shared/models";
 import { MAX_MESSAGE_CHARS } from "@shared/types";
-import { errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
+import { assertMayInteract, errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
 import { refuseGuestSend, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
@@ -41,6 +41,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     // is never refused, and its regenerate never stops the very generation it names.
     const existing = engine.owner(body.generationId) !== null;
     if (!existing && isDraining()) return jsonError(503, { error: "draining" }, { "retry-after": "5" });
+    if (!existing) assertMayInteract(user);
     if (!existing && user.role === "guest") {
       const refused = refuseGuestSend(request, user.id);
       if (refused) return refused;

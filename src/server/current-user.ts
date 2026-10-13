@@ -8,6 +8,7 @@ import { getDb, schema } from "@db/client";
 import type { ApiError } from "@shared/api";
 import { env } from "@shared/env";
 import type { UserRole } from "@shared/types";
+import { guestsBlocked } from "./instance-settings";
 
 export interface CurrentUser {
   id: string;
@@ -66,6 +67,11 @@ export async function requireAdmin(): Promise<CurrentUser> {
   const user = await requireUser();
   if (user.role !== "admin") throw new HttpError(404, { error: "not_found" });
   return user;
+}
+
+/** While guests are blocked a guest still reads its chats but starts nothing new. */
+export function assertMayInteract(user: CurrentUser): void {
+  if (user.role === "guest" && guestsBlocked()) throw new HttpError(403, { error: "guests_blocked" });
 }
 
 export class HttpError extends Error {

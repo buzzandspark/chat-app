@@ -2,7 +2,7 @@ import { getDb, schema } from "@db/client";
 import type { SeedLongChatResponse } from "@shared/api";
 import { uuidv7 } from "@shared/id";
 import { GUEST_MODEL } from "@shared/models";
-import { errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
+import { assertMayInteract, errorResponse, jsonError, requireUser, scenariosAllowed } from "@server/current-user";
 import { getLimiters, tooMany } from "@server/ratelimit";
 
 const FILLER = [
@@ -17,6 +17,7 @@ export async function POST(): Promise<Response> {
   try {
     const user = await requireUser();
     if (!scenariosAllowed(user.role)) return jsonError(403, { error: "forbidden" });
+    assertMayInteract(user);
     const limit = getLimiters().seedLongChat.check(user.id);
     if (!limit.ok) return tooMany(limit.retryAfterMs);
     const db = getDb();

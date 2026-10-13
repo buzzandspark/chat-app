@@ -167,6 +167,10 @@ export function StatusFooter({ message, onRetry, onContinue, onResume }: StatusF
       case "quota_exceeded":
         text = "You have used the whole budget on this instance.";
         break;
+      case "guests_blocked":
+        text = "Guests can't send messages right now.";
+        offer = link("/login", "Sign in");
+        break;
       case "context_full":
         text = "This chat is too long to continue.";
         offer = action("Start a new chat", newChat);

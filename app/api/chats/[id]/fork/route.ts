@@ -7,7 +7,7 @@ import { ForkOptionBody } from "@relay/options/schema";
 import { BudgetExceededError, QuotaExceededError } from "@relay/quota";
 import { readJson, type ApiError, type ForkResponse } from "@shared/api";
 import { MAX_FORKS } from "@shared/forks";
-import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import { assertMayInteract, errorResponse, jsonError, requireUser } from "@server/current-user";
 import { refuseGuestSend, tooMany } from "@server/ratelimit";
 import { getRelay } from "@server/relay";
 import { isDraining } from "@server/shutdown";
@@ -38,6 +38,7 @@ function failure(err: unknown): Response {
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[id]/fork">): Promise<Response> {
   try {
     const user = await requireUser();
+    assertMayInteract(user);
     const { id } = await ctx.params;
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request", issues: parsed.error.issues });

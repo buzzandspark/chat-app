@@ -85,6 +85,8 @@ type ErrorKind =
   | "gone"
   /** An Edit or Regenerate whose turns the server could not replace now; nothing was added. */
   | "conflict"
+  /** A guest's new work while an admin has blocked guests. */
+  | "guests_blocked"
   | "unknown";
 
 /** Longest user message the route accepts; the composer counts against it. */

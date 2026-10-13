@@ -17,7 +17,7 @@ export async function rewriteOptions(messageId: string, instruction: string, opt
       body: JSON.stringify({ instruction, options }),
     });
     if (res.status === 429) return { ok: false, error: busyText(Number(res.headers.get("retry-after")) * 1000) };
-    if (!res.ok) return { ok: false, error: res.status === 402 ? CAP : `Could not apply the instruction (${res.status}).` };
+    if (!res.ok) return { ok: false, error: res.status === 402 ? CAP : res.status === 403 ? "Guests can't use Explore right now. Sign in to continue." : `Could not apply the instruction (${res.status}).` };
     const data = await readJson<RewriteResponse>(res);
     // The server sends traces only in development; the check lets production builds drop the logging.
     if (process.env.NODE_ENV !== "production" && data.trace) logOptionsTrace("rewrite", data.trace, performance.now() - asked);

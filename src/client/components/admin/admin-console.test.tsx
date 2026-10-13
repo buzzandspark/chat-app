@@ -19,7 +19,7 @@ const ada: AdminUserRow = {
 const offline = () => Promise.reject(new TypeError("Failed to fetch"));
 
 function renderConsole() {
-  render(<AdminConsole initialUsers={[ada]} selfId="admin" defaultCapUsd={5} />);
+  render(<AdminConsole initialUsers={[ada]} selfId="admin" defaultCapUsd={5} initialGuestsBlocked={false} />);
 }
 
 describe("AdminConsole on a dead network", () => {
@@ -37,6 +37,16 @@ describe("AdminConsole on a dead network", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Create failed: you seem to be offline.");
     expect(screen.getByRole("button", { name: "Create and invite" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Issue invite" })).toBeEnabled();
+  });
+
+  it("a Block guests switch whose save fails turns back off and says so", async () => {
+    vi.stubGlobal("fetch", vi.fn(offline));
+    renderConsole();
+    fireEvent.click(screen.getByRole("switch", { name: "Block guests" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not change guest access.");
+    expect(screen.getByRole("switch", { name: "Block guests" })).not.toBeChecked();
+    expect(screen.getByRole("switch", { name: "Block guests" })).toBeEnabled();
   });
 
   it("a row action whose fetch rejects says so and frees every action", async () => {

@@ -199,7 +199,7 @@ describe("0004_spend_buckets", () => {
   it("adds an empty spend_buckets table and a null budget_keys for every existing user", () => {
     applyMigrations(sqlite, migrationsThrough("0003_guests"));
     seed();
-    applyMigrations(sqlite);
+    applyMigrations(sqlite, migrationsThrough("0004_spend_buckets"));
     expect(journalRows()).toBe(5);
     expect(count("spend_buckets")).toBe(0);
     expect(sqlite.prepare("SELECT budget_keys FROM users").pluck().all()).toEqual([null]);

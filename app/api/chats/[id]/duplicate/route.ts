@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb } from "@db/client";
 import { duplicateChat, ForkError } from "@relay/forks";
-import { errorResponse, jsonError, requireUser } from "@server/current-user";
+import { assertMayInteract, errorResponse, jsonError, requireUser } from "@server/current-user";
 import type { DuplicateResponse } from "@shared/api";
 
 const Body = z.object({ chatId: z.string().uuid(), messageId: z.string().uuid() });
@@ -11,6 +11,7 @@ const Body = z.object({ chatId: z.string().uuid(), messageId: z.string().uuid() 
 export async function POST(request: NextRequest, ctx: RouteContext<"/api/chats/[id]/duplicate">): Promise<Response> {
   try {
     const user = await requireUser();
+    assertMayInteract(user);
     const { id } = await ctx.params;
     const parsed = Body.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return jsonError(400, { error: "bad_request" });

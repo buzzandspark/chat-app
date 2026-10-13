@@ -17,6 +17,7 @@ export interface ForkOutcome {
 
 const MESSAGES: Record<number, string> = {
   402: CAP,
+  403: "Guests can't fork chats right now. Sign in to continue.",
   404: "This chat no longer exists.",
   409: "This chat cannot be forked.",
   503: "The server is restarting; try again in a moment.",

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { getAuth } from "@auth/server";
 import { getDb, schema } from "@db/client";
+import { guestsBlocked } from "@server/instance-settings";
 import { clientKeys, getLimiters } from "@server/ratelimit";
 import { isDraining } from "@server/shutdown";
 import { safeNext } from "@shared/safe-next";
@@ -30,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
   return start(request, true);
 }
 
-/** A live session is reused; new guests are limited per address and overall, and past that it is sign-in only. */
+/** A live session is reused; new guests are limited per address and overall, and past that or while guests are blocked it is sign-in only. */
 async function start(request: Request, mayCreate: boolean): Promise<Response> {
   const next = safeNext(new URL(request.url).searchParams.get("next")) ?? "/c";
   const back = redirectTo(next);
@@ -44,7 +45,7 @@ async function start(request: Request, mayCreate: boolean): Promise<Response> {
   const login = `/login?next=${encodeURIComponent(next)}`;
   const { guestStart, guestStartAll } = getLimiters();
   const keys = clientKeys(request);
-  if (!mayCreate || isDraining() || !guestStart.check(keys.ip, false).ok || !guestStartAll.check("all", false).ok) return redirectTo(login);
+  if (!mayCreate || isDraining() || guestsBlocked() || !guestStart.check(keys.ip, false).ok || !guestStartAll.check("all", false).ok) return redirectTo(login);
   // Counted only when both allow it, and before the sign-in's await, so a burst of visits cannot all pass the check.
   guestStart.check(keys.ip);
   guestStartAll.check("all");

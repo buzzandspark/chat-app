@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useNow } from "@client/hooks/use-now";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { readJson, type AdminUsersResponse, type ApiError, type CreateUserResponse, type InviteResponse } from "@shared/api";
 import { NO_CAP, parseCapText } from "@shared/cost-cap";
 import type { AdminUserRow } from "@server/admin";
@@ -19,8 +20,19 @@ function money(n: number | null): string {
 }
 
 /** Phone-first (cards) and a table at md; every action is a 44 px target. */
-export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialUsers: AdminUserRow[]; selfId: string; defaultCapUsd: number }) {
+export function AdminConsole({
+  initialUsers,
+  selfId,
+  defaultCapUsd,
+  initialGuestsBlocked,
+}: {
+  initialUsers: AdminUserRow[];
+  selfId: string;
+  defaultCapUsd: number;
+  initialGuestsBlocked: boolean;
+}) {
   const [users, setUsers] = useState(initialUsers);
+  const [guestsBlocked, setGuestsBlocked] = useState(initialGuestsBlocked);
   const [email, setEmail] = useState("");
   const [cap, setCap] = useState("");
   const [noCap, setNoCap] = useState(false);
@@ -95,6 +107,22 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
     await refresh();
   };
 
+  const blockGuests = async (blocked: boolean) => {
+    setGuestsBlocked(blocked);
+    setBusy(true);
+    setNotice(null);
+    const res = await fetch("/api/admin/settings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ guestsBlocked: blocked }),
+    }).catch(() => null);
+    setBusy(false);
+    if (!res?.ok) {
+      setGuestsBlocked(!blocked);
+      setNotice("Could not change guest access.");
+    }
+  };
+
   const patch = (id: string, data: Record<string, unknown>, label: string) =>
     act(label, () => fetch(`/api/admin/users/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(data) }));
 
@@ -103,6 +131,18 @@ export function AdminConsole({ initialUsers, selfId, defaultCapUsd }: { initialU
       <header className="space-y-1">
         <h1 className="text-title font-semibold">Admin</h1>
       </header>
+
+      <div className="flex min-h-11 items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
+        <div className="min-w-0 flex-1">
+          <label htmlFor="block-guests" className="block text-small font-medium">
+            Block guests
+          </label>
+          <p id="block-guests-hint" className="text-caption text-muted-foreground">
+            No new guests; current guests can read their chats but not send, fork or Explore
+          </p>
+        </div>
+        <Switch id="block-guests" checked={guestsBlocked} disabled={busy} onCheckedChange={(on) => void blockGuests(on)} aria-describedby="block-guests-hint" />
+      </div>
 
       <form onSubmit={(e) => void create(e)} className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[1fr_10rem_auto_auto] md:items-end" aria-label="Create user">
         <div className="space-y-1.5">

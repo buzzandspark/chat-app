@@ -243,6 +243,12 @@ export const spendBuckets = sqliteTable("spend_buckets", {
   updatedAt: timestamp("updated_at").notNull(),
 });
 
+/** Instance-wide switches from the admin page: a single row, id 1. */
+export const instanceSettings = sqliteTable("instance_settings", {
+  id: integer("id").primaryKey(),
+  guestsBlocked: integer("guests_blocked", { mode: "boolean" }).notNull().default(false),
+});
+
 export type User = typeof users.$inferSelect;
 export type Chat = typeof chats.$inferSelect;
 export type Message = typeof messages.$inferSelect;

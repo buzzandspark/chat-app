@@ -534,11 +534,13 @@ export class GenerationClient {
             ? "conflict"
             : res.status === 401
               ? "session"
-              : res.status === 403
-                ? "forbidden"
-                : res.status === 503
-                  ? "unavailable"
-                  : "bad_request";
+              : body.error === "guests_blocked"
+                ? "guests_blocked"
+                : res.status === 403
+                  ? "forbidden"
+                  : res.status === 503
+                    ? "unavailable"
+                    : "bad_request";
     const message =
       kind === "quota_exceeded"
         ? "You have used your whole budget on this instance"
@@ -550,13 +552,15 @@ export class GenerationClient {
               ? "An earlier reply is still finishing"
               : kind === "session"
                 ? "Your session has ended"
-                : kind === "forbidden"
-                  ? "This chat belongs to another account"
-                  : kind === "unavailable"
-                    ? "The server is restarting"
-                    : tooLong(body)
-                      ? `This message is too long (the limit is ${MAX_MESSAGE_CHARS.toLocaleString()} characters)`
-                      : `Request failed (${res.status})`;
+                : kind === "guests_blocked"
+                  ? "Guests can't send messages right now"
+                  : kind === "forbidden"
+                    ? "This chat belongs to another account"
+                    : kind === "unavailable"
+                      ? "The server is restarting"
+                      : tooLong(body)
+                        ? `This message is too long (the limit is ${MAX_MESSAGE_CHARS.toLocaleString()} characters)`
+                        : `Request failed (${res.status})`;
     this.store.updateMessage(messageId, {
       status: "error",
       connection: "idle",
