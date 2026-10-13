@@ -312,7 +312,7 @@ export class ChatStore {
   }
 
   /**
-   * Local in-flight messages win and unlisted optimistic ones stay after the server's rows (ADR-0005).
+   * Local in-flight messages win and unlisted optimistic ones keep their place among the server's rows (ADR-0005).
    * deferNotify: the caller seeds during its own render, so subscribers are notified in a microtask.
    */
   seedChat(
@@ -322,12 +322,18 @@ export class ChatStore {
     options: { deferNotify?: boolean; older?: number; fork?: { from: string | null; position: number | null } } = {},
   ): void {
     const previous = this.chats.get(chatId);
-    const ids: string[] = [];
+    const listed = new Set(rows.map((r) => r.id));
+    // Each unlisted local message keeps its place after the nearest earlier listed row (null: before them all).
+    const unlistedAfter = new Map<string | null, string[]>();
+    let anchor: string | null = null;
+    for (const id of previous?.messageIds ?? []) {
+      if (listed.has(id)) anchor = id;
+      else if (this.messages.get(id)?.local) unlistedAfter.set(anchor, [...(unlistedAfter.get(anchor) ?? []), id]);
+    }
+    const ids: string[] = [...(unlistedAfter.get(null) ?? [])];
     const touched: string[] = [];
-    const listed = new Set<string>();
     for (const row of rows) {
-      listed.add(row.id);
-      ids.push(row.id);
+      ids.push(row.id, ...(unlistedAfter.get(row.id) ?? []));
       const existing = this.messages.get(row.id);
       if (existing) {
         if (existing.status === "streaming") continue;
@@ -339,11 +345,6 @@ export class ChatStore {
       this.internals.set(row.id, { blockIndex: blockIndexFromContent(row.content) });
       if (m.generationId) this.byGeneration.set(m.generationId, row.id);
       touched.push(row.id);
-    }
-    if (previous) {
-      for (const id of previous.messageIds) {
-        if (!listed.has(id) && this.messages.get(id)?.local) ids.push(id);
-      }
     }
     const nextTitle = title ?? previous?.title ?? null;
     // An existing chat opens on the model and effort its last reply was asked with, unless the user already chose here.

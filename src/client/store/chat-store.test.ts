@@ -220,6 +220,25 @@ describe("ChatStore", () => {
       expect(store.getMessage("u1")!.local).toBe(false);
     });
 
+    it("keeps a refused turn in its place when later turns are listed, so it stays unretryable", () => {
+      const { store } = makeStore();
+      const u0 = row({ id: "u0", role: "user", content: [text("first")] });
+      const a0 = row({ id: "a0", role: "assistant", content: [text("reply")] });
+      store.seedChat("c1", "T", [u0, a0]);
+      store.addMessage(createMessageState({ id: "u1", chatId: "c1", role: "user", blocks: [{ type: "text", text: "refused" }] }));
+      store.addMessage(createMessageState({ id: "a1", chatId: "c1", role: "assistant", status: "error" }));
+      store.addMessage(createMessageState({ id: "u2", chatId: "c1", role: "user", blocks: [{ type: "text", text: "accepted" }] }));
+      store.addMessage(createMessageState({ id: "a2", chatId: "c1", role: "assistant", status: "done" }));
+      const u2 = row({ id: "u2", role: "user", content: [text("accepted")] });
+      const a2 = row({ id: "a2", role: "assistant", content: [text("ok")] });
+      store.seedChat("c1", "T", [u0, a0, u2, a2]);
+      expect(store.getChat("c1").messageIds).toEqual(["u0", "a0", "u1", "a1", "u2", "a2"]);
+      expect(canRetryReply(store.getChat("c1"), store.getMessage("a1")!)).toBe(false);
+      // With no listed row before it, a refused first turn stays first.
+      store.seedChat("c1", "T", [u2, a2]);
+      expect(store.getChat("c1").messageIds).toEqual(["u1", "a1", "u2", "a2"]);
+    });
+
     it("does not notify or replace anything when the rows are unchanged", () => {
       const { store } = makeStore();
       const rows = [row({ id: "u1", role: "user", content: [text("q")] }), row({ id: "a1", role: "assistant", content: [text("a")] })];
