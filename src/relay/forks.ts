@@ -164,7 +164,7 @@ export function duplicateChat(db: Db, input: { userId: string; chatId: string; m
   const source = db.select().from(chats).where(and(eq(chats.id, input.chatId), eq(chats.userId, input.userId))).get();
   if (!source) throw new ForkError("not_found");
   const reply = db.select().from(messages).where(and(eq(messages.id, input.messageId), eq(messages.chatId, source.id))).get();
-  if (!reply || reply.role !== "assistant" || reply.status === "streaming") throw new ForkError("not_found");
+  if (!reply || reply.role !== "assistant" || reply.status === "streaming" || reply.status === "error") throw new ForkError("not_found");
   const parentId = source.forkedFrom ?? source.id;
   const forkOrder = db.select({ id: chats.id }).from(chats).where(eq(chats.forkedFrom, parentId)).all().length;
   if (forkOrder >= MAX_FORKS) throw new ForkError("too_many");

@@ -269,13 +269,16 @@ describe("duplicateChat", () => {
     expect(second.title).toBe(`${first.title} (copy)`);
   });
 
-  it("refuses another user's chat, a message that isn't a finished reply, and an eleventh fork", async () => {
+  it("refuses another user's chat, a message that isn't a finished reply, an errored reply, and an eleventh fork", async () => {
     const parentId = await parentChat(1);
     const rows = rowsOf(parentId);
     const reply = rows.find((r) => r.role === "assistant")!;
     const question = rows.find((r) => r.role === "user")!;
     expect(() => duplicateChat(db, { userId: "u2", chatId: parentId, messageId: reply.id, newChatId: uuidv7() })).toThrow(/not_found/);
     expect(() => duplicateChat(db, { userId: USER, chatId: parentId, messageId: question.id, newChatId: uuidv7() })).toThrow(/not_found/);
+    db.update(messages).set({ status: "error" }).where(eq(messages.id, reply.id)).run();
+    expect(() => duplicateChat(db, { userId: USER, chatId: parentId, messageId: reply.id, newChatId: uuidv7() })).toThrow(/not_found/);
+    db.update(messages).set({ status: "done" }).where(eq(messages.id, reply.id)).run();
     for (let i = 0; i < 10; i++) duplicateChat(db, { userId: USER, chatId: parentId, messageId: reply.id, newChatId: uuidv7() });
     expect(() => duplicateChat(db, { userId: USER, chatId: parentId, messageId: reply.id, newChatId: uuidv7() })).toThrow(ForkError);
   });

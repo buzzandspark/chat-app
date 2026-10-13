@@ -27,9 +27,10 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
   const [error, setError] = useState<string | null>(null);
   const store = useChatStore();
   const router = useRouter();
-  // Copy from here makes another fork of the main chat, so it's offered while the main chat has room for one.
+  // Copy from here makes another fork of the main chat, so it's offered while the main chat has room for one, and never on a failed reply.
   const parentId = useChat(message.chatId).forkedFrom ?? message.chatId;
   const roomForFork = useSidebarChats().filter((c) => c.forkedFrom === parentId).length < MAX_FORKS;
+  const canCopy = message.status !== "error" && roomForFork;
   const onFork = () => {
     setError(null);
     void duplicateChat(store, router, message.chatId, message.id).then((out) => {
@@ -73,7 +74,7 @@ export function AssistantActions({ message, text, canRegenerate, onRegenerate, d
               Regenerate
             </DropdownMenuItem>
           ) : null}
-          {roomForFork ? (
+          {canCopy ? (
             <DropdownMenuItem onSelect={onFork} className="min-h-11">
               <GitFork />
               Copy from here
