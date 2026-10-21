@@ -103,7 +103,7 @@ export class OptionsService {
     const startedAt = performance.now();
     if (!chat || chat.forkedFrom || !info.text.trim() || !this.exploreOn(info.userId) || this.quota.spendBlock(info.userId) || !this.canFork(info.chatId)) return null;
     const messenger = this.messenger(info.scenario, info.billable);
-    const result = await this.charged(messenger, info.userId, info.generationId, "options", Buffer.byteLength(info.text), () => messenger.detect(info.text, onProgress), true).catch(
+    const result = await this.charged(messenger, messenger.detectModel, info.userId, info.generationId, "options", Buffer.byteLength(info.text), () => messenger.detect(info.text, onProgress), true).catch(
       (err: unknown) => {
         if (err instanceof QuotaExceededError || err instanceof BudgetExceededError) return null;
         throw err;
@@ -174,7 +174,7 @@ export class OptionsService {
       if (block) throw block;
     }
     const promptBytes = Buffer.byteLength(JSON.stringify(options) + instruction);
-    const result = await this.charged(messenger, userId, gen?.id ?? null, "options_rewrite", promptBytes, () => messenger.rewrite(options, instruction));
+    const result = await this.charged(messenger, OPTIONS_MODEL, userId, gen?.id ?? null, "options_rewrite", promptBytes, () => messenger.rewrite(options, instruction));
     if (!result) throw new BusyError();
     return { options: result.options, trace: result.trace ?? null };
   }
@@ -207,6 +207,7 @@ export class OptionsService {
    */
   private async charged(
     messenger: OptionsMessenger,
+    model: string,
     userId: string,
     generationId: string | null,
     iterationType: string,
@@ -220,12 +221,12 @@ export class OptionsService {
     else if (guest && !this.holdSlot(userId)) return null;
     const hold = guest ? `options:${uuidv7()}` : null;
     try {
-      if (hold) this.quota.admit(userId, hold, OPTIONS_MODEL, promptBytes);
+      if (hold) this.quota.admit(userId, hold, model, promptBytes);
       const result = await run();
-      this.record(userId, generationId, iterationType, result.usage, billable, false);
+      this.record(userId, generationId, iterationType, model, result.usage, billable, false);
       return result;
     } catch (err) {
-      if (err instanceof OptionsCallError) this.record(userId, generationId, iterationType, err.usage, billable, true);
+      if (err instanceof OptionsCallError) this.record(userId, generationId, iterationType, model, err.usage, billable, true);
       throw err;
     } finally {
       if (hold) this.quota.release(userId, hold);
@@ -263,15 +264,15 @@ export class OptionsService {
     return this.db.select({ role: users.role }).from(users).where(eq(users.id, userId)).get()?.role === "guest";
   }
 
-  private record(userId: string, generationId: string | null, iterationType: string, usage: TokenCounts | null, billable: boolean, estimated: boolean): void {
+  private record(userId: string, generationId: string | null, iterationType: string, model: string, usage: TokenCounts | null, billable: boolean, estimated: boolean): void {
     if (!usage) return;
-    const costUsd = billable ? costOf(OPTIONS_MODEL, usage) : 0;
+    const costUsd = billable ? costOf(model, usage) : 0;
     const now = new Date(this.now());
     // The chat may have been deleted while Haiku answered: the spend is kept, the link is not.
     const linked = generationId && this.db.select({ id: generations.id }).from(generations).where(eq(generations.id, generationId)).get() ? generationId : null;
     this.db.transaction((tx) => {
       tx.insert(usageEvents)
-        .values({ id: uuidv7(), generationId: linked, userId, model: OPTIONS_MODEL, iterationType, ...usage, costUsd, estimated, createdAt: now })
+        .values({ id: uuidv7(), generationId: linked, userId, model, iterationType, ...usage, costUsd, estimated, createdAt: now })
         .run();
       this.quota.spend(tx, userId, costUsd);
     });

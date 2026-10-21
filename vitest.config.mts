@@ -26,7 +26,7 @@ export default defineConfig({
         test: {
           name: "server",
           environment: "node",
-          include: ["src/{relay,db,shared,server,auth}/**/*.test.ts"],
+          include: ["src/{relay,db,shared,server,auth}/**/*.test.ts", "evals/**/*.test.ts"],
         },
       },
       {

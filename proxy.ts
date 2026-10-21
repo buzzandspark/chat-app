@@ -5,7 +5,7 @@ import { env } from "@shared/env";
 
 // Single segments the app serves. Any other would reach [adminSlug], whose notFound() comes after the shell
 // has streamed with a 200, so it 404s here instead.
-const TOP_LEVEL = new Set(["c", "settings", "login", "preview", "icon", "apple-icon", "manifest.webmanifest", "favicon.ico", "robots.txt"]);
+const TOP_LEVEL = new Set(["c", "settings", "login", "preview", "evals", "icon", "apple-icon", "manifest.webmanifest", "favicon.ico", "robots.txt"]);
 const SESSION_PATH = /^\/(c(\/|$)|settings$|$)/;
 
 const SESSION_COOKIES = ["better-auth.session_token", "__Secure-better-auth.session_token"];

@@ -7,6 +7,7 @@ import { uuidv7 } from "@shared/id";
 import { Budgets } from "../budgets";
 import { BusyError, type ReplyDoneInfo } from "../engine";
 import { BudgetExceededError, QuotaManager } from "../quota";
+import { costOf } from "../anthropic/pricing";
 import { createTestDb, seedUser } from "../test-utils";
 import { OPTIONS_MODEL, OptionsCallError, SCRIPTED_OPTIONS, type MessengerResult, type OptionsMessenger } from "./messenger";
 import { OptionsService } from "./service";
@@ -22,12 +23,13 @@ const USAGE = { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheW
 const TRACE = { model: "claude-haiku-5-5", system: "s", user: "u", response: {}, stopReason: "end_turn", inputTokens: 1000, outputTokens: 200, apiMs: 900 };
 
 /** A live stand-in that answers after `delayMs` and remembers what it was asked. */
-function fakeLive(delayMs = 0): OptionsMessenger & { asked: string[] } {
+function fakeLive(delayMs = 0, detectModel = OPTIONS_MODEL): OptionsMessenger & { asked: string[] } {
   const asked: string[] = [];
   const answer = (options: ForkOption[]): Promise<MessengerResult> =>
     new Promise((resolve) => setTimeout(() => resolve({ options, usage: USAGE, trace: TRACE }), delayMs));
   return {
     name: "haiku",
+    detectModel,
     asked,
     detect(reply) {
       asked.push(reply);
@@ -81,6 +83,14 @@ describe("OptionsService", () => {
     expect(service.takeTrace(info.messageId)).toBeNull();
   });
 
+  it("bills a detection at the model the messenger calls", async () => {
+    const service = new OptionsService({ db, replayMode: false, live: () => fakeLive(0, "claude-sonnet-5-5") });
+    const info = seedReply(uuidv7());
+    service.onReplyDone(info);
+    await service.awaitOptions(info.messageId, 1000);
+    expect(db.select().from(usageEvents).get()).toMatchObject({ model: "claude-sonnet-5-5", costUsd: costOf("claude-sonnet-5-5", USAGE) });
+  });
+
   it("charges a guest's Explore call to its budgets", async () => {
     db.update(users).set({ role: "guest", budgetKeys: ["ip:203.0.113.7"] }).where(eq(users.id, USER)).run();
     const quota = new QuotaManager(db, { maxPromptTokens: 60_000, budgets: new Budgets(db, { ip: 1, ip48: 3, all: 10 }, () => 0) });
@@ -94,7 +104,7 @@ describe("OptionsService", () => {
   });
 
   it("records and charges the estimated cost of a call that broke off partway, and the detection fails", async () => {
-    const broken: OptionsMessenger = { name: "haiku", detect: async () => Promise.reject(new OptionsCallError(USAGE, { cause: new Error("lost") })), rewrite: async () => ({ options: [], usage: null }) };
+    const broken: OptionsMessenger = { name: "haiku", detectModel: OPTIONS_MODEL, detect: async () => Promise.reject(new OptionsCallError(USAGE, { cause: new Error("lost") })), rewrite: async () => ({ options: [], usage: null }) };
     const service = new OptionsService({ db, replayMode: false, live: () => broken });
     const info = seedReply(uuidv7());
     service.onReplyDone(info);
@@ -254,6 +264,7 @@ describe("OptionsService", () => {
   it("watch follows a detection: the count, the options so far, then done; a failure ends it as failed", async () => {
     const progressive: OptionsMessenger = {
       name: "haiku",
+      detectModel: OPTIONS_MODEL,
       async detect(_reply, onProgress) {
         onProgress?.({ count: 2 });
         await new Promise((r) => setTimeout(r, 5));
@@ -275,7 +286,7 @@ describe("OptionsService", () => {
     watched.stop();
     expect(service.watch(uuidv7(), () => {})).toBeNull();
 
-    const broken: OptionsMessenger = { name: "haiku", detect: async () => Promise.reject(new Error("boom")), rewrite: async () => ({ options: [], usage: null }) };
+    const broken: OptionsMessenger = { name: "haiku", detectModel: OPTIONS_MODEL, detect: async () => Promise.reject(new Error("boom")), rewrite: async () => ({ options: [], usage: null }) };
     const failing = new OptionsService({ db, replayMode: false, live: () => broken });
     const other = seedReply(uuidv7());
     failing.onReplyDone(other);

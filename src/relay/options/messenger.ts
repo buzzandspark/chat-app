@@ -7,6 +7,7 @@ import { CHARS_PER_TOKEN } from "../quota";
 import { DetectOutput, RewriteOutput } from "./schema";
 
 export const OPTIONS_MODEL = "claude-haiku-5-5";
+export const OPTIONS_MAX_TOKENS = 8192;
 
 export interface DetectProgress {
   count?: number;
@@ -24,20 +25,31 @@ export interface MessengerResult {
 /** Haiku's own messenger: separate client and request shape from the chat relay, never in its history. */
 export interface OptionsMessenger {
   readonly name: "haiku" | "scripted";
+  /** What a detection is billed and held at. */
+  readonly detectModel: string;
   detect(reply: string, onProgress?: (progress: DetectProgress) => void): Promise<MessengerResult>;
   rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult>;
 }
 
-const DETECT_SYSTEM = `Decide whether this assistant reply lays out distinct alternatives the user might weigh against each other. A menu of ideas or suggestions the user could pick from counts too, even when they could do several of them.
+export const DETECT_SYSTEM = `Decide whether this assistant reply lays out distinct alternatives the user might weigh against each other. A menu of ideas or suggestions the user could pick from counts too, even when they could do several of them.
 
 Return none for parts of one whole (steps, tips that together serve one goal, features, facts, examples, pros and cons), alternatives mentioned in passing, or questions about the user's situation. When unsure, return none.`;
 
-interface Effort {
+export interface Effort {
   thinking: { type: "adaptive" } | { type: "disabled" };
-  effort: "low" | "medium";
+  effort: "low" | "medium" | "high";
 }
 // Measured 2026-10-09: at low effort Haiku never thinks; medium thinks on borderline replies and was as accurate as high, and faster.
 const DETECT_EFFORT: Effort = { thinking: { type: "adaptive" }, effort: "medium" };
+
+/** What a detection sends; the evals in evals/options swap it to compare prompts and models. */
+export interface DetectConfig {
+  model: string;
+  system: string;
+  mode: Effort;
+}
+export const DETECT_CONFIG: DetectConfig = { model: OPTIONS_MODEL, system: DETECT_SYSTEM, mode: DETECT_EFFORT };
+
 // Applying one instruction to every prompt needs no judgement.
 const REWRITE_EFFORT: Effort = { thinking: { type: "disabled" }, effort: "low" };
 
@@ -56,13 +68,20 @@ export class OptionsCallError extends Error {
 
 export class LiveOptionsMessenger implements OptionsMessenger {
   readonly name = "haiku" as const;
-  constructor(private client: Anthropic = new Anthropic({ maxRetries: 1, timeout: 60_000 })) {}
+  readonly detectModel: string;
+  constructor(
+    private client: Anthropic = new Anthropic({ maxRetries: 1, timeout: 60_000 }),
+    private detectConfig: DetectConfig = DETECT_CONFIG,
+  ) {
+    this.detectModel = detectConfig.model;
+  }
 
   /** Streamed: the count and each completed option are reported as they arrive. */
   async detect(reply: string, onProgress?: (progress: DetectProgress) => void): Promise<MessengerResult> {
     let count: number | null = null;
     let seen = 0;
-    const { parsed, usage, trace } = await this.call(DETECT_SYSTEM, `<reply>\n${reply}\n</reply>`, DetectOutput, DETECT_EFFORT, (text, delta) => {
+    const { system, mode } = this.detectConfig;
+    const { parsed, usage, trace } = await this.call(this.detectModel, system, `<reply>\n${reply}\n</reply>`, DetectOutput, mode, (text, delta) => {
       if (count === null) {
         const match = /"count"\s*:\s*(\d+)\s*[,}]/.exec(text);
         if (match) {
@@ -82,11 +101,12 @@ export class LiveOptionsMessenger implements OptionsMessenger {
   }
 
   async rewrite(options: readonly ForkOption[], instruction: string): Promise<MessengerResult> {
-    const { parsed, usage, trace } = await this.call(REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput, REWRITE_EFFORT);
+    const { parsed, usage, trace } = await this.call(OPTIONS_MODEL, REWRITE_SYSTEM, `<instruction>\n${instruction}\n</instruction>\n<prompts>\n${JSON.stringify(options)}\n</prompts>`, RewriteOutput, REWRITE_EFFORT);
     return { options: clampOptions(parsed?.options ?? []), usage, trace };
   }
 
   private async call<T extends z.ZodType>(
+    model: string,
     system: string,
     content: string,
     output: T,
@@ -97,8 +117,8 @@ export class LiveOptionsMessenger implements OptionsMessenger {
     // Without the SDK's own parse, which throws on a cut-off answer and loses its usage.
     const { type, schema } = zodOutputFormat(output);
     const stream = this.client.messages.stream({
-      model: OPTIONS_MODEL,
-      max_tokens: 8192,
+      model,
+      max_tokens: OPTIONS_MAX_TOKENS,
       system,
       messages: [{ role: "user", content }],
       thinking: mode.thinking,
@@ -130,7 +150,7 @@ export class LiveOptionsMessenger implements OptionsMessenger {
     } catch {
       // A refusal or a cut-off answer: no options, and the raw text in the trace.
     }
-    return { parsed, usage, trace: toTrace(system, content, parsed ?? text, message.stop_reason ?? null, usage, Math.round(performance.now() - started)) };
+    return { parsed, usage, trace: toTrace(model, system, content, parsed ?? text, message.stop_reason ?? null, usage, Math.round(performance.now() - started)) };
   }
 }
 
@@ -143,8 +163,8 @@ function toUsage(u: Anthropic.Usage): TokenCounts {
   };
 }
 
-function toTrace(system: string, user: string, response: unknown, stopReason: string | null, usage: TokenCounts, apiMs: number): OptionsTrace {
-  return { model: OPTIONS_MODEL, system, user, response, stopReason, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, apiMs };
+function toTrace(model: string, system: string, user: string, response: unknown, stopReason: string | null, usage: TokenCounts, apiMs: number): OptionsTrace {
+  return { model, system, user, response, stopReason, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, apiMs };
 }
 
 /** The options completed so far in a partial `{"count":…,"options":[…` answer. */
@@ -190,6 +210,7 @@ export const SCRIPTED_OPTIONS: ForkOption[] = [
 /** Scenario runs and replay mode never spend; the answer comes from the scenario name. */
 export class ScriptedOptionsMessenger implements OptionsMessenger {
   readonly name = "scripted" as const;
+  readonly detectModel = OPTIONS_MODEL;
   constructor(private scenario: string | null) {}
 
   /** The options scenario paces itself like Haiku (count, then the list) so the button's waiting states can be seen and tested. */

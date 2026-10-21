@@ -1,0 +1,13 @@
+{
+  "note": "How much worse than the baseline production run each metric may get, about twice the run-to-run noise of a 3-sample mean, measured on 2026-10-21 by scoring each sample of the baseline as its own run (sd of the mean: f1 0.012, count 0.021, coverage 0.012, false buttons 0.005). The baseline moves only when this file is edited.",
+  "baseline": "2026-10-21-production-447268",
+  "tolerances": {
+    "f1": 0.04,
+    "falseButtonRate": 0.02,
+    "countExact": 0.06,
+    "countAgrees": 0.02,
+    "promptPass": 0.03,
+    "coverage": 0.04,
+    "parseFailRate": 0.01
+  }
+}
