@@ -85,7 +85,9 @@ async function main(): Promise<void> {
   const pct = (v: number | null) => (v === null ? "n/a" : `${(v * 100).toFixed(1)}%`);
   console.log(`\n\n${id}: ${jobs.length} detections, ${tally.hits} from cache, $${tally.spent.toFixed(2)} spent now ($${(run.costUsd.detect + run.costUsd.judge).toFixed(2)} uncached)`);
   if (tally.judgeErrors > 0) console.log(`${tally.judgeErrors} answers went unjudged after judge errors; rerun to retry them.`);
-  console.log(`F1 ${pct(m.f1)}  false buttons ${pct(m.falseButtonRate)}  count exact ${pct(m.countExact)}  prompts pass ${pct(m.promptPass)}  coverage ${pct(m.coverage)}`);
+  const { dev, test } = run.bySplit;
+  console.log(`dev: F1 ${pct(dev.f1)}  false buttons ${pct(dev.falseButtonRate)}  count exact ${pct(dev.countExact)}  prompts pass ${pct(dev.promptPass)}  coverage ${pct(dev.coverage)}`);
+  console.log(`held out (don't tune on these): F1 ${pct(test.f1)}  false buttons ${pct(test.falseButtonRate)}`);
   console.log(`flips ${pct(m.flipRate)}  parse fails ${pct(m.parseFailRate)}  errors ${pct(m.errorRate)}  $${m.costPer1k.toFixed(2)}/1k  count p95 ${m.countMsP95}ms`);
 }
 
