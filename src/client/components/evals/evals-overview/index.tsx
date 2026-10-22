@@ -79,7 +79,7 @@ function JudgeAgreement({ calibration }: { calibration: Calibration | null }) {
         {calibration.judgeModel} against labels by {calibration.labelers.join(", ") || "nobody yet"}, {formatDate(calibration.createdAt)}. Cohen&apos;s κ is agreement beyond chance: 1 is perfect, 0 is
         chance, and it&apos;s undefined (–) when the labels hold no failures for a criterion. Tune the rubric on the dev split only; test stays held out.
       </p>
-      <div className="-mx-4 overflow-x-auto px-4">
+      <div tabIndex={0} className="-mx-4 overflow-x-auto px-4">
         <table className="w-full min-w-[480px] border-collapse text-small">
           <thead>
             <tr className="text-caption text-muted-foreground">

@@ -5,13 +5,12 @@ import { isDeepStrictEqual } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { LOWER_IS_BETTER, Metrics } from "@shared/evals";
+import { LOWER_IS_BETTER, MetricKey } from "@shared/evals";
 import { OPTIONS_DIR, datasetHash, loadCases, loadRuns } from "./cases";
 import { describeConfig } from "./configs";
 import { summarize } from "./score";
 
-const MetricName = Metrics.keyof().exclude(["cases", "positives"]);
-const Gate = z.object({ note: z.string(), baseline: z.string(), tolerances: z.partialRecord(MetricName, z.number()) });
+const Gate = z.object({ note: z.string(), baseline: z.string(), tolerances: z.partialRecord(MetricKey, z.number()) });
 
 function main(): string[] {
   const gate = Gate.parse(JSON.parse(fs.readFileSync(path.join(OPTIONS_DIR, "gate.json"), "utf8")));
@@ -33,7 +32,7 @@ function main(): string[] {
   if (previous === latest) return failures;
   if (previous.datasetHash !== latest.datasetHash) console.log("The dataset changed between these runs, so the comparison below mixes data and model changes.");
   if (previous.judgeVersion !== latest.judgeVersion) console.log("The judge changed between these runs, so judged metrics compare different graders.");
-  for (const key of MetricName.options) {
+  for (const key of MetricKey.options) {
     const tolerance = gate.tolerances[key];
     const before = previous.summary[key];
     const after = latest.summary[key];

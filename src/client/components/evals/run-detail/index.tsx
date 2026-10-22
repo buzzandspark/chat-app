@@ -70,7 +70,7 @@ export function RunDetail({ run, baseline, replies }: { run: RunFile; baseline: 
             {baseline.judgeVersion !== run.judgeVersion ? ", graded under a different judge version" : ""}.
           </p>
         ) : null}
-        <div className="-mx-4 overflow-x-auto px-4">
+        <div tabIndex={0} className="-mx-4 overflow-x-auto px-4">
           <table className="w-full min-w-[560px] border-collapse text-small">
             <thead>
               <tr className="text-caption text-muted-foreground">

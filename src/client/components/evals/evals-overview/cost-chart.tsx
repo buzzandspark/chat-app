@@ -36,7 +36,7 @@ export function CostChart({ runs }: { runs: RunFile[] }) {
   const yTicks = Array.from({ length: Math.round((yMax - yMin) / 0.05) + 1 }, (_, i) => yMin + i * 0.05);
 
   return (
-    <div className="-mx-4 overflow-x-auto px-4">
+    <div tabIndex={0} className="-mx-4 overflow-x-auto px-4">
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full min-w-[560px]" role="img" aria-label="Detection F1 against cost per thousand replies, one point per config">
         {yTicks.map((t) => (
           <g key={t}>

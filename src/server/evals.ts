@@ -1,12 +1,12 @@
 import "server-only";
 import fs from "node:fs";
-import { z } from "zod";
+import type { z } from "zod";
 import { Calibration, type RunFile } from "@shared/evals";
-import { CALIBRATION_PATH, CASES_PATH, RUNS_DIR, loadRuns, readJsonl } from "../../evals/options/cases";
+import { CALIBRATION_PATH, CASES_PATH, Case, RUNS_DIR, loadRuns, readJsonl } from "@/evals/options/cases";
 
-// The committed results of evals/options. The newest run's page is prerendered; older ones render on first visit, then are cached.
+// The committed results of evals/options.
 
-const Reply = z.object({ id: z.string(), question: z.string().nullable(), reply: z.string() });
+const Reply = Case.pick({ id: true, question: true, reply: true });
 export type Reply = z.infer<typeof Reply>;
 
 // Parsed once per change to the runs folder (runs are only ever added), not once per page.

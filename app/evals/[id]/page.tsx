@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { RunDetail } from "@client/components/evals/run-detail";
 import { getRun, listReplies, listRuns } from "@server/evals";
 
+// Only the newest run is prerendered; older ones render on first visit, then are cached.
 export function generateStaticParams() {
   return listRuns().slice(-1).map((r) => ({ id: r.id }));
 }

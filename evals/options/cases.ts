@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { Gold, RunFile } from "@shared/evals";
+import { Gold, OptionVerdict, RunFile, SampleResult } from "@shared/evals";
 
 // Scripts run from the repo root (pnpm evals…), like the app's other tsx scripts.
 export const OPTIONS_DIR = path.resolve("evals/options");
@@ -35,13 +35,8 @@ export const JudgeLabel = z.object({
   caseId: z.string(),
   /** The config whose answer this is. */
   from: z.string(),
-  options: z.array(z.object({ title: z.string(), prompt: z.string() })),
-  human: z
-    .object({
-      options: z.array(z.object({ faithful: z.boolean(), standalone: z.boolean(), concrete: z.boolean() })),
-      coverage: z.boolean(),
-    })
-    .nullable(),
+  options: SampleResult.shape.options,
+  human: z.object({ options: z.array(OptionVerdict.omit({ reasoning: true })), coverage: z.boolean() }).nullable(),
   labeler: z.string().nullable(),
 });
 export type JudgeLabel = z.infer<typeof JudgeLabel>;
@@ -82,7 +77,11 @@ export function loadRuns(): RunFile[] {
   return fs
     .readdirSync(RUNS_DIR)
     .filter((f) => f.endsWith(".json"))
-    .map((f) => RunFile.parse(JSON.parse(fs.readFileSync(path.join(RUNS_DIR, f), "utf8"))))
+    .map((f) => {
+      const result = RunFile.safeParse(JSON.parse(fs.readFileSync(path.join(RUNS_DIR, f), "utf8")));
+      if (!result.success) throw new Error(`${f}: ${result.error.message}`);
+      return result.data;
+    })
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 

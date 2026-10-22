@@ -7,14 +7,14 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import Database from "better-sqlite3";
 import { z } from "zod";
 import { SYSTEM_PROMPT } from "@relay/anthropic/system-prompt";
-import { CASES_PATH, DATA_DIR, OPTIONS_DIR, datasetHash, loadCases, readJsonl, splitOf, writeJsonl, type Case } from "./cases";
+import { CASES_PATH, DATA_DIR, OPTIONS_DIR, datasetHash, loadCases, readJsonl, splitOf, writeJsonl, Case } from "./cases";
 import { pool } from "./pool";
 
 const INBOX_PATH = path.join(DATA_DIR, "inbox.jsonl");
 const SEEDS_PATH = path.join(DATA_DIR, "seeds.jsonl");
 const OPUS = "claude-opus-5-5";
 
-const InboxItem = z.object({ id: z.string(), source: z.enum(["local", "synthetic", "handwritten"]), question: z.string().nullable(), reply: z.string(), tags: z.array(z.string()) });
+const InboxItem = Case.pick({ id: true, source: true, question: true, reply: true, tags: true });
 type InboxItem = z.infer<typeof InboxItem>;
 const Seed = z.object({ id: z.string(), question: z.string(), tags: z.array(z.string()) });
 
@@ -34,6 +34,15 @@ const textOf = (content: string): string =>
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
     .join("");
+
+/** Logs a failed call and returns null, so one failure doesn't discard the other items' paid calls. */
+function orNull<T extends { id: string }, R>(work: (item: T) => Promise<R>): (item: T) => Promise<R | null> {
+  return (item) =>
+    work(item).catch((err: unknown) => {
+      console.error(`\n${item.id}: ${String(err)}`);
+      return null;
+    });
+}
 
 function known(): Set<string> {
   return new Set([...loadCases().map((c) => c.reply.trim()), ...readJsonl(INBOX_PATH, InboxItem).map((i) => i.reply.trim())]);
@@ -75,7 +84,7 @@ function importDbs(files: string[]): void {
 async function generate(client: Anthropic): Promise<void> {
   const seen = new Set([...loadCases().map((c) => c.id), ...readJsonl(INBOX_PATH, InboxItem).map((i) => i.id)]);
   const seeds = readJsonl(SEEDS_PATH, Seed).filter((s) => !seen.has(`syn-${s.id}`));
-  const items = await pool(seeds, 6, async (seed) => {
+  const items = await pool(seeds, 6, orNull(async (seed) => {
     const message = await client.messages.create({
       model: OPUS,
       max_tokens: 16_000,
@@ -87,15 +96,15 @@ async function generate(client: Anthropic): Promise<void> {
     const reply = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
     process.stdout.write(".");
     return { id: `syn-${seed.id}`, source: "synthetic" as const, question: seed.question, reply, tags: seed.tags };
-  });
-  append(items.filter((i) => i.reply.trim()));
+  }));
+  append(items.filter((i) => i !== null).filter((i) => i.reply.trim()));
 }
 
 /** Drafts each inbox reply's label against GUIDE.md; a person reviews the drafts with `pnpm evals:label cases`. */
 async function prelabel(client: Anthropic): Promise<void> {
   const guide = fs.readFileSync(path.join(OPTIONS_DIR, "GUIDE.md"), "utf8");
   const inbox = readJsonl(INBOX_PATH, InboxItem);
-  const drafted = await pool(inbox, 6, async (item): Promise<Case> => {
+  const drafted = await pool(inbox, 6, orNull(async (item): Promise<Case> => {
     const message = await client.messages.parse({
       model: OPUS,
       max_tokens: 8192,
@@ -119,10 +128,11 @@ async function prelabel(client: Anthropic): Promise<void> {
       reviewed: false,
       notes: `${OPUS} draft: ${draft.reasoning}`,
     };
-  });
-  writeJsonl(CASES_PATH, [...loadCases(), ...drafted]);
-  writeJsonl(INBOX_PATH, []);
-  console.log(`\n${drafted.length} drafts added to ${path.relative(process.cwd(), CASES_PATH)}`);
+  }));
+  const done = drafted.filter((d) => d !== null);
+  writeJsonl(CASES_PATH, [...loadCases(), ...done]);
+  writeJsonl(INBOX_PATH, inbox.filter((_, i) => drafted[i] === null));
+  console.log(`\n${done.length} drafts added to ${path.relative(process.cwd(), CASES_PATH)}`);
 }
 
 async function main(): Promise<void> {

@@ -78,7 +78,8 @@ export const Metrics = z.object({
   apiMsP95: rate,
 });
 export type Metrics = z.infer<typeof Metrics>;
-export type MetricKey = Exclude<keyof Metrics, "cases" | "positives">;
+export const MetricKey = Metrics.keyof().exclude(["cases", "positives"]);
+export type MetricKey = z.infer<typeof MetricKey>;
 
 export const LOWER_IS_BETTER: ReadonlySet<MetricKey> = new Set([
   "falseButtonRate",
