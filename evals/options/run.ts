@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
-import { SampleResult, type CaseResult, type RunFile } from "@shared/evals";
+import { SampleResult, shown, type CaseResult, type RunFile } from "@shared/evals";
 import { cached } from "./cache";
 import { RUNS_DIR, datasetHash, loadCases, loadRuns } from "./cases";
 import { configByName, describeConfig } from "./configs";
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
     // Only answers that show the button on a reply with a choice: elsewhere detection already scored them.
     // A failed judge call leaves the sample unjudged rather than losing the run; a rerun retries it.
     const judged =
-      !c.ambiguous && c.gold.hasChoice && detection.value.options.length >= 2
+      !c.ambiguous && c.gold.hasChoice && shown(detection.value)
         ? await judgeCached(client, c.reply, c.gold, detection.value.options).catch((err: unknown) => {
             tally.judgeErrors++;
             console.error(`\njudge failed on ${c.id}: ${String(err)}`);

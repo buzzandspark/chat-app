@@ -4,7 +4,7 @@ import { RunDetail } from "@client/components/evals/run-detail";
 import { getRun, listReplies, listRuns } from "@server/evals";
 
 export function generateStaticParams() {
-  return listRuns().map((r) => ({ id: r.id }));
+  return listRuns().slice(-1).map((r) => ({ id: r.id }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/evals/[id]">): Promise<Metadata> {

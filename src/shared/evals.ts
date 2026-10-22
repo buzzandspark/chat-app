@@ -80,7 +80,6 @@ export const Metrics = z.object({
 export type Metrics = z.infer<typeof Metrics>;
 export type MetricKey = Exclude<keyof Metrics, "cases" | "positives">;
 
-/** Metrics where a smaller number is better. */
 export const LOWER_IS_BETTER: ReadonlySet<MetricKey> = new Set([
   "falseButtonRate",
   "parseFailRate",
@@ -133,7 +132,7 @@ export function titleOk(title: string): boolean {
 }
 
 /** The app shows the Explore button for two or more options. */
-export function shown(sample: SampleResult): boolean {
+export function shown(sample: Pick<SampleResult, "options">): boolean {
   return sample.options.length >= 2;
 }
 

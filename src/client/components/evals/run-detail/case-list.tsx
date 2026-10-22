@@ -1,6 +1,5 @@
-import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sampleCorrect, type CaseResult, type SampleResult } from "@shared/evals";
+import { sampleCorrect, shown, type CaseResult, type SampleResult } from "@shared/evals";
 
 export interface CaseRow {
   result: CaseResult;
@@ -10,11 +9,11 @@ export interface CaseRow {
 }
 
 function Mark({ ok, label }: { ok: boolean; label: string }) {
-  const Icon = ok ? Check : X;
   return (
     <span className={cn("inline-flex items-center gap-0.5", ok ? "text-success" : "text-destructive")}>
-      <Icon className="size-3.5" aria-hidden />
+      <span aria-hidden>{ok ? "✓" : "✗"}</span>
       <span className="text-foreground">{label}</span>
+      <span className="sr-only">{ok ? ": pass" : ": fail"}</span>
     </span>
   );
 }
@@ -26,12 +25,12 @@ function Sample({ sample, index, gold }: { sample: SampleResult; index: number; 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-small">
         <Mark ok={correct} label={`Sample ${index + 1}`} />
         <span className="text-muted-foreground">
-          {sample.options.length >= 2 ? `${sample.options.length} options` : "no button"}
+          {shown(sample) ? `${sample.options.length} options` : "no button"}
           {sample.count !== null ? ` · streamed count ${sample.count}` : ""}
           {sample.error ? ` · error: ${sample.error}` : !sample.parsed ? " · unparsable answer" : ""}
         </span>
       </div>
-      {sample.options.length >= 2 ? (
+      {shown(sample) ? (
         <ol className="space-y-2">
           {sample.options.map((o, i) => {
             const v = sample.judge?.options[i];
@@ -63,11 +62,12 @@ function Sample({ sample, index, gold }: { sample: SampleResult; index: number; 
 
 function Marks({ result }: { result: CaseResult }) {
   return (
-    <span className="inline-flex gap-0.5" aria-label={`${result.samples.filter((s) => sampleCorrect(result.gold, s)).length} of ${result.samples.length} samples right`}>
-      {result.samples.map((s, i) => {
-        const Icon = sampleCorrect(result.gold, s) ? Check : X;
-        return <Icon key={i} className={cn("size-3.5", sampleCorrect(result.gold, s) ? "text-success" : "text-destructive")} aria-hidden />;
-      })}
+    <span role="img" className="inline-flex gap-0.5" aria-label={`${result.samples.filter((s) => sampleCorrect(result.gold, s)).length} of ${result.samples.length} samples right`}>
+      {result.samples.map((s, i) => (
+        <span key={i} className={sampleCorrect(result.gold, s) ? "text-success" : "text-destructive"}>
+          {sampleCorrect(result.gold, s) ? "✓" : "✗"}
+        </span>
+      ))}
     </span>
   );
 }
@@ -87,11 +87,12 @@ function Case({ row }: { row: CaseRow }) {
         ) : null}
         <span className="text-caption text-muted-foreground">{gold.hasChoice ? `choice of ${gold.count}` : "no choice"}</span>
         <span className="text-caption text-muted-foreground">{result.tags.join(", ")}</span>
+        {result.split === "test" ? <span className="text-caption text-muted-foreground">held out</span> : null}
       </summary>
       <div className="space-y-3 pb-4">
         {gold.hasChoice ? <p className="text-small">Labeled options: {gold.titles.join(" · ")}</p> : null}
         {row.question ? <p className="text-small text-muted-foreground">Asked: {row.question}</p> : null}
-        <div className="max-h-80 overflow-y-auto rounded-md bg-muted p-3 font-mono text-caption whitespace-pre-wrap">{row.reply ?? "This reply is no longer in the dataset."}</div>
+        <div tabIndex={0} className="max-h-80 overflow-y-auto rounded-md bg-muted p-3 font-mono text-caption whitespace-pre-wrap">{row.reply ?? "This reply is no longer in the dataset."}</div>
         <div className="grid gap-3 md:grid-cols-2">
           {result.samples.map((s, i) => (
             <Sample key={i} sample={s} index={i} gold={gold} />

@@ -2,7 +2,7 @@ import { MAX_FORKS } from "@shared/forks";
 import { sampleCorrect, shown, titleOk, type CaseResult, type Metrics, type RunFile } from "@shared/evals";
 import { percentile, ratio } from "./stats";
 
-/** Every metric is over samples of the cases the guide settles; ambiguous cases are reported but not scored. */
+/** Detection, count and judge metrics are over samples of the cases the guide settles; failure, cost and latency cover every sample, ambiguous ones included. */
 export function summarize(cases: readonly CaseResult[]): Metrics {
   const scored = cases.filter((c) => !c.ambiguous);
   const samples = scored.flatMap((c) => c.samples.map((s) => ({ gold: c.gold, s })));

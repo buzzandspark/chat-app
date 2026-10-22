@@ -1,13 +1,10 @@
 import "server-only";
 import fs from "node:fs";
-import path from "node:path";
 import { z } from "zod";
 import { Calibration, type RunFile } from "@shared/evals";
-import { RUNS_DIR, loadRuns } from "../../evals/options/cases";
+import { CALIBRATION_PATH, CASES_PATH, RUNS_DIR, loadRuns, readJsonl } from "../../evals/options/cases";
 
-// The committed results of evals/options, read at build time: the /evals pages are static.
-const CASES_PATH = path.join(process.cwd(), "evals/options/data/cases.jsonl");
-const CALIBRATION_PATH = path.join(process.cwd(), "evals/calibration.json");
+// The committed results of evals/options. The newest run's page is prerendered; older ones render on first visit, then are cached.
 
 const Reply = z.object({ id: z.string(), question: z.string().nullable(), reply: z.string() });
 export type Reply = z.infer<typeof Reply>;
@@ -35,9 +32,7 @@ export function getRun(id: string): RunFile | null {
 
 /** The dataset's replies by case id; runs store only the ids. */
 export function listReplies(): Map<string, Reply> {
-  if (!fs.existsSync(CASES_PATH)) return new Map();
-  const lines = fs.readFileSync(CASES_PATH, "utf8").split("\n").filter((l) => l.trim());
-  return new Map(lines.map((l) => Reply.parse(JSON.parse(l))).map((r) => [r.id, r]));
+  return new Map(readJsonl(CASES_PATH, Reply).map((r) => [r.id, r]));
 }
 
 export function getCalibration(): Calibration | null {

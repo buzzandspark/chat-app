@@ -49,7 +49,7 @@ function RunsTable({ runs, caption }: { runs: RunFile[]; caption: string }) {
           {runs.map((r) => (
             <tr key={r.id} className="border-t border-border">
               <th scope="row" className="py-2 text-left font-normal">
-                <Link href={`/evals/${r.id}`} className="font-medium underline-offset-2 hover:underline">
+                <Link href={`/evals/${r.id}`} prefetch={false} className="font-medium underline-offset-2 hover:underline">
                   {r.config.name}
                 </Link>
                 <div className="text-caption text-muted-foreground">
@@ -147,7 +147,7 @@ export function EvalsOverview({ runs, calibration }: { runs: RunFile[]; calibrat
         {latest ? (
           <>
             <p className="text-small text-muted-foreground">
-              The latest production run, <Link href={`/evals/${latest.id}`} className="underline underline-offset-2">{latest.id}</Link>, with every production run before it.
+              The latest production run, <Link href={`/evals/${latest.id}`} prefetch={false} className="underline underline-offset-2">{latest.id}</Link>, with every production run before it.
             </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {TILES.map((info) => (

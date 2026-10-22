@@ -4,7 +4,7 @@ import readline from "node:readline/promises";
 import { CASES_PATH, JUDGE_LABELS_PATH, JudgeLabel, loadCases, readJsonl, writeJsonl, type Case } from "./cases";
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const LABELER = process.env.USER ?? "human";
+const LABELER = process.env.EVALS_LABELER ?? "human";
 
 function show(c: Pick<Case, "id" | "question" | "reply">): void {
   console.log(`\n${"═".repeat(80)}\n${c.id}${c.question ? `\nAsked: ${c.question}` : ""}\n${"─".repeat(80)}\n${c.reply}\n${"─".repeat(80)}`);
@@ -38,8 +38,8 @@ async function reviewCases(): Promise<void> {
     if (answer.kind === "quit") break;
     if (answer.kind === "skip") continue;
     if (answer.kind === "none") c.gold = { hasChoice: false, count: 0, titles: [] };
-    if (answer.kind === "ambiguous") c.ambiguous = !c.ambiguous;
     if (answer.kind === "choice") c.gold = { hasChoice: true, count: answer.count, titles: answer.titles };
+    if (answer.kind !== "accept") c.ambiguous = answer.kind === "ambiguous";
     c.reviewed = true;
     writeJsonl(CASES_PATH, cases);
   }
@@ -55,7 +55,7 @@ async function yes(question: string): Promise<boolean> {
 async function labelJudge(): Promise<void> {
   const cases = new Map(loadCases().map((c) => [c.id, c]));
   const labels = readJsonl(JUDGE_LABELS_PATH, JudgeLabel);
-  const todo = labels.filter((l) => !l.human);
+  const todo = labels.filter((l) => !l.human || l.labeler?.endsWith("(provisional)"));
   console.log(`${todo.length} answers to label. Criteria are in evals/options/judge.ts.`);
   for (const label of todo) {
     const c = cases.get(label.caseId);

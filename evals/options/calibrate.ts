@@ -5,12 +5,11 @@ import fs from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { shown, type Calibration } from "@shared/evals";
-import { JUDGE_LABELS_PATH, JudgeLabel, loadCases, loadRuns, readJsonl, sha256, splitOf, writeJsonl } from "./cases";
+import { CALIBRATION_PATH, JUDGE_LABELS_PATH, JudgeLabel, loadCases, loadRuns, readJsonl, sha256, splitOf, writeJsonl } from "./cases";
 import { JUDGE_MODEL, JUDGE_VERSION, judgeCached } from "./judge";
 import { flag, pool } from "./pool";
 import { cohensKappa, ratio } from "./stats";
 
-const CALIBRATION_PATH = path.resolve("evals/calibration.json");
 const CRITERIA = ["faithful", "standalone", "concrete", "coverage"] as const;
 
 /** Half from what the app ships, half from deliberately poor answers, so there are failures for the judge to catch. */
@@ -62,7 +61,7 @@ async function grade(): Promise<void> {
     return {
       items: ps.length,
       agreement: ratio(ps.filter(([h, j]) => h === j).length, ps.length),
-      kappa: cohensKappa(ps),
+      kappa: ps.some(([h]) => !h) ? cohensKappa(ps) : null,
       missedFailures: ratio(ps.filter(([h, j]) => !h && j).length, ps.filter(([h]) => !h).length),
       falseAlarms: ratio(ps.filter(([h, j]) => h && !j).length, ps.filter(([h]) => h).length),
     };

@@ -10,6 +10,7 @@ export const DATA_DIR = path.join(OPTIONS_DIR, "data");
 export const CASES_PATH = path.join(DATA_DIR, "cases.jsonl");
 export const JUDGE_LABELS_PATH = path.join(DATA_DIR, "judge-labels.jsonl");
 export const RUNS_DIR = path.resolve("evals/runs");
+export const CALIBRATION_PATH = path.resolve("evals/calibration.json");
 
 export const Case = z.object({
   id: z.string(),

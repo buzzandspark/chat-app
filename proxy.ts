@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { CLIENT_ADDRESS_HEADER, forwardedAddress } from "@server/client-address";
 import { crossSite } from "@server/cross-site";
+import { getRun } from "@server/evals";
 import { env } from "@shared/env";
 
 // Single segments the app serves. Any other would reach [adminSlug], whose notFound() comes after the shell
@@ -27,6 +28,8 @@ export function proxy(request: NextRequest) {
   if (segment !== undefined && !TOP_LEVEL.has(segment) && segment !== env.ADMIN_PATH_SLUG) {
     return NextResponse.rewrite(new URL("/_not-found", request.url));
   }
+  const run = /^\/evals\/([^/]+)$/.exec(request.nextUrl.pathname)?.[1];
+  if (run !== undefined && !getRun(run)) return NextResponse.rewrite(new URL("/_not-found", request.url));
   if (!SESSION_PATH.test(request.nextUrl.pathname)) return NextResponse.next();
   // No landing page: the root opens a new chat, in one hop for a new visitor rather than through /c.
   const root = request.nextUrl.pathname === "/";
@@ -51,5 +54,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/((?!_)[^/]+)", "/c/:path*", "/api/:path*"],
+  matcher: ["/", "/((?!_)[^/]+)", "/c/:path*", "/evals/:id", "/api/:path*"],
 };

@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import type { Reply } from "@server/evals";
 import { sampleCorrect, type CaseResult, type RunFile } from "@shared/evals";
 import { METRICS, formatChange, formatDate, formatValue, improvement } from "../format";
 import { CaseList, type CaseRow } from "./case-list";
@@ -22,7 +23,7 @@ function Change({ value, text }: { value: number | null; text: string }) {
 }
 
 /** One run: its numbers next to its baseline's, accuracy by tag, and every case, the ones that changed first. */
-export function RunDetail({ run, baseline, replies }: { run: RunFile; baseline: RunFile | null; replies: Map<string, { question: string | null; reply: string }> }) {
+export function RunDetail({ run, baseline, replies }: { run: RunFile; baseline: RunFile | null; replies: Map<string, Reply> }) {
   const before = new Map(baseline?.cases.map((c) => [c.id, c]));
   const rows: CaseRow[] = run.cases.map((result) => ({ result, baseline: before.get(result.id) ?? null, question: replies.get(result.id)?.question ?? null, reply: replies.get(result.id)?.reply ?? null }));
   const scored = rows.filter((r) => !r.result.ambiguous);
@@ -64,8 +65,9 @@ export function RunDetail({ run, baseline, replies }: { run: RunFile; baseline: 
         </h2>
         {baseline ? (
           <p className="text-small text-muted-foreground">
-            Compared with <Link href={`/evals/${baseline.id}`} className="underline underline-offset-2">{baseline.id}</Link>
-            {baseline.datasetHash !== run.datasetHash ? ", which ran on a different dataset" : ""}.
+            Compared with <Link href={`/evals/${baseline.id}`} prefetch={false} className="underline underline-offset-2">{baseline.id}</Link>
+            {baseline.datasetHash !== run.datasetHash ? ", which ran on a different dataset" : ""}
+            {baseline.judgeVersion !== run.judgeVersion ? ", graded under a different judge version" : ""}.
           </p>
         ) : null}
         <div className="-mx-4 overflow-x-auto px-4">

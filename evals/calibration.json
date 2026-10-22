@@ -26,7 +26,7 @@
       "dev": {
         "items": 160,
         "agreement": 0.96875,
-        "kappa": 0,
+        "kappa": null,
         "missedFailures": null,
         "falseAlarms": 0.03125
       },
