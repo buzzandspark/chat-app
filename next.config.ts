@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
   // better-sqlite3 is a native module; load it through Node's require, not the bundler.
   serverExternalPackages: ["better-sqlite3"],
   experimental: {
+    agentUpgrade: "security",
     // A restored dev cache lacks HMR's asset registry, so pages reloaded every second (HMR `restart`); compile fresh.
     turbopackFileSystemCacheForDev: false,
   },
