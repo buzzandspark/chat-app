@@ -29,6 +29,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      # No API calls: checks the committed eval run against the code and dataset (evals/options/check.ts).
+      - run: pnpm evals:check
       - run: pnpm build
         env:
           REPLAY_MODE: "1"

@@ -54,6 +54,20 @@ browser ◀── GET /api/messages/:id/options (JSON lines: count, each option 
 - Every call writes a `usage_events` row under the parent generation and counts against the user's cap; a call that breaks off is charged an estimate. Guest calls hold their worst-case cost against the budgets and run at most 2 per guest and 50 overall: detection waits for a slot, a rewrite is refused as busy.
 - `POST /api/messages/:id/options/rewrite` applies one instruction to every prompt through the same messenger; the result goes back to the sheet and isn't stored.
 
+### Evals: is the detector getting better?
+
+```
+cases.jsonl ──▶ LiveOptionsMessenger (the app's own, config swapped per run) ──▶ cache ──▶ code checks + Sonnet judge ──▶ evals/runs/*.json
+  labeled by GUIDE.md                                                              (free on rerun)                         │
+                                                                                                    pnpm evals:check (CI) ◀──┴──▶ /evals
+```
+
+- `evals/options/data/cases.jsonl`: labeled replies, real (from local databases, nothing private), synthetic (Opus answering seed questions aimed at each failure mode) and hand-written. `GUIDE.md` decides the edge cases; Opus drafts labels and `pnpm evals:label cases` reviews them.
+- `pnpm evals [--config <name in evals/options/configs.ts, default production>] [--samples 3]` runs every reply three times. Code scores the button, option count, count/list agreement, titles, failures, cost and latency. Claude Sonnet 5.5 judges whether each prompt is faithful, standalone and concrete, and whether the list covers the reply's options. Answers are cached by a hash of all their inputs, so reruns cost nothing.
+- `pnpm evals:calibrate sample`, `pnpm evals:label judge`, `pnpm evals:calibrate` check the judge against people's verdicts: agreement and Cohen's κ per criterion, on a split the rubric wasn't tuned on. The committed judge labels are provisional Opus drafts until a person relabels them with `pnpm evals:label judge`, which records `EVALS_LABELER` (the name /evals shows) as the labeler.
+- `pnpm evals:check` (in CI, no API key) fails when the newest production run doesn't match the detect config or dataset in the checkout, or when a gated metric drops past its tolerance in `evals/options/gate.json` from the baseline run it pins.
+- `/evals` is a static, public page built from the committed runs: metrics over time, accuracy against cost, judge agreement, and per-case answers against the baseline.
+
 ## Major decisions
 
 - **One long-lived process with SQLite** (ADR-0002, 0003): replies outlive their HTTP request and resume reads an in-process buffer. No serverless, no Redis.
@@ -61,6 +75,7 @@ browser ◀── GET /api/messages/:id/options (JSON lines: count, each option 
 - **Client store first** (ADR-0005): the chat view renders from the store and server rows only seed it, so switching chats paints in the next frame.
 - **Guests and invites** (ADR-0004): visitors are capped Haiku guests; accounts are invite-only with per-user cost caps metered as replies stream.
 - **Explore options** (ADR-0006): Haiku detects alternatives in a reply; forks copy the chat and share its prompt cache.
+- **Evals** (ADR-0007): a labeled dataset, code checks plus a calibrated Sonnet judge, cached answers, and a CI gate on committed runs.
 - **Replay harness**: scripted scenarios exercise disconnects, fallbacks, refusals and errors without spending; replay mode answers every chat from them.
 
 Details: `docs/design-doc.md`, `docs/adr/`. Deployment and guest limits: `docs/self-host.md`.
@@ -68,7 +83,7 @@ Details: `docs/design-doc.md`, `docs/adr/`. Deployment and guest limits: `docs/s
 ## Check
 
 ```sh
-pnpm typecheck && pnpm lint && pnpm test
+pnpm typecheck && pnpm lint && pnpm test && pnpm evals:check
 pnpm build && pnpm size
 pnpm e2e --project=pixel7      # then --project=iphone14 --project=desktop
 pnpm test:shutdown             # SIGTERM and SIGKILL mid-stream against the built server

@@ -12,9 +12,10 @@ A phone-first chat client for Claude that streams smoothly, survives disconnects
 - `src/server/`: user-scoped data access (chats, messages, search, admin) and request-side helpers (current user, guests, rate limits, boot, shutdown). Route handlers parse, authenticate and call these or the relay; only the health probe queries the database itself.
 - `src/auth/`: better-auth setup and invites (ADR-0004).
 - `src/client/`: external chat store, transport with resume, markdown renderer, components, hooks.
+- `evals/`: the Explore options eval harness and its committed runs (ADR-0007); `src/server/evals.ts` reads them for the public `/evals` pages.
 - `instrumentation.ts`: calls `src/server/boot.ts` (migrations, crash backstop, guest purge, the SIGTERM drain in `src/server/shutdown.ts`).
 
-Decisions with their alternatives are in `docs/adr/`: transport (0001), topology (0002), persistence (0003), identity (0004), client-store chat route (0005), Explore options and forks (0006).
+Decisions with their alternatives are in `docs/adr/`: transport (0001), topology (0002), persistence (0003), identity (0004), client-store chat route (0005), Explore options and forks (0006), Explore options evals (0007).
 
 ## 3. Streaming pipeline
 

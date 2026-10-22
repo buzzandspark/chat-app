@@ -80,6 +80,17 @@ describe("options messenger", () => {
     expect(format).toContain("next message in this same conversation");
   });
 
+  it("detects with a given model, prompt and effort while the rewrite keeps its own", async () => {
+    const { client, stream } = streaming(JSON.stringify({ count: 0, options: [] }));
+    const messenger = new LiveOptionsMessenger(client, { model: "claude-sonnet-5-5", system: "Variant prompt", mode: { thinking: { type: "disabled" }, effort: "low" } });
+    const { trace } = await messenger.detect("x");
+    await messenger.rewrite([], "shorter");
+    const [detect, rewrite] = stream.mock.calls.map((c) => (c as unknown as [{ model: string; system: string; output_config: { effort: string } }])[0]);
+    expect(detect).toMatchObject({ model: "claude-sonnet-5-5", system: "Variant prompt", output_config: { effort: "low" } });
+    expect(trace!.model).toBe("claude-sonnet-5-5");
+    expect(rewrite!.model).toBe(OPTIONS_MODEL);
+  });
+
   it("no choice, a single alternative, or an unparsable answer is an empty list", async () => {
     const two = [{ title: "A", prompt: "a" }, { title: "B", prompt: "b" }];
     expect((await new LiveOptionsMessenger(streaming(JSON.stringify({ count: 0, options: [] })).client).detect("x")).options).toEqual([]);

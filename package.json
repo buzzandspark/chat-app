@@ -24,7 +24,12 @@
     "screenshots": "node scripts/dev-lock-guard.mjs screenshots && tsx scripts/screenshots.ts",
     "test:shutdown": "node scripts/dev-lock-guard.mjs test:shutdown && sh scripts/shutdown-test.sh",
     "test:cache": "CACHE_TEST=1 vitest run --project server src/relay/anthropic/cache.live.test.ts",
-    "worktree": "sh scripts/worktree.sh"
+    "worktree": "sh scripts/worktree.sh",
+    "evals": "tsx --env-file-if-exists=.env evals/options/run.ts",
+    "evals:check": "tsx evals/options/check.ts",
+    "evals:data": "tsx --env-file-if-exists=.env evals/options/dataset.ts",
+    "evals:label": "tsx evals/options/label.ts",
+    "evals:calibrate": "tsx --env-file-if-exists=.env evals/options/calibrate.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",

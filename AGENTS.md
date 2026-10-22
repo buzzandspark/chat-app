@@ -21,7 +21,7 @@ Land multi-file refactors as one write (`git apply`, `git checkout`), not file b
 
 ## Component layout
 
-- A component simple enough for one file is `<feature>/<name>.tsx` (features: `chat`, `shell`, `admin`, `settings`, `auth`, `preview`, `ui`).
+- A component simple enough for one file is `<feature>/<name>.tsx` (features: `chat`, `shell`, `admin`, `settings`, `auth`, `preview`, `evals`, `ui`).
 - A complex component (private helpers, or more than one component's worth of code) is a folder, `<feature>/<name>/index.tsx`, holding the hooks, subcomponents and utils only it uses, with their tests beside them. Folders don't nest: a complex child gets its own sibling folder.
 - A helper used by more than one component moves to the lowest level they share: the feature root (`components/chat/tab-reveal.ts`) within a feature, or `src/client/hooks/`, `src/client/store/` or `components/ui/` across features. Another feature may import a feature's root files (`shell/shell-user.tsx`, `shell/load-dialogs.tsx`) and a folder only through its `index.tsx`. The dev preview gallery is the exception and may import private pieces.
 - Imports are relative within a feature and use `@client/...` beyond it.

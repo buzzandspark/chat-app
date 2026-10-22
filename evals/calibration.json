@@ -1,0 +1,74 @@
+{
+  "createdAt": "2026-10-21T22:14:20.701Z",
+  "judgeModel": "claude-sonnet-5-5",
+  "judgeVersion": "c170916685f8",
+  "labelers": [
+    "claude-opus-5-5 (provisional)"
+  ],
+  "criteria": {
+    "faithful": {
+      "dev": {
+        "items": 160,
+        "agreement": 0.9,
+        "kappa": 0.6536796536796539,
+        "missedFailures": 0.2857142857142857,
+        "falseAlarms": 0.06060606060606061
+      },
+      "test": {
+        "items": 65,
+        "agreement": 0.8,
+        "kappa": 0.4800000000000001,
+        "missedFailures": 0.5,
+        "falseAlarms": 0.06666666666666667
+      }
+    },
+    "standalone": {
+      "dev": {
+        "items": 160,
+        "agreement": 0.96875,
+        "kappa": null,
+        "missedFailures": null,
+        "falseAlarms": 0.03125
+      },
+      "test": {
+        "items": 65,
+        "agreement": 1,
+        "kappa": null,
+        "missedFailures": null,
+        "falseAlarms": 0
+      }
+    },
+    "concrete": {
+      "dev": {
+        "items": 160,
+        "agreement": 1,
+        "kappa": 1,
+        "missedFailures": 0,
+        "falseAlarms": 0
+      },
+      "test": {
+        "items": 65,
+        "agreement": 1,
+        "kappa": 1,
+        "missedFailures": 0,
+        "falseAlarms": 0
+      }
+    },
+    "coverage": {
+      "dev": {
+        "items": 29,
+        "agreement": 1,
+        "kappa": 1,
+        "missedFailures": 0,
+        "falseAlarms": 0
+      },
+      "test": {
+        "items": 11,
+        "agreement": 1,
+        "kappa": 1,
+        "missedFailures": 0,
+        "falseAlarms": 0
+      }
+    }
+  }
+}

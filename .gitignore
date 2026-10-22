@@ -39,3 +39,7 @@ next-env.d.ts
 
 # keep the documented template
 !.env.example
+
+# Eval harness: cached API answers, and replies waiting to be checked for anything private
+/evals/.cache/
+/evals/options/data/inbox.jsonl
